@@ -1,9 +1,9 @@
 #!/usr/bin/python
-# A Python frontend to various audio/video tools to automatically convert them to MP4/H264/AAC-LC and tag them
 # -*- coding: latin-1 -*-
+# A Python frontend to various audio/video tools to automatically convert them to MP4/H264/AAC-LC and tag them
 
 prog='MakeMP4'
-version='3.2'
+version='3.4'
 author='Carl Edman (CarlEdman@gmail.com)'
 
 import shutil, re, shlex, os, codecs, argparse, configparser, logging, subprocess
@@ -103,7 +103,7 @@ class MakeMP4Config(configparser.RawConfigParser):
 		if isinstance(v,bool): return "Yes" if v else "No"
 		if isinstance(v,int): return str(v)
 		if isinstance(v,float): return str(v)
-		if isinstance(v,Fraction): return str(v.denominator)+'/'+str(v.numerator)
+		if isinstance(v,Fraction): return str(v.numerator)+'/'+str(v.denominator)
 		if isinstance(v,str): return v.strip()
 		return repr(v)
 	
@@ -276,7 +276,7 @@ def config_from_base(cfg,base):
 		cfg.set('show',img[0])
 		if img[2] and img[2]!='0': cfg.set('season',int(img[2]))
 		cfg.set('episode',int(img[3]))
-	elif imps(r'^(.*) Se\. (\d+) *(.*?)$',base):
+	elif imps(r'^(.*) Se\. *(\d+) *(.*?)$',base):
 		cfg.set('type','tvshow')
 		cfg.set('show',img[0])
 		cfg.set('season',int(img[1]))
@@ -338,13 +338,13 @@ def config_from_d2vfile(cfg,d2vfile):
 		cfg.set('x264_rate_factor',18.0)
 	elif mbs<=8192: # 1080p@30fps
 		cfg.set('avc_level',4.0)
-		cfg.set('x264_rate_factor',20.0)
+		cfg.set('x264_rate_factor',19.0)
 	elif mbs<=22080: # 1080p@72fps; 1920p@30fps
 		cfg.set('avc_level',5.0)
-		cfg.set('x264_rate_factor',22.0)
+		cfg.set('x264_rate_factor',21.0)
 	else: # 1080p@120fps; 2048@30fps
 		cfg.set('avc_level',5.1)
-		cfg.set('x264_rate_factor',22.0)
+		cfg.set('x264_rate_factor',21.0)
 	
 	frames=0
 	for l in d2vp[2].splitlines():
@@ -683,16 +683,16 @@ def prepare_mkv(mkvfile):
 		if not t2cfile: continue
 		with open(t2cfile,'r') as fp:
 			t2cl=list(filter(lambda s:imps(r'^\s*\d*\.?\d*\s*$',s),fp.readlines()))
-		frames=len(t2cl)+1 # FIX WHEN timecode file is fixed.
-		oframes=cfg.get('frames',-1)
-		if oframes>0 and oframes!=frames:
+		frames = len(t2cl)+1 # FIX WHEN timecode file is fixed.
+		oframes = cfg.get('frames',-1)
+		if oframes>0 and frames != oframes: 
 			warn('Timecodes changed frames in "{}" from {:d} to {:d}'.format(file,oframes,frames))
-			cfg.set('frames',frames)
+		cfg.set('frames',frames)
 		duration=(2*float(t2cl[-1])-float(t2cl[-2]))/1000.0  # FIX WHEN timecode file is fixed.
 		oduration=cfg.get('duration',-1.0)
 		if oduration>0 and oduration!=duration:
 			warn('Encoding changed duration in "{}" from {:f} to {:f}'.format(file,oduration,duration))
-			cfg.set('duration',duration)
+		cfg.set('duration',duration)
 		cfg.sync()
 	
 	for vt in sorted([t for t in cfg.sections() if t.startswith('TRACK') and not cfg.get('disable',section=t) and cfg.equals('type','subtitles',section=t)]):
@@ -773,7 +773,7 @@ def update_description_tvshow(cfg,txt):
 	if i>=0: h[i]='Series Episode'
 	sei=lfind(h,'Series Episode')
 	
-	epi=lfind(h,'#','No. in series','Episode number')
+	epi=lfind(h,'#','No.','No. in series','Episode number')
 	if epi<0: return False # Fix
 	tii=lfind(h,'Title','Episode title')
 	dei=lfind(h,'Description')
@@ -992,7 +992,7 @@ def build_videos(cfgfile):
 		inext = cfg.get('extension')
 		d2vfile = cfg.get('d2v_file', None)
 		dgifile = cfg.get('dgi_file', None)
-		outfile = cfg.get('out_file',splitext(basename(infile))[0] +'.mp4') # +'.m4v')
+		outfile = cfg.get('out_file',splitext(basename(infile))[0] +'.out.264' ) # +'.mp4') # +'.m4v')
 		cfg.set('out_file',outfile)
 		cfg.sync()
 		if not readytomake(outfile,infile,d2vfile,dgifile): continue
@@ -1035,6 +1035,7 @@ def build_videos(cfgfile):
 		doublerate=False
 		
 		if lt == 'PROGRESSIVE':
+			cfg.set('frame_rate_ratio_out',fr)
 			pass
 		elif lt == 'VIDEO':
 #			avs+='TomsMoComp(1,5,1)\n'
@@ -1042,13 +1043,17 @@ def build_videos(cfgfile):
 #			avs+='TDeint(mode=2, type={:d}, tryWeave=True, full=False)\n'.format(3 if cfg.get('x264_tune','animation' if cfg.get('genre',section='MAIN') in ['Anime', 'Animation'] else 'film')=='animation' else 2)
 			avs+='Bob()\n'
 			doublerate=True
+			cfg.set('frame_rate_ratio_out',fr)
 		elif d2vfo != 1 and lt == 'FILM':
 			fr*=Fraction(4,5)
+			cfg.set('frame_rate_ratio_out',fr)
 			avs+='tfm().tdecimate(hybrid=1)\n'
 #			avs+='tfm().tdecimate(hybrid=1,d2v="{}")\n'.format(abspath(d2vfile))
 #			avs+='Telecide(post={:d},guide=0,blend=True)'.format(0 if lp>0.99 else 2)
 #			avs+='Decimate(mode={:d},cycle=5)'.format(0 if lp>0.99 else 3)
-		
+		else:
+			cfg.set('frame_rate_ratio_out',fr)
+
 		if cfg.has('crop'):
 			if imps('^\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*$',cfg.get('crop')):
 				cl,cr,ct,cb=[int(img[i]) for i in range(4)]
@@ -1102,8 +1107,11 @@ def build_videos(cfgfile):
 		if not cfg.get('x264_dct_decimate',False): call += ['--no-dct-decimate']
 		if cfg.has('avc_profile'): call += ['--profile', cfg.get('avc_profile')]
 		if cfg.has('avc_level'): call += ['--level', cfg.get('avc_level')]
-		#call += ['--timebase', '1/1000', '--tcfile-in', t2cfile]
+		if cfg.has('t2cfile'): call += ['--timebase', '1000', '--tcfile-in', cfg.get('t2cfile')] # XXX
+		if cfg.has('frames'): call += ['--frames', cfg.get('frames')]
 		call += [ '--output', outfile ]
+		
+		cfg.sync()
 		res=do_call(call,outfile)
 		remove(avsfile[1])
 		if res and imps(r'\bencoded (\d+) frames\b',res):
@@ -1187,10 +1195,12 @@ def build_results(cfgfile):
 		infiles.append(of)
 		if cfg.has('name'): call[-1]+=':name='+cfg.get('name')
 		if cfg.has('language'): call[-1]+=':lang='+cfg.get('language')
+		if cfg.has('frame_rate_ratio_out'): call[-1] += ':fps=' + str(float(cfg.get('frame_rate_ratio_out')))
 		if cfg.equals('type','audio'):
 			ats += 1
 			if not cfg.get('defaulttrack',ats==1): call[-1]+=':disable'
-#		if cfg.equals('type','video'):
+
+		#		if cfg.equals('type','video'):
 #			vts += 1
 #			if not cfg.get('defaulttrack',vts==1): call[-1]+=':disable'
 #		if cfg.equals('type','subtitle'):
@@ -1269,7 +1279,7 @@ if 'parser' not in globals():
 	parser.add_argument('--tivodir',dest='tivodir',action='store',help='directory of .TiVo and .mpg files to be processed')
 	parser.add_argument('--vobdir',dest='vobdir',action='store',help='directory of .vob files to be processed')
 	parser.add_argument('--outdir',dest='outdir',action='store',help='directory for finalized .mp4 files')
-	parser.add_argument('--tmpdir',dest='tmpdir',action='store',help='directory for temporary files')
+#	parser.add_argument('--tmpdir',dest='tmpdir',action='store',help='directory for temporary files') # XXX Unused
 	parser.add_argument('--descdir',dest='descdir',action='store',help='directory for .txt files with descriptive data')
 	parser.add_argument('--artdir',dest='artdir',action='store',help='directory for .jpg and .png cover art')
 	parser.add_argument('--mak',dest='mak',action='store',help='your TiVo MAK key to decrypt .TiVo files to .mpg')
