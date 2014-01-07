@@ -3,19 +3,12 @@
 # A Python frontend to various audio/video tools to automatically convert them to MP4/H264/AAC-LC and tag them
 
 prog='MakeMP4'
-version='3.4'
+version='3.5'
 author='Carl Edman (CarlEdman@gmail.com)'
 
-import shutil, re, shlex, os, codecs, argparse, configparser, logging, subprocess
+import shutil, re, os, sys, argparse, configparser, logging, subprocess, tempfile, time, math
 from os.path import exists, isfile, getmtime, getsize, join, basename, splitext, abspath, dirname
-from os import remove, access, rename, listdir
-from sys import exit, argv
-from string import digits
-from time import sleep, strftime
-from math import floor, ceil
 from fractions import Fraction
-from datetime import datetime, date, time
-from tempfile import TemporaryFile, NamedTemporaryFile, mkstemp
 from logging import debug, info, warn, error, critical
 
 langNameToISO6392T = { 'English':'eng', 'Français': 'fra', 'Japanese':'jpn', 'Español':'esp' , 'German':'deu', 'Deutsch':'deu', 'Svenska':'swe', 'Latin':'lat', 'Dutch':'nld', 'Chinese':'zho' }
@@ -63,7 +56,7 @@ def readytomake(file,*comps):
 	return False
 
 def myglob(pat,dir='.'):
-	return sorted([f if dir=='.' else join(dir,f) for f in listdir(dir) if imps(pat,f)],key=(lambda s:re.sub(r'\d+',lambda m: m.group(0).zfill(6),s)))
+	return sorted([f if dir=='.' else join(dir,f) for f in os.listdir(dir) if imps(pat,f)],key=(lambda s:re.sub(r'\d+',lambda m: m.group(0).zfill(6),s)))
 
 class MakeMP4Config(configparser.RawConfigParser):
 	"""A subclass of configparser for MakeMP4 Configuration Files"""
@@ -175,7 +168,7 @@ def secsToParts(s):
 	secs, msecs= divmod(s,1)
 	mins, secs = divmod(secs,60)
 	hours, mins = divmod(mins,60)
-	return (neg,int(hours),int(mins),int(secs),int(floor(msecs*1000)))
+	return (neg,int(hours),int(mins),int(secs),int(math.floor(msecs*1000)))
 
 im=None
 img=None
@@ -221,7 +214,7 @@ def do_call(args,outfile=None,infile=None):
 		outstr=outstr.decode(encoding='cp1252')
 		errstrl=errstrl.decode(encoding='cp1252')
 	except KeyboardInterrupt:
-		if outfile and exists(outfile): remove(outfile)
+		if outfile and exists(outfile): os.remove(outfile)
 		raise
 	else:
 		errstr=""
@@ -244,7 +237,7 @@ def make_srt(cfg,track,files):
 	base=cfg.get('base',section='MAIN')
 	srtfile='{} T{:02d}.srt'.format(base,track)
 	if not exists(srtfile): do_call(['ccextractorwin'] + files + ['-o', srtfile],srtfile)
-	if exists(srtfile) and getsize(srtfile)==0: remove(srtfile)
+	if exists(srtfile) and getsize(srtfile)==0: os.remove(srtfile)
 	if not exists(srtfile): return False
 	cfg.setsection('TRACK{:02d}'.format(track))
 	cfg.set('file',srtfile)
@@ -327,7 +320,7 @@ def config_from_d2vfile(cfg,d2vfile):
 	cfg.set('field_operation', fio)
 	cfg.set('frame_rate_ratio', str(frf))
 	cfg.set('sample_aspect_ratio',str(sarf))
-	mbs = int(ceil((psx-cl-cr)/16.0))*int(ceil((psy-ct-cb)/16.0))
+	mbs = int(math.ceil((psx-cl-cr)/16.0))*int(math.ceil((psy-ct-cb)/16.0))
 	cfg.set('macroblocks',mbs)
 	cfg.set('avc_profile','high')
 	if mbs<=1620: # 480p@30fps; 576p@25fps
@@ -389,7 +382,7 @@ def config_from_dgifile(cfg,dgifile):
 	cfg.set('field_operation', fio)
 	cfg.set('frame_rate_ratio', str(frf))
 	cfg.set('sample_aspect_ratio',str(sarf))
-	mbs = int(ceil((psx-cl-cr)/16.0))*int(ceil((psy-ct-cb)/16.0))
+	mbs = int(math.ceil((psx-cl-cr)/16.0))*int(math.ceil((psy-ct-cb)/16.0))
 	cfg.set('macroblocks',mbs)
 	cfg.set('avc_profile','high')
 	if mbs<=1620: # 480p@30fps; 576p@25fps
@@ -442,7 +435,7 @@ def prepare_tivo(tivofile):
 	
 	if args.mak:
 		do_call(['tivodecode','--mak',args.mak,'--out',mpgfile,tivofile],mpgfile)
-		if exists(mpgfile) and getsize(mpgfile)>0: remove(tivofile)
+		if exists(mpgfile) and getsize(mpgfile)>0: os.remove(tivofile)
 
 def prepare_mpg(mpgfile):
 	base, ext=splitext(basename(mpgfile))
@@ -455,7 +448,7 @@ def prepare_mpg(mpgfile):
 	d2vfile='{} T{:02d}.d2v'.format(base,track)
 	if not exists(d2vfile):
 		do_call(['dgindex', '-i', mpgfile, '-fo', '0', '-ia', '3', '-om', '2', '-exit'],base+'.d2v')
-		rename(base+'.d2v',d2vfile)
+		os.rename(base+'.d2v',d2vfile)
 	if not exists(d2vfile): return
 	cfg.setsection('TRACK{:02d}'.format(track))
 	cfg.set('file',mpgfile)
@@ -470,7 +463,7 @@ def prepare_mpg(mpgfile):
 		track+=1
 		cfg.setsection('TRACK{:02d}'.format(track))
 		nf='{} T{:02d}.{}'.format(base,track,ext)
-		rename(file,nf)
+		os.rename(file,nf)
 		cfg.set('file',nf)
 		cfg.set('type','audio')
 		cfg.set('extension',ext)
@@ -683,7 +676,7 @@ def prepare_mkv(mkvfile):
 		if not t2cfile: continue
 		with open(t2cfile,'r') as fp:
 			t2cl=list(filter(lambda s:imps(r'^\s*\d*\.?\d*\s*$',s),fp.readlines()))
-		frames = len(t2cl)+1 # FIX WHEN timecode file is fixed.
+		frames = len(t2cl) # FIX WHEN timecode file is fixed.
 		oframes = cfg.get('frames',-1)
 		if oframes>0 and frames != oframes: 
 			warn('Timecodes changed frames in "{}" from {:d} to {:d}'.format(file,oframes,frames))
@@ -738,7 +731,7 @@ def prepare_vob(vobfile):
 	#open(vobsubfile,'w').write('%(ifofile)s\n%(basefile)s\n%(pgc)d\n0\nALL\nCLOSE\n' % locals())
 	#if trueifofile!=ifofile: copyfile(trueifofile,ifofile)
 	#do_call([r'C:\Windows\SysWOW64\rundll32.exe','vobsub.dll,Configure',vobsubfile],vobsubfile)
-	#if trueifofile!=ifofile: remove(ifofile)
+	#if trueifofile!=ifofile: os.remove(ifofile)
 	##if not exists(idxfile): open(idxfile,'w').truncate(0)
 
 	#if make_srt(cfg,track+1,vobfiles): track+=1
@@ -904,8 +897,8 @@ def build_subtitles(cfgfile):
 					if nneg1 or nneg2: continue
 					o.write(beg+'{:02d}:{:02d}:{:02d},{:03d}'.format(nhours1,nmins1,nsecs1,nmsecs1)+mid+'{:02d}:{:02d}:{:02d},{:03d}'.format(nhours2,nmins2,nsecs2,nmsecs2)+end+'\n\n')
 			do_call(['mp4box','-ttxt','temp.srt'],outfile)
-			rename('temp.ttxt',outfile)
-			remove('temp.srt')
+			os.rename('temp.ttxt',outfile)
+			os.remove('temp.srt')
 		elif inext=='sup':
 			outfile = splitext(infile)[0]+'.idx'
 			cfg.set('out_file', outfile)
@@ -1047,6 +1040,7 @@ def build_videos(cfgfile):
 		elif d2vfo != 1 and lt == 'FILM':
 			fr*=Fraction(4,5)
 			cfg.set('frame_rate_ratio_out',fr)
+			cfg.set('frames',math.ceil(cfg.get('frames')*5.0/4.0))
 			avs+='tfm().tdecimate(hybrid=1)\n'
 #			avs+='tfm().tdecimate(hybrid=1,d2v="{}")\n'.format(abspath(d2vfile))
 #			avs+='Telecide(post={:d},guide=0,blend=True)'.format(0 if lp>0.99 else 2)
@@ -1088,7 +1082,7 @@ def build_videos(cfgfile):
 		if doublerate: avs+='MFlowFps(super, bv1, fv1, num={:d}, den={:d}, ml=100)\n'.format(fr.numerator,fr.denominator)
 		if procs!=1: avs+='Distributor()\n'
 		
-		avsfile=mkstemp(suffix='.avs')
+		avsfile=tempfile.mkstemp(suffix='.avs')
 		os.write(avsfile[0],avs.encode())
 		os.close(avsfile[0])
 		debug('Created AVS file:' + repr(avs))
@@ -1108,12 +1102,12 @@ def build_videos(cfgfile):
 		if cfg.has('avc_profile'): call += ['--profile', cfg.get('avc_profile')]
 		if cfg.has('avc_level'): call += ['--level', cfg.get('avc_level')]
 		if cfg.has('t2cfile'): call += ['--timebase', '1000', '--tcfile-in', cfg.get('t2cfile')] # XXX
-		if cfg.has('frames'): call += ['--frames', cfg.get('frames')]
+#		if cfg.has('frames'): call += ['--frames', cfg.get('frames')]
 		call += [ '--output', outfile ]
 		
 		cfg.sync()
 		res=do_call(call,outfile)
-		remove(avsfile[1])
+		os.remove(avsfile[1])
 		if res and imps(r'\bencoded (\d+) frames\b',res):
 			cfg.sync()
 			frames=int(img[0])
@@ -1211,7 +1205,7 @@ def build_results(cfgfile):
 	do_call(call,outfile)
 	
 	cfg.setsection('MAIN')
-	call=['-encodedby', prog + ' ' + version + ' on ' + strftime('%A, %B %d, %Y, at %X')]
+	call=['-encodedby', prog + ' ' + version + ' on ' + time.strftime('%A, %B %d, %Y, at %X')]
 	if cfg.has('type'): call += [ '-type' , cfg.get('type') ]
 	if cfg.has('genre'): call += [ '-genre' , cfg.get('genre') ]
 	if cfg.has('year'): call += [ '-year' , cfg.get('year') ]
@@ -1257,7 +1251,7 @@ def build_results(cfgfile):
 					(neg,hours,mins,secs,msecs)=secsToParts(ct*elong+delay)
 					f.write('{}{:02d}:{:02d}:{:02d}.{:03d} {} ({:d}m {:d}s)\n'.format(neg,hours,mins,secs,msecs,cn,(-1 if neg else 1)*hours*60+mins,secs))
 		do_call(['mp4chaps', '--import', outfile],outfile)
-		if chapters_made: remove(chapterfile)
+		if chapters_made: os.remove(chapterfile)
 	
 	for i in coverfiles:
 		info('Adding coverart for "{}": "{}"'.format(outfile, i))
@@ -1283,13 +1277,13 @@ if 'parser' not in globals():
 	parser.add_argument('--descdir',dest='descdir',action='store',help='directory for .txt files with descriptive data')
 	parser.add_argument('--artdir',dest='artdir',action='store',help='directory for .jpg and .png cover art')
 	parser.add_argument('--mak',dest='mak',action='store',help='your TiVo MAK key to decrypt .TiVo files to .mpg')
-	inifile='{}.ini'.format(splitext(argv[0])[0])
-	if exists(inifile): argv.insert(1,'@'+inifile)
+	inifile='{}.ini'.format(splitext(sys.argv[0])[0])
+	if exists(inifile): sys.argv.insert(1,'@'+inifile)
 	args = parser.parse_args()
 
 logging.basicConfig(level=args.loglevel,filename=args.logfile,format='%(asctime)s [%(levelname)s]: %(message)s')
 nice(args.niceness)
-progmodtime=getmtime(argv[0])
+progmodtime=getmtime(sys.argv[0])
 
 #cfg = MakeMP4Config("Kung Fu Panda () Animals.cfg")
 #cfg.setsection('TRACK01')
@@ -1298,12 +1292,12 @@ progmodtime=getmtime(argv[0])
 #print imps(r'^(.*?) (pt\. (\d+) *)?\((\d*)\) *(.*?)$','Two Towers pt. 2 () HD')
 #print img[0]
 #print img[2]
-#exit()
+#sys.exit()
 
 while True:
 	working=False
-	if getmtime(argv[0])>progmodtime:
-		exec(compile(open(argv[0]).read(), argv[0], 'exec')) # execfile(argv[0])
+	if getmtime(sys.argv[0])>progmodtime:
+		exec(compile(open(sys.argv[0]).read(), sys.argv[0], 'exec')) # execfile(sys.argv[0])
 	
 	if args.tivodir:
 		for f in myglob('\.TiVo$',args.tivodir):
@@ -1336,4 +1330,4 @@ while True:
 		build_videos(f)
 	
 	print("Sleeping.")
-	sleep(60)
+	time.sleep(60)
