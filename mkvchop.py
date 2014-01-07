@@ -1,18 +1,10 @@
 #!/usr/bin/python
 # -*- coding: latin-1 -*-
-# Version: 2.0
+# Version: 2.1
 # Author: Carl Edman (email full name as one word at gmail.com)
 
-import shutil, logging, re, shlex, os, codecs, argparse, configparser, subprocess
+import logging, re, os, argparse, subprocess, math, sys
 from os.path import exists, isfile, getmtime, getsize, join, basename, splitext, abspath, dirname
-from os import remove, access, rename
-from sys import exit, argv
-from time import sleep
-from math import floor, ceil
-from datetime import datetime, date, time
-from fractions import gcd
-from glob import glob
-from tempfile import TemporaryFile, NamedTemporaryFile, mkstemp
 from logging import debug, info, warn, error, critical
 
 def secsToParts(s):
@@ -24,7 +16,7 @@ def secsToParts(s):
 	secs, msecs= divmod(s,1)
 	mins, secs = divmod(secs,60)
 	hours, mins = divmod(mins,60)
-	return (neg,int(hours),int(mins),int(secs),int(floor(msecs*1000)))
+	return (neg,int(hours),int(mins),int(secs),int(math.floor(msecs*1000)))
 
 im=None
 img=None
@@ -60,7 +52,7 @@ for s in args.split:
 		chap=int(img[0])
 		if chap not in chaps:
 			print('Chapter {:d} not in "{:}"'.format(chap,args.infile))
-			exit(-1)
+			sys.exit(-1)
 		splits.append(chaps[chap])
 	elif imps('^\+(\d+)$',s):
 		i=int(img[0])
@@ -113,7 +105,7 @@ for i in range(len(splits)):
 				cf.write('CHAPTER{:02d}NAME={}\n'.format(no,cn))
 		
 		debug(subprocess.check_output(['mkvmerge','--output', args.outfiles.format(i+args.start), '--chapters', chapfile, '--no-chapters', tf]))
-		remove(tf+'.chap.txt')
-		remove(tf)
+		os.remove(tf+'.chap.txt')
+		os.remove(tf)
 	else:
-		rename(tf,args.outfiles.format(i+args.start))
+		os.rename(tf,args.outfiles.format(i+args.start))
