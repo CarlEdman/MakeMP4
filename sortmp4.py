@@ -2,26 +2,14 @@
 # -*- coding: latin-1 -*-
 
 prog='SortMP4'
-version='0.2'
+version='0.3'
 author='Carl Edman (CarlEdman@gmail.com)'
 
-import shutil, re, shlex, os, argparse, logging, subprocess
+import shutil, re, shlex, os, argparse, logging, subprocess, logging
 from os.path import exists, isfile, isdir, getmtime, getsize, join, basename, splitext, abspath, dirname
-from logging import debug, info, warn, error, critical
 
-parser = argparse.ArgumentParser(description='Sort mp4s from current directory to target subdirectories',fromfile_prefix_chars='@',prog=prog,epilog='Written by: '+author)
-parser.add_argument('-v','--verbose',dest='loglevel',action='store_const', const=logging.INFO)
-parser.add_argument('-d','--debug',dest='loglevel',action='store_const', const=logging.DEBUG)
-parser.set_defaults(loglevel=logging.WARN)
-parser.add_argument('--version', action='version', version='%(prog)s '+version)
-parser.add_argument('--target', action='store', default= 'Y:\\')
-args = parser.parse_args()
-logging.basicConfig(level=args.loglevel,format='%(asctime)s [%(levelname)s]: %(message)s')
-
-im=None
 img=None
 def imps(p,s):
-	global im
 	global img
 	im=re.search(p,s)
 	if im:
@@ -32,9 +20,30 @@ def imps(p,s):
 		return False
 
 def myglob(pat,dir='.'):
-	return sorted([f if dir=='.' else join(dir,f) for f in os.listdir(dir) if imps(pat,f)],key=(lambda s:re.sub(r'\d+',lambda m: m.group(0).zfill(6),s)))
+	return sorted([f if dir=='.' else join(dir,f) for f in os.listdir(dir) if imps(r'^' + pat + r'$',f)],key=(lambda s:re.sub(r'\d+',lambda m: m.group(0).zfill(6),s)))
 
-for f in myglob('^.*\.(mp4|m4r|m4b)$'):
+def debug(*args):
+	logging.debug(*args)
+def info(*args):
+	logging.info(*args)
+def warn(*args):
+	logging.warn(*args)
+def error(*args):
+	logging.error(*args)
+def critical(*args):
+	logging.critical(*args)
+	exit(1)
+
+parser = argparse.ArgumentParser(description='Sort mp4s from current directory to target subdirectories',fromfile_prefix_chars='@',prog=prog,epilog='Written by: '+author)
+parser.add_argument('-v','--verbose',dest='loglevel',action='store_const', const=logging.INFO)
+parser.add_argument('-d','--debug',dest='loglevel',action='store_const', const=logging.DEBUG)
+parser.set_defaults(loglevel=logging.WARN)
+parser.add_argument('--version', action='version', version='%(prog)s '+version)
+parser.add_argument('--target', action='store', default= 'Y:\\')
+args = parser.parse_args()
+logging.basicConfig(level=args.loglevel,format='%(asctime)s [%(levelname)s]: %(message)s')
+
+for f in myglob(r'.*\.(mp4|m4r|m4b|m4a)'):
 	ifo=subprocess.check_output(['mp4info',f]).decode(errors='ignore')
 	if not imps('^(?m)\s*Media Type:\s*(.*)$',ifo):
 		warn('No Media Type in {}, skipping.'.format(f))
