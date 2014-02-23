@@ -3,20 +3,27 @@
 # Version: 2.1
 # Author: Carl Edman (email full name as one word at gmail.com)
 
+prog='MakeM4B'
+version='2.2'
+author='Carl Edman (CarlEdman@gmail.com)'
+
 import logging, re, os, argparse, subprocess, math, sys
 from os.path import exists, isfile, getmtime, getsize, join, basename, splitext, abspath, dirname
-from logging import debug, info, warn, error, critical
 
-def secsToParts(s):
-	if s<0:
-		neg="-"
-		s=-s
-	else:
-		neg=""
-	secs, msecs= divmod(s,1)
-	mins, secs = divmod(secs,60)
-	hours, mins = divmod(mins,60)
-	return (neg,int(hours),int(mins),int(secs),int(math.floor(msecs*1000)))
+def debug(*args):
+	logging.debug(*args)
+def info(*args):
+	logging.info(*args)
+def warn(*args):
+	logging.warn(*args)
+def error(*args):
+	logging.error(*args)
+def critical(*args):
+	logging.critical(*args)
+	exit(1)
+
+def myglob(pat,dir='.'):
+	return sorted([f if dir=='.' else join(dir,f) for f in os.listdir(dir) if imps(r'^' + pat + r'$',f)],key=(lambda s:re.sub(r'\d+',lambda m: m.group(0).zfill(6),s)))
 
 im=None
 img=None
@@ -32,7 +39,7 @@ def imps(p,s):
 		return False
 
 parser = argparse.ArgumentParser(description='Chop an mkv file into subfiles at timecodes or chapters.')
-parser.add_argument('--version', action='version', version='%(prog)s 1.0')
+parser.add_argument('--version', action='version', version='%(prog)s '+version)
 parser.add_argument('-s', '--start', type=int, default=1, help='initial value of index for outfiles (default: %(default)d)')
 parser.add_argument('--debug', action='store_true', default=False, help='output debugging messages')
 parser.add_argument('infile', type=str, help='mkv file to be chopped up')
@@ -62,7 +69,7 @@ for s in args.split:
 		while chap in chaps:
 			splits.append(chaps[chap])
 			chap+=i
-	elif imps('^(\d+\.\d*$',s):
+	elif imps('^(\d+\.\d*)$',s):
 		splits.append(float(img[0]))
 	elif imps('^(\d):(\d+\.?\d*$',s):
 		splits.append(60*float(img[0])+float(img[1]))
@@ -75,8 +82,10 @@ timecodes=",".join(['{:02d}:{:02d}:{:02d}:{:03d}'.format(int(s/3600),int(s/60)%6
 
 debug(subprocess.check_output(['mkvmerge','--split','timecodes:'+timecodes,'-o','Temp-%06d.mkv',args.infile]))
 
-for i in range(len(splits)):
-	tf='Temp-{:06d}.mkv'.format(i+1)
+if splits[0] != 0.0:
+	os.remove('Temp-000001.mkv')
+
+for tf,ff in zip(myglob(r'Temp-\d{6}\.mkv'),(args.outfiles.format(i) for i in range(args.start,sys.maxsize))):
 	chaptimes=[]
 	chapnames=[]
 	for l in subprocess.check_output(['mkvextract', 'chapters', '--simple', tf], universal_newlines = True).splitlines():
@@ -104,8 +113,8 @@ for i in range(len(splits)):
 				cf.write('CHAPTER{:02d}={:02d}:{:02d}:{:02d}.{:03d}\n'.format(no,int(ct/3600),int(ct/60)%60,int(ct)%60,int(ct*1000)%1000))
 				cf.write('CHAPTER{:02d}NAME={}\n'.format(no,cn))
 		
-		debug(subprocess.check_output(['mkvmerge','--output', args.outfiles.format(i+args.start), '--chapters', chapfile, '--no-chapters', tf]))
+		debug(subprocess.check_output(['mkvmerge','--output', ff, '--chapters', chapfile, '--no-chapters', tf]))
 		os.remove(tf+'.chap.txt')
 		os.remove(tf)
 	else:
-		os.rename(tf,args.outfiles.format(i+args.start))
+		os.rename(tf,ff)
