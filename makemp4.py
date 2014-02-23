@@ -3,7 +3,7 @@
 # A Python frontend to various audio/video tools to automatically convert them to MP4/H264/AAC-LC and tag them
 
 prog='MakeMP4'
-version='3.5'
+version='3.6'
 author='Carl Edman (CarlEdman@gmail.com)'
 
 import shutil, re, os, sys, argparse, configparser, logging, subprocess, tempfile, time, math
@@ -12,8 +12,6 @@ from fractions import Fraction
 from logging import debug, info, warn, error, critical
 
 langNameToISO6392T = { 'English':'eng', 'Français': 'fra', 'Japanese':'jpn', 'Español':'esp' , 'German':'deu', 'Deutsch':'deu', 'Svenska':'swe', 'Latin':'lat', 'Dutch':'nld', 'Chinese':'zho' }
-langNameToISO6392T = { 'English':'eng', 'Français': 'fra', 'Japanese':'jpn', 'Español':'esp' , 'German':'deu', 'Deutsch':'deu', 'Svenska':'swe', 'Latin':'lat', 'Dutch':'nld', 'Chinese':'zho' }
-
 iso6392BtoT = { 'alb':'sqi', 'arm':'hye', 'baq':'eus', 'bur':'mya', 'chi':'zho', 'cze':'ces', 'dut':'nld', 'fre':'fra', 'geo':'kat', 'ger':'deu', 'gre':'ell', 'ice':'isl', 'mac':'mkd', 'mao':'mri', 'may':'msa', 'per':'fas', 'rum':'ron', 'slo':'slk', 'tib':'bod', 'wel':'cym' }
 
 def nice(niceness):
@@ -56,7 +54,7 @@ def readytomake(file,*comps):
 	return False
 
 def myglob(pat,dir='.'):
-	return sorted([f if dir=='.' else join(dir,f) for f in os.listdir(dir) if imps(pat,f)],key=(lambda s:re.sub(r'\d+',lambda m: m.group(0).zfill(6),s)))
+	return sorted([f if dir=='.' else join(dir,f) for f in os.listdir(dir) if imps(r'^' + pat + r'$',f)],key=(lambda s:re.sub(r'\d+',lambda m: m.group(0).zfill(6),s)))
 
 class MakeMP4Config(configparser.RawConfigParser):
 	"""A subclass of configparser for MakeMP4 Configuration Files"""
@@ -165,10 +163,14 @@ def secsToParts(s):
 		s=-s
 	else:
 		neg=""
-	secs, msecs= divmod(s,1)
+	secs, msecs= divmod(int(s*1000),1000)
 	mins, secs = divmod(secs,60)
 	hours, mins = divmod(mins,60)
-	return (neg,int(hours),int(mins),int(secs),int(math.floor(msecs*1000)))
+	return (neg,hours,mins,secs,msecs)
+
+def partsToSecs(p):
+	neg,hours,mins,secs,msecs=p
+	return (-1 if neg=='-' else 1)*(float(msecs)/1000+secs+(mins+hours*60)*60)
 
 im=None
 img=None
@@ -182,11 +184,6 @@ def imps(p,s):
 	else:
 		img=None
 		return False
-
-def lfind(l,*ws):
-	for w in ws:
-		if w in l: return l.index(w)
-	return -1
 
 def cookout(s):
 	s=re.sub(r'[ \r*]*\n[\r* ]*',r'\n',s)
@@ -328,16 +325,16 @@ def config_from_d2vfile(cfg,d2vfile):
 		cfg.set('x264_rate_factor',16.0)
 	elif mbs<=3600: # 720p@30fps
 		cfg.set('avc_level',3.1)
-		cfg.set('x264_rate_factor',18.0)
+		cfg.set('x264_rate_factor',17.0)
 	elif mbs<=8192: # 1080p@30fps
 		cfg.set('avc_level',4.0)
-		cfg.set('x264_rate_factor',19.0)
+		cfg.set('x264_rate_factor',18.0)
 	elif mbs<=22080: # 1080p@72fps; 1920p@30fps
 		cfg.set('avc_level',5.0)
-		cfg.set('x264_rate_factor',21.0)
+		cfg.set('x264_rate_factor',20.0)
 	else: # 1080p@120fps; 2048@30fps
 		cfg.set('avc_level',5.1)
-		cfg.set('x264_rate_factor',21.0)
+		cfg.set('x264_rate_factor',20.0)
 	
 	frames=0
 	for l in d2vp[2].splitlines():
@@ -456,7 +453,7 @@ def prepare_mpg(mpgfile):
 	cfg.sync()
 	config_from_d2vfile(cfg,d2vfile)
 
-	for file in myglob(r'^' + re.escape(base) +r'\s+T[0-9a-fA-F][0-9a-fA-F]\s+(.*)\.(ac3|dts|mpa|mp2|wav|pcm)$'):
+	for file in myglob(re.escape(base) +r'\s+T[0-9a-fA-F][0-9a-fA-F]\s+(.*)\.(ac3|dts|mpa|mp2|wav|pcm)'):
 		if not imps('^'+re.escape(base)+r'\s+T[0-9a-fA-F][0-9a-fA-F]\s+(.*)\.(ac3|dts|mpa|mp2|wav|pcm)$',file): continue
 		feat=img[0]
 		ext=img[1]
@@ -495,6 +492,16 @@ def prepare_mkv(mkvfile):
 	config_from_base(cfg,base)
 	
 	track=0
+	
+#	File '..\MKV\Despicable Me 2 () HD.mkv': container: Matroska [title:Despicable\sMe\s2 duration:5885754000000 segment_uid:2ea0b6ff6629b799b28c7af1fed0e6fe is_providing_timecodes:1]
+#	Track ID 0: video (MPEG-4p10/AVC/h.264) [number:1 uid:1 codec_id:V_MPEG4/ISO/AVC codec_private_length:128 codec_private_data:01640029ffe1003567640029ac1b1a501e0089f9701100000303e90000bb80e26000042c1c00007270e8c4b8c4c0000858380000e4e1d18970f8e1852c01003c68ea8dce51d1d84388c5456688cdc99a64a3a3b087118a8acd119b9334c94921484e4f37c9fafe4fd7c9e4e4d4966a689d793ebf5fd7ebebc9d6a9c0fdf8f800 language:eng pixel_dimensions:1920x1080 display_dimensions:1920x1080 default_track:0 forced_track:0 enabled_track:1 packetizer:mpeg4_p10_video default_duration:41708333]
+#	Track ID 1: audio (DTS) [number:2 uid:2 codec_id:A_DTS codec_private_length:0 language:eng track_name:3/2+1 default_track:1 forced_track:0 enabled_track:1 default_duration:10666666 audio_sampling_frequency:48000 audio_channels:6]
+#	Track ID 2: audio (AC3/EAC3) [number:3 uid:3 codec_id:A_AC3 codec_private_length:0 language:eng track_name:2/0 default_track:0 forced_track:0 enabled_track:1 default_duration:32000000 audio_sampling_frequency:48000 audio_channels:2]
+#	Track ID 3: audio (AC3/EAC3) [number:4 uid:4 codec_id:A_AC3 codec_private_length:0 language:eng track_name:2/0 default_track:0 forced_track:0 enabled_track:1 default_duration:32000000 audio_sampling_frequency:48000 audio_channels:2]
+#	Track ID 4: subtitles (PGS) [number:5 uid:5 codec_id:S_HDMV/PGS codec_private_length:0 language:eng default_track:0 forced_track:0 enabled_track:1]
+#	Chapters: 20 entries
+	
+	
 	for l in subprocess.check_output(['mkvmerge','--identify-verbose',mkvfile]).decode(encoding='cp1252').splitlines():
 		if imps('^\s*$',l):
 			continue
@@ -505,74 +512,68 @@ def prepare_mkv(mkvfile):
 			if imps(r'\bduration:(\d+)\b',dets):
 				cfg.set('duration',int(img[0])/1000000000.0,section='MAIN')
 			
-		elif imps('^\s*Track ID (\d+): (\w+)\s*\(([A-Z0-9_/, ]*)\)\s*\[(.*)\]\s*$',l):
+		elif imps('^\s*Track ID (\d+): (\w+)\s*\((.*)\)\s*\[(.*)\]\s*$',l):
 			track+=1
 			cfg.setsection('TRACK{:02d}'.format(track))
 			cfg.set('mkvtrack',int(img[0]))
 			cfg.set('type',img[1])
 			cfg.set('format',img[2])
 			dets=img[3]
-			if img[2]=='V_MPEG2':
+			if img[2] in ('V_MPEG2','MPEG-1/2'):
 				cfg.set('extension','mpg')
 				cfg.set('file','{} T{:02d}.mpg'.format(base,track))
 				cfg.set('t2c_file','{} T{:02d}.t2c'.format(base,track))
 				cfg.set('d2v_file','{} T{:02d}.d2v'.format(base,track))
-			elif img[2]=='V_MPEG4/ISO/AVC':
+			elif img[2] in ('V_MPEG4/ISO/AVC','MPEG-4p10/AVC/h.264'):
 				cfg.set('extension','264')
 				cfg.set('file','{} T{:02d}.264'.format(base,track))
 				cfg.set('t2c_file','{} T{:02d}.t2c'.format(base,track))
 				cfg.set('dgi_file','{} T{:02d}.dgi'.format(base,track))
-			elif img[2]=='V_MS/VFW/FOURCC, WVC1':
+			elif img[2] in ('V_MS/VFW/FOURCC, WVC1'):
 				cfg.set('extension','avi')
 				cfg.set('file','{} T{:02d}.avi'.format(base,track))
 				cfg.set('t2c_file','{} T{:02d}.t2c'.format(base,track))
 				cfg.set('dgi_file','{} T{:02d}.dgi'.format(base,track))
-			elif img[2]=='A_AC3':
+			elif img[2] in ('A_AC3','A_EAC3','AC3/EAC3'):
 				cfg.set('extension','ac3')
+#				cfg.set('extension','eac')
 				cfg.set('file','{} T{:02d}.ac3'.format(base,track))
 				cfg.set('quality',60)
 				cfg.set('delay',0.0)
 #				cfg.set('elongation',1.0)
 #				cfg.set('normalize',False)
-			elif img[2]=='A_EAC3':
-				cfg.set('extension','eac')
-				cfg.set('file','{} T{:02d}.eac'.format(base,track))
-				cfg.set('quality',60)
-				cfg.set('delay',0.0)
-#				cfg.set('elongation',1.0)
-#				cfg.set('normalize',False)
-			elif img[2]=='A_TRUEHD':
+			elif img[2] in ('A_TRUEHD'):
 				cfg.set('extension','thd')
 				cfg.set('file','{} T{:02d}.thd'.format(base,track))
 				cfg.set('quality',60)
 				cfg.set('delay',0.0)
 #				cfg.set('elongation',1.0)
 #				cfg.set('normalize',False)
-			elif img[2]=='A_DTS':
+			elif img[2] in ('A_DTS','DTS'):
 				cfg.set('extension','dts')
 				cfg.set('file','{} T{:02d}.dts'.format(base,track))
 				cfg.set('quality',60)
 				cfg.set('delay',0.0)
 #				cfg.set('elongation',1.0)
 #				cfg.set('normalize',False)
-			elif img[2]=='A_PCM/INT/LIT':
+			elif img[2] in ('A_PCM/INT/LIT'):
 				cfg.set('extension','pcm')
 				cfg.set('file','{} T{:02d}.pcm'.format(base,track))
 				cfg.set('quality',60)
 				cfg.set('delay',0.0)
 #				cfg.set('elongation',1.0)
 #				cfg.set('normalize',False)
-			elif img[2]=='S_VOBSUB':
+			elif img[2] in ('S_VOBSUB','VobSub'):
 				cfg.set('extension','idx')
 				cfg.set('file','{} T{:02d}.idx'.format(base,track))
 				cfg.set('delay',0.0)
 				cfg.set('elongation',1.0)
-			elif img[2]=='S_HDMV/PGS':
+			elif img[2] in ('S_HDMV/PGS','PGS'):
 				cfg.set('extension','sup')
 				cfg.set('file','{} T{:02d}.sup'.format(base,track))
 				cfg.set('delay',0.0)
 				cfg.set('elongation',1.0)
-			elif img[2]=='A_MS/ACM':
+			elif img[2] in ('A_MS/ACM'):
 				cfg.set('disable',True)
 				pass
 			else:
@@ -750,7 +751,7 @@ def update_coverart(cfgfile):
 	
 	cfg.setsection('MAIN')
 	
-	for p in myglob('^.*\.(jpg|jpeg|png)$',args.artdir if args.artdir else '.'):
+	for p in myglob(r'.*\.(jpg|jpeg|png)',args.artdir if args.artdir else '.'):
 		b=splitext(basename(p))[0]
 		if imps(r'^(.*)\s+P[\d+]',b):
 			b=img[0]
@@ -759,6 +760,10 @@ def update_coverart(cfgfile):
 	cfg.sync()
 
 def update_description_tvshow(cfg,txt):
+	def lfind(l,*ws):
+		for w in ws:
+			if w in l: return l.index(w)
+		return -1
 	tl=txt.splitlines()
 	h=tl[0].split('\t')
 	tl=tl[1:]
@@ -768,7 +773,7 @@ def update_description_tvshow(cfg,txt):
 	
 	epi=lfind(h,'#','No.','No. in series','Episode number')
 	if epi<0: return False # Fix
-	tii=lfind(h,'Title','Episode title')
+	tii=lfind(h,'Title','Episode title','Episode name','Episode Title','Episode Name')
 	dei=lfind(h,'Description')
 	if dei<0:
 		dei=len(h)
@@ -780,13 +785,17 @@ def update_description_tvshow(cfg,txt):
 			tl[i]=''
 		i+=1
 	wri=lfind(h,'Written by','Writer')
-	dai=lfind(h,'Original Airdate','Original air date','Original airdate','Airdate','Release date')
+	dai=lfind(h,'Original Airdate','Original air date','Original airdate','Airdate','Release date','Aired on','Recorded on')
 	pci=lfind(h,'Production code','Prod. code','prod. code','Prod.code')
 	
 	for t in tl:
 		if not t: continue
 		l=t.split('\t')
-		if l[epi]!=str(cfg.get('episode','*')): continue
+		if cfg.has('episode'):
+			if l[epi]!=str(cfg.get('episode')): continue
+		else:
+			if l[epi]!='*': continue
+#		if l[epi].lstrip(' 0')!=str(cfg.get('episode','*')): continue
 		if 0<=tii<len(l) and l[tii] and cfg.hasno('song'):
 			cfg.set('song',l[tii].strip('" '))
 		if 0<=wri<len(l) and l[wri] and cfg.hasno('writer'):
@@ -821,26 +830,26 @@ def update_description_movie(cfg,txt):
 		atr=img[0]
 		val=img[1]
 		if atr=='Genres' and cfg.hasno('genre'):
-			if imps('\b'+'Musicals'+'\b',val): cfg.set('genre','Musical')
-			elif imps('\b'+'Animes'+'\b',val): cfg.set('genre','Anime')
-			elif imps('\b'+'Operas'+'\b',val): cfg.set('genre','Opera')
-			elif imps('\b'+'Fantasy'+'\b',val): cfg.set('genre','Fantasy')
-			elif imps('\b'+'Horror'+'\b',val): cfg.set('genre','Horror')
-			elif imps('\b'+'Documentaries'+'\b',val): cfg.set('genre','Documentary')
-			elif imps('\b'+'Superhero'+'\b',val): cfg.set('genre','Superhero')
-			elif imps('\b'+'Western'+'\b',val): cfg.set('genre','Westerns')
-			elif imps('\b'+'Classics'+'\b',val): cfg.set('genre','Classics')
-			elif imps('\b'+'Sci-Fi & Fantasy'+'\b',val): cfg.set('genre','Science Fiction')
-			elif imps('\b'+'Comedies'+'\b',val): cfg.set('genre','Comedy')
-			elif imps('\b'+'Crime'+'\b',val): cfg.set('genre','Crime')
-			elif imps('\b'+'Thrillers'+'\b',val): cfg.set('genre','Thriller')
-			elif imps('\b'+'Romantic'+'\b',val): cfg.set('genre','Romance')
-			elif imps('\b'+'Animation'+'\b',val): cfg.set('genre','Animation')
-			elif imps('\b'+'Cartoons'+'\b',val): cfg.set('genre','Animation')
-			elif imps('\b'+'Period Pieces'+'\b',val): cfg.set('genre','History')
-			elif imps('\b'+'Action'+'\b',val): cfg.set('genre','Action')
-			elif imps('\b'+'Adventure'+'\b',val): cfg.set('genre','Adventure')
-			elif imps('\b'+'Dramas'+'\b',val): cfg.set('genre','Drama')
+			if imps(r'\bMusicals\b',val): cfg.set('genre','Musical')
+			elif imps(r'\bAnimes\b',val): cfg.set('genre','Anime')
+			elif imps(r'\bOperas\b',val): cfg.set('genre','Opera')
+			elif imps(r'\bFantasy\b',val): cfg.set('genre','Fantasy')
+			elif imps(r'\bHorror\b',val): cfg.set('genre','Horror')
+			elif imps(r'\bDocumentaries\b',val): cfg.set('genre','Documentary')
+			elif imps(r'\bSuperhero\b',val): cfg.set('genre','Superhero')
+			elif imps(r'\bWestern\b',val): cfg.set('genre','Westerns')
+			elif imps(r'\bClassics\b',val): cfg.set('genre','Classics')
+			elif imps(r'\bSci-Fi & Fantasy\b',val): cfg.set('genre','Science Fiction')
+			elif imps(r'\bComedies\b',val): cfg.set('genre','Comedy')
+			elif imps(r'\bCrime\b',val): cfg.set('genre','Crime')
+			elif imps(r'\bThrillers\b',val): cfg.set('genre','Thriller')
+			elif imps(r'\bRomantic\b',val): cfg.set('genre','Romance')
+			elif imps(r'\bAnimation\b',val): cfg.set('genre','Animation')
+			elif imps(r'\bCartoons\b',val): cfg.set('genre','Animation')
+			elif imps(r'\bPeriod Pieces\b',val): cfg.set('genre','History')
+			elif imps(r'\bAction\b',val): cfg.set('genre','Action')
+			elif imps(r'\bAdventure\b',val): cfg.set('genre','Adventure')
+			elif imps(r'\bDramas\b',val): cfg.set('genre','Drama')
 			else: cfg.set('genre',val)
 		elif atr=='Director':
 			description += '  '+t+'.'
@@ -897,8 +906,8 @@ def build_subtitles(cfgfile):
 					if nneg1 or nneg2: continue
 					o.write(beg+'{:02d}:{:02d}:{:02d},{:03d}'.format(nhours1,nmins1,nsecs1,nmsecs1)+mid+'{:02d}:{:02d}:{:02d},{:03d}'.format(nhours2,nmins2,nsecs2,nmsecs2)+end+'\n\n')
 			do_call(['mp4box','-ttxt','temp.srt'],outfile)
-			os.rename('temp.ttxt',outfile)
-			os.remove('temp.srt')
+			if exists('temp.ttxt'): os.rename('temp.ttxt',outfile)
+			if exists('temp.srt'): os.remove('temp.srt')
 		elif inext=='sup':
 			outfile = splitext(infile)[0]+'.idx'
 			cfg.set('out_file', outfile)
@@ -968,7 +977,7 @@ def build_audios(cfgfile):
 			warn('Invalid downmix "{:d}"'.format(cfg.get('downmix')))
 #		if cfg.get('normalize',False): call.append('-normalize')
 		
-		call += [ '|', 'qaac', '--ignorelength', '--no-optimize', '--tvbr', str(cfg.get('quality',60)), '--quality', '2', '-', '-o', outfile]
+		call += [ '|', 'qaac', '--threading', '--ignorelength', '--no-optimize', '--tvbr', str(cfg.get('quality',60)), '--quality', '2', '-', '-o', outfile]
 		
 		res=do_call(call, outfile)
 		if res and imps(r'\bwrote (\d+\.?\d*) seconds\b',res):
@@ -1102,12 +1111,12 @@ def build_videos(cfgfile):
 		if cfg.has('avc_profile'): call += ['--profile', cfg.get('avc_profile')]
 		if cfg.has('avc_level'): call += ['--level', cfg.get('avc_level')]
 		if cfg.has('t2cfile'): call += ['--timebase', '1000', '--tcfile-in', cfg.get('t2cfile')] # XXX
-#		if cfg.has('frames'): call += ['--frames', cfg.get('frames')]
+		if cfg.has('frames'): call += ['--frames', cfg.get('frames')]
 		call += [ '--output', outfile ]
 		
 		cfg.sync()
 		res=do_call(call,outfile)
-		os.remove(avsfile[1])
+		if exists(avsfile[1]): os.remove(avsfile[1])
 		if res and imps(r'\bencoded (\d+) frames\b',res):
 			cfg.sync()
 			frames=int(img[0])
@@ -1205,7 +1214,7 @@ def build_results(cfgfile):
 	do_call(call,outfile)
 	
 	cfg.setsection('MAIN')
-	call=['-encodedby', prog + ' ' + version + ' on ' + time.strftime('%A, %B %d, %Y, at %X')]
+	call=['-tool', prog + ' ' + version + ' on ' + time.strftime('%A, %B %d, %Y, at %X')]
 	if cfg.has('type'): call += [ '-type' , cfg.get('type') ]
 	if cfg.has('genre'): call += [ '-genre' , cfg.get('genre') ]
 	if cfg.has('year'): call += [ '-year' , cfg.get('year') ]
@@ -1300,33 +1309,33 @@ while True:
 		exec(compile(open(sys.argv[0]).read(), sys.argv[0], 'exec')) # execfile(sys.argv[0])
 	
 	if args.tivodir:
-		for f in myglob('\.TiVo$',args.tivodir):
+		for f in myglob(r'.*\.TiVo',args.tivodir):
 			prepare_tivo(f)
 	
 	if args.tivodir:
-		for f in myglob('\.mpg$',args.tivodir):
+		for f in myglob(r'.*\.mpg',args.tivodir):
 			prepare_mpg(f)
 	
 	if args.mkvdir:
-		for f in myglob('\.mkv$',args.mkvdir):
+		for f in myglob(r'.*\.mkv',args.mkvdir):
 			prepare_mkv(f)
 	
 	if args.vobdir:
-		for f in myglob('\.vob$',args.vobdir):
+		for f in myglob(r'.*\.vob',args.vobdir):
 			prepare_vob(f)
 	
-	for f in myglob('\.cfg$'):
+	for f in myglob(r'.*\.cfg'):
 		update_coverart(f)
 		update_description(f)
 		build_results(f)
 	
-	for f in myglob('\.cfg$'):
+	for f in myglob(r'.*\.cfg'):
 		build_subtitles(f)
 	
-	for f in myglob('\.cfg$'):
+	for f in myglob(r'.*\.cfg'):
 		build_audios(f)
 	
-	for f in myglob('\.cfg$'):
+	for f in myglob(r'.*\.cfg'):
 		build_videos(f)
 	
 	print("Sleeping.")
