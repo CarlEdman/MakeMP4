@@ -3,7 +3,7 @@
 # A Python frontend to various audio/video tools to automatically convert them to MP4/H264/AAC-LC and tag them
 
 prog='MakeMP4'
-version='3.6'
+version='3.7'
 author='Carl Edman (CarlEdman@gmail.com)'
 
 import shutil, re, os, sys, argparse, configparser, logging, subprocess, tempfile, time, math
@@ -282,99 +282,57 @@ def config_from_base(cfg,base):
 		cfg.set('episode','')
 	cfg.sync()
 
-def config_from_d2vfile(cfg,d2vfile):
-	with open(d2vfile, 'rb') as fp: d2v=fp.read().decode(encoding='cp1252')
-	d2vp=d2v.split('\r\n\r\n')
-	if len(d2vp)!=4: return False
-	if not imps(r'^DGIndexProjectFile16',d2vp[0]): return False
-	if not imps(r'^FINISHED\s+([0-9.]+)%\s+(.*?)\s*$',d2vp[3]): return False
-	ilp=img[0]
-	ilt=img[1]
-	if not imps(r'\bAspect_Ratio=(\d+):(\d+)',d2vp[1]): return False
-	arf=Fraction(int(img[0]),int(img[1]))
-	if not imps(r'\bClipping=\ *(\d+) *, *(\d+) *, *(\d+) *, *(\d+)',d2vp[1]): return False
-	cl,cr,ct,cb=[int(img[i]) for i in range(4)]
-	if not imps(r'\bPicture_Size= *(\d+)x(\d+)',d2vp[1]): return False
-	psx,psy=[int(img[i]) for i in range(2)]
-	sarf=arf/Fraction(psx,psy)
-	if not imps(r'\bField_Operation= *(\d+)',d2vp[1]): return False
-	fio=img[0]
-	if not imps(r'\bFrame_Rate= *(\d+) *\((\d+)/(\d+)\)',d2vp[1]): return False
-	frm=float(img[0])/1000.0
-	frf=Fraction(int(img[1]),int(img[2]))
-	
-	cfg.set('type', 'video')
-#	cfg.set('file', d2vp[0].splitlines()[2])
-	cfg.set('d2v_file', d2vfile)
-	cfg.set('interlace_type', ilt)
-	cfg.set('interlace_percent', ilp)
-	cfg.set('aspect_ratio',str(arf))
-	if cl==cr==ct==cb==0:
-		cfg.set('crop', 'auto')
-	else:
-		cfg.set('crop', '0,0,0,0')
-	cfg.set('picture_size', "{:d}x{:d}".format(psx,psy))
-	cfg.set('field_operation', fio)
-	cfg.set('frame_rate_ratio', str(frf))
-	cfg.set('sample_aspect_ratio',str(sarf))
-	mbs = int(math.ceil((psx-cl-cr)/16.0))*int(math.ceil((psy-ct-cb)/16.0))
-	cfg.set('macroblocks',mbs)
-	cfg.set('avc_profile','high')
-	if mbs<=1620: # 480p@30fps; 576p@25fps
-		cfg.set('avc_level',3.0)
-		cfg.set('x264_rate_factor',16.0)
-	elif mbs<=3600: # 720p@30fps
-		cfg.set('avc_level',3.1)
-		cfg.set('x264_rate_factor',17.0)
-	elif mbs<=8192: # 1080p@30fps
-		cfg.set('avc_level',4.0)
-		cfg.set('x264_rate_factor',18.0)
-	elif mbs<=22080: # 1080p@72fps; 1920p@30fps
-		cfg.set('avc_level',5.0)
-		cfg.set('x264_rate_factor',20.0)
-	else: # 1080p@120fps; 2048@30fps
-		cfg.set('avc_level',5.1)
-		cfg.set('x264_rate_factor',20.0)
-	
-	frames=0
-	for l in d2vp[2].splitlines():
-		if imps(r'^([0-9a-f]+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(?P<flags>([0-9a-f]+ +)*[0-9a-f]+)\s*$',l):
-			frames += len(img[7].split())
-	cfg.set('frames', frames)
-	cfg.sync()
-	return True
-
 def config_from_dgifile(cfg,dgifile):
 	with open(dgifile, 'rb') as fp: dgi=fp.read().decode(encoding='cp1252')
 	dgip=dgi.split('\r\n\r\n')
 	if len(dgip)!=4: return False
-	if not imps(r'^(DGAVCIndexFileNV14|DGMPGIndexFileNV14|DGVC1IndexFileNV14)',dgip[0]): return False
-	if not imps(r'\bCLIP\ *(\d+) *(\d+) *(\d+) *(\d+)',dgip[2]): return False
-	cl,cr,ct,cb=[int(img[i]) for i in range(4)]
-	if not imps(r'\bSIZ *(\d+) *x *(\d+)',dgip[3]): return False
-	psx,psy=[int(img[i]) for i in range(2)]
-	sarf=Fraction(1,1)
-	if not imps(r'\bORDER *(\d+)',dgip[3]): return False
-	fio=img[0]
-	if not imps(r'\bFPS *(\d+) */ *(\d+) *',dgip[3]): return False
-	frf=Fraction(int(img[0]),int(img[1]))
-	if not imps(r'\b(\d*\.\d*)% *FILM',dgip[3]): return False
-	ilp = float(img[0])
+	if imps(r'^(DGAVCIndexFileNV14|DGMPGIndexFileNV14|DGVC1IndexFileNV14)',dgip[0]):
+		ilt='PROGRESSIVE'
+		ilp=100.0
+		if not imps(r'\bCLIP\ *(\d+) *(\d+) *(\d+) *(\d+)',dgip[2]): return False
+		cl,cr,ct,cb=[int(img[i]) for i in range(4)]
+		if not imps(r'\bSIZ *(\d+) *x *(\d+)',dgip[3]): return False
+		psx,psy=[int(img[i]) for i in range(2)]
+		cl=cr=ct=cb=0
+		sarf=Fraction(1,1)
+		if not imps(r'\bORDER *(\d+)',dgip[3]): return False
+		fio=img[0]
+		if not imps(r'\bFPS *(\d+) */ *(\d+) *',dgip[3]): return False
+		frf=Fraction(int(img[0]),int(img[1]))
+		if not imps(r'\b(\d*\.\d*)% *FILM',dgip[3]): return False
+		ilp = float(img[0])
+		frames = 0 # FIXME
+	elif imps(r'^DGIndexProjectFile16',dgip[0]):
+		if not imps(r'^FINISHED\s+([0-9.]+)%\s+(.*?)\s*$',dgip[3]): return False
+		ilp=img[0]
+		ilt=img[1]
+		if not imps(r'\bAspect_Ratio=(\d+):(\d+)',dgip[1]): return False
+		arf=Fraction(int(img[0]),int(img[1]))
+		if not imps(r'\bClipping=\ *(\d+) *, *(\d+) *, *(\d+) *, *(\d+)',dgip[1]): return False
+		cl,cr,ct,cb=[int(img[i]) for i in range(4)]
+		if not imps(r'\bPicture_Size= *(\d+)x(\d+)',dgip[1]): return False
+		psx,psy=[int(img[i]) for i in range(2)]
+		sarf=arf/Fraction(psx,psy)
+		if not imps(r'\bField_Operation= *(\d+)',dgip[1]): return False
+		fio=img[0]
+		if not imps(r'\bFrame_Rate= *(\d+) *\((\d+)/(\d+)\)',dgip[1]): return False
+		frm=float(img[0])/1000.0
+		frf=Fraction(int(img[1]),int(img[2]))
+		
+		frames=0
+		for l in dgip[2].splitlines():
+			if imps(r'^([0-9a-f]+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(?P<flags>([0-9a-f]+ +)*[0-9a-f]+)\s*$',l):
+				frames += len(img[7].split())
+	else:
+		return False
 	
 	cfg.set('type', 'video')
 #	cfg.set('file', dgip[1].splitlines()[0])
 	cfg.set('dgi_file', dgifile)
-	cfg.set('interlace_type', 'PROGRESSIVE')
-#	if ilp>50.0:
-#		cfg.set('interlace_type', 'FILM')
-#		cfg.set('interlace_percent', ilp)
-#	else:
-#		cfg.set('interlace_type', 'VIDEO')
-#		cfg.set('interlace_percent', 100.0-ilp)
-#	if cl==cr==ct==cb==0:
-	cfg.set('crop', 'auto')
-#	else:
-#		cfg.set('crop', '0,0,0,0')
+	cfg.set('interlace_type', ilt)
+	cfg.set('interlace_percent', ilp)
+	cfg.set('crop', 'auto' if cl==cr==ct==cb==0 else '0,0,0,0')
+#	cfg.set('aspect_ratio',str(arf))
 	cfg.set('picture_size', "{:d}x{:d}".format(psx,psy))
 	cfg.set('field_operation', fio)
 	cfg.set('frame_rate_ratio', str(frf))
@@ -389,20 +347,21 @@ def config_from_dgifile(cfg,dgifile):
 		cfg.set('avc_level',3.1)
 		cfg.set('x264_rate_factor',18.0)
 	elif mbs<=8192: # 1080p@30fps
-		cfg.set('avc_level',4.1)
-		cfg.set('x264_rate_factor',20.0)
+		cfg.set('avc_level',4.0)
+		cfg.set('x264_rate_factor',19.0)
 	elif mbs<=22080: # 1080p@72fps; 1920p@30fps
 		cfg.set('avc_level',5.0)
-		cfg.set('x264_rate_factor',22.0)
+		cfg.set('x264_rate_factor',20.0)
 	else: # 1080p@120fps; 2048@30fps
 		cfg.set('avc_level',5.1)
-		cfg.set('x264_rate_factor',22.0)
-	
+		cfg.set('x264_rate_factor',20.0)
+	if frames!=0:
+		cfg.set('frames', frames)
 	cfg.sync()
 	return True
 
 def config_from_idxfile(cfg,idxfile):
-	with open(d2vfile, 'rb') as fp: idx=fp.read()
+	with open(idxfile, 'rb') as fp: idx=fp.read()
 	timestamp=[]
 	filepos=[]
 	for l in idx.splitlines():
@@ -442,16 +401,15 @@ def prepare_mpg(mpgfile):
 	config_from_base(cfg,base)
 	
 	track=1
-	d2vfile='{} T{:02d}.d2v'.format(base,track)
+	dgifile='{} T{:02d}.d2v'.format(base,track)
 	if not exists(d2vfile):
 		do_call(['dgindex', '-i', mpgfile, '-fo', '0', '-ia', '3', '-om', '2', '-exit'],base+'.d2v')
-		os.rename(base+'.d2v',d2vfile)
-	if not exists(d2vfile): return
+		os.rename(base+'.d2v',dgifile)
+	if not exists(dgifile): return
 	cfg.setsection('TRACK{:02d}'.format(track))
 	cfg.set('file',mpgfile)
-	cfg.set('d2v_file',d2vfile)
 	cfg.sync()
-	config_from_d2vfile(cfg,d2vfile)
+	config_from_dgifile(cfg,dgifile)
 
 	for file in myglob(re.escape(base) +r'\s+T[0-9a-fA-F][0-9a-fA-F]\s+(.*)\.(ac3|dts|mpa|mp2|wav|pcm)'):
 		if not imps('^'+re.escape(base)+r'\s+T[0-9a-fA-F][0-9a-fA-F]\s+(.*)\.(ac3|dts|mpa|mp2|wav|pcm)$',file): continue
@@ -493,15 +451,6 @@ def prepare_mkv(mkvfile):
 	
 	track=0
 	
-#	File '..\MKV\Despicable Me 2 () HD.mkv': container: Matroska [title:Despicable\sMe\s2 duration:5885754000000 segment_uid:2ea0b6ff6629b799b28c7af1fed0e6fe is_providing_timecodes:1]
-#	Track ID 0: video (MPEG-4p10/AVC/h.264) [number:1 uid:1 codec_id:V_MPEG4/ISO/AVC codec_private_length:128 codec_private_data:01640029ffe1003567640029ac1b1a501e0089f9701100000303e90000bb80e26000042c1c00007270e8c4b8c4c0000858380000e4e1d18970f8e1852c01003c68ea8dce51d1d84388c5456688cdc99a64a3a3b087118a8acd119b9334c94921484e4f37c9fafe4fd7c9e4e4d4966a689d793ebf5fd7ebebc9d6a9c0fdf8f800 language:eng pixel_dimensions:1920x1080 display_dimensions:1920x1080 default_track:0 forced_track:0 enabled_track:1 packetizer:mpeg4_p10_video default_duration:41708333]
-#	Track ID 1: audio (DTS) [number:2 uid:2 codec_id:A_DTS codec_private_length:0 language:eng track_name:3/2+1 default_track:1 forced_track:0 enabled_track:1 default_duration:10666666 audio_sampling_frequency:48000 audio_channels:6]
-#	Track ID 2: audio (AC3/EAC3) [number:3 uid:3 codec_id:A_AC3 codec_private_length:0 language:eng track_name:2/0 default_track:0 forced_track:0 enabled_track:1 default_duration:32000000 audio_sampling_frequency:48000 audio_channels:2]
-#	Track ID 3: audio (AC3/EAC3) [number:4 uid:4 codec_id:A_AC3 codec_private_length:0 language:eng track_name:2/0 default_track:0 forced_track:0 enabled_track:1 default_duration:32000000 audio_sampling_frequency:48000 audio_channels:2]
-#	Track ID 4: subtitles (PGS) [number:5 uid:5 codec_id:S_HDMV/PGS codec_private_length:0 language:eng default_track:0 forced_track:0 enabled_track:1]
-#	Chapters: 20 entries
-	
-	
 	for l in subprocess.check_output(['mkvmerge','--identify-verbose',mkvfile]).decode(encoding='cp1252').splitlines():
 		if imps('^\s*$',l):
 			continue
@@ -523,7 +472,8 @@ def prepare_mkv(mkvfile):
 				cfg.set('extension','mpg')
 				cfg.set('file','{} T{:02d}.mpg'.format(base,track))
 				cfg.set('t2c_file','{} T{:02d}.t2c'.format(base,track))
-				cfg.set('d2v_file','{} T{:02d}.d2v'.format(base,track))
+#				cfg.set('dgi_file','{} T{:02d}.dgi'.format(base,track))
+				cfg.set('dgi_file','{} T{:02d}.d2v'.format(base,track))
 			elif img[2] in ('V_MPEG4/ISO/AVC','MPEG-4p10/AVC/h.264'):
 				cfg.set('extension','264')
 				cfg.set('file','{} T{:02d}.264'.format(base,track))
@@ -659,16 +609,16 @@ def prepare_mkv(mkvfile):
 	for vt in sorted([t for t in cfg.sections() if t.startswith('TRACK') and not cfg.get('disable',section=t) and cfg.equals('type','video',section=t)]):
 		cfg.setsection(vt)
 		file=cfg.get('file')
-		d2vfile=cfg.get('d2v_file', None)
-		if d2vfile:
-			if not exists(d2vfile):
-				do_call(['dgindex', '-i', cfg.get('file'), '-o', splitext(d2vfile)[0], '-fo', '0', '-ia', '3', '-om', '2', '-hide', '-exit'],d2vfile)
-			config_from_d2vfile(cfg,d2vfile)
 		dgifile=cfg.get('dgi_file', None)
 		if dgifile:
 			if not exists(dgifile):
-				do_call(['DGIndexNV', '-i', cfg.get('file'), '-o', dgifile, '-h', '-e'],dgifile)
-				config_from_dgifile(cfg,dgifile)
+				if dgifile.endswith('.dgi'):
+					do_call(['DGIndexNV', '-i', cfg.get('file'), '-o', dgifile, '-h', '-e'],dgifile)
+				elif dgifile.endswith('.d2v'):
+					do_call(['dgindex', '-i', cfg.get('file'), '-o', splitext(dgifile)[0], '-fo', '0', '-ia', '3', '-om', '2', '-hide', '-exit'],dgifile)
+				else:
+					continue
+			config_from_dgifile(cfg,dgifile)
 		
 
 	for vt in sorted([t for t in cfg.sections() if t.startswith('TRACK') and not cfg.get('disable',section=t)]):
@@ -833,13 +783,13 @@ def update_description_movie(cfg,txt):
 			if imps(r'\bMusicals\b',val): cfg.set('genre','Musical')
 			elif imps(r'\bAnimes\b',val): cfg.set('genre','Anime')
 			elif imps(r'\bOperas\b',val): cfg.set('genre','Opera')
+			elif imps(r'\bSci-Fi\b',val): cfg.set('genre','Science Fiction')
 			elif imps(r'\bFantasy\b',val): cfg.set('genre','Fantasy')
 			elif imps(r'\bHorror\b',val): cfg.set('genre','Horror')
 			elif imps(r'\bDocumentaries\b',val): cfg.set('genre','Documentary')
 			elif imps(r'\bSuperhero\b',val): cfg.set('genre','Superhero')
 			elif imps(r'\bWestern\b',val): cfg.set('genre','Westerns')
 			elif imps(r'\bClassics\b',val): cfg.set('genre','Classics')
-			elif imps(r'\bSci-Fi & Fantasy\b',val): cfg.set('genre','Science Fiction')
 			elif imps(r'\bComedies\b',val): cfg.set('genre','Comedy')
 			elif imps(r'\bCrime\b',val): cfg.set('genre','Crime')
 			elif imps(r'\bThrillers\b',val): cfg.set('genre','Thriller')
@@ -992,21 +942,20 @@ def build_videos(cfgfile):
 		cfg.setsection(track)
 		infile = cfg.get('file')
 		inext = cfg.get('extension')
-		d2vfile = cfg.get('d2v_file', None)
 		dgifile = cfg.get('dgi_file', None)
 		outfile = cfg.get('out_file',splitext(basename(infile))[0] +'.out.264' ) # +'.mp4') # +'.m4v')
 		cfg.set('out_file',outfile)
 		cfg.sync()
-		if not readytomake(outfile,infile,d2vfile,dgifile): continue
+		if not readytomake(outfile,infile,dgifile): continue
 		
 		avs=''
 		procs=cfg.get('processors',6)
 		if procs!=1: avs += 'SetMTMode(5,{:d})\n'.format(procs)
 		avs += 'SetMemoryMax(1024)\n'
-		if d2vfile:
-			avs+='DGDecode_mpeg2source("{}", info=3, idct=4, cpu=3)\n'.format(abspath(d2vfile))
-			avs+='ColorMatrix(hints = true,interlaced=true)\n'.format(abspath(d2vfile))
-		elif dgifile:
+		if dgifile.endswith('.d2v'):
+			avs+='DGDecode_mpeg2source("{}", info=3, idct=4, cpu=3)\n'.format(abspath(dgifile))
+			avs+='ColorMatrix(hints = true,interlaced=true)\n'.format(abspath(dgifile))
+		elif dgifile.endswith('.dgi'):
 			avs+='DGSource("{}", deinterlace=1, use_pf = true)\n'.format(abspath(dgifile))
 			avs+='ColorMatrix(hints = true, interlaced=false)\n'
 		else:
@@ -1293,15 +1242,6 @@ if 'parser' not in globals():
 logging.basicConfig(level=args.loglevel,filename=args.logfile,format='%(asctime)s [%(levelname)s]: %(message)s')
 nice(args.niceness)
 progmodtime=getmtime(sys.argv[0])
-
-#cfg = MakeMP4Config("Kung Fu Panda () Animals.cfg")
-#cfg.setsection('TRACK01')
-#config_from_dgifile(cfg,'Kung Fu Panda () Animals T01.dgi')
-#cfg.sync()
-#print imps(r'^(.*?) (pt\. (\d+) *)?\((\d*)\) *(.*?)$','Two Towers pt. 2 () HD')
-#print img[0]
-#print img[2]
-#sys.exit()
 
 while True:
 	working=False
