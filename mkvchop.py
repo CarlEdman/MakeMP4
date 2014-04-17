@@ -1,42 +1,14 @@
 #!/usr/bin/python
 # -*- coding: latin-1 -*-
-# Version: 2.1
 # Author: Carl Edman (email full name as one word at gmail.com)
 
 prog='MakeM4B'
-version='2.2'
+version='2.3'
 author='Carl Edman (CarlEdman@gmail.com)'
 
 import logging, re, os, argparse, subprocess, math, sys
 from os.path import exists, isfile, getmtime, getsize, join, basename, splitext, abspath, dirname
-
-def debug(*args):
-	logging.debug(*args)
-def info(*args):
-	logging.info(*args)
-def warn(*args):
-	logging.warn(*args)
-def error(*args):
-	logging.error(*args)
-def critical(*args):
-	logging.critical(*args)
-	exit(1)
-
-def myglob(pat,dir='.'):
-	return sorted([f if dir=='.' else join(dir,f) for f in os.listdir(dir) if imps(r'^' + pat + r'$',f)],key=(lambda s:re.sub(r'\d+',lambda m: m.group(0).zfill(6),s)))
-
-im=None
-img=None
-def imps(p,s):
-	global im
-	global img
-	im=re.search(p,s)
-	if im:
-		img=im.groups()
-		return True
-	else:
-		img=None
-		return False
+from cetools import *
 
 parser = argparse.ArgumentParser(description='Chop an mkv file into subfiles at timecodes or chapters.')
 parser.add_argument('--version', action='version', version='%(prog)s '+version)
@@ -49,34 +21,34 @@ args = parser.parse_args()
 
 chaps=dict()
 for l in subprocess.check_output(['mkvextract', 'chapters', '--simple', args.infile], universal_newlines = True).splitlines():
-	if imps('^CHAPTER(\d+)=(\d+):(\d+):(\d+\.?\d*)$',l):
-		chaps[int(img[0])]=3600*float(img[1])+60*float(img[2])+float(img[3])
+	if rser('^CHAPTER(\d+)=(\d+):(\d+):(\d+\.?\d*)$',l):
+		chaps[int(rget(0))]=3600*float(rget(1))+60*float(rget(2))+float(rget(3))
 
 splits=[]
 chap=None
 for s in args.split:
-	if imps('^(\d+)$',s):
-		chap=int(img[0])
+	if rser('^(\d+)$',s):
+		chap=int(rget(0))
 		if chap not in chaps:
 			print('Chapter {:d} not in "{:}"'.format(chap,args.infile))
 			sys.exit(-1)
 		splits.append(chaps[chap])
-	elif imps('^\+(\d+)$',s):
-		i=int(img[0])
+	elif rser('^\+(\d+)$',s):
+		i=int(rget(0))
 		if not chap:
 			print('No previous chapter for increment +{:d} not in "{:}"'.format(i,args.infile))
 		chap+=i
 		while chap in chaps:
 			splits.append(chaps[chap])
 			chap+=i
-	elif imps('^(\d+\.\d*)$',s):
-		splits.append(float(img[0]))
-	elif imps('^(\d):(\d+\.?\d*$',s):
-		splits.append(60*float(img[0])+float(img[1]))
-	elif imps('^(\d):(\d):(\d+\.?\d*$',s):
-		splits.append(3600*float(img[0])+60*float(img[1])+float(img[2]))
-	elif imps('^(\d):(\d+\.\d*)$',s):
-		splits.append(float(img[0])*60+float(img[1]))
+	elif rser('^(\d+\.\d*)$',s):
+		splits.append(float(rget(0)))
+	elif rser('^(\d):(\d+\.?\d*$',s):
+		splits.append(60*float(rget(0))+float(rget(1)))
+	elif rser('^(\d):(\d):(\d+\.?\d*$',s):
+		splits.append(3600*float(rget(0))+60*float(rget(1))+float(rget(2)))
+	elif rser('^(\d):(\d+\.\d*)$',s):
+		splits.append(float(rget(0))*60+float(rget(1)))
 
 timecodes=",".join(['{:02d}:{:02d}:{:02d}:{:03d}'.format(int(s/3600),int(s/60)%60,int(s)%60,int(s*1000)%1000) for s in splits])
 
@@ -85,14 +57,14 @@ debug(subprocess.check_output(['mkvmerge','--split','timecodes:'+timecodes,'-o',
 if splits[0] != 0.0:
 	os.remove('Temp-000001.mkv')
 
-for tf,ff in zip(myglob(r'Temp-\d{6}\.mkv'),(args.outfiles.format(i) for i in range(args.start,sys.maxsize))):
+for tf,ff in zip(reglob(r'Temp-\d{6}\.mkv'),(args.outfiles.format(i) for i in range(args.start,sys.maxsize))):
 	chaptimes=[]
 	chapnames=[]
 	for l in subprocess.check_output(['mkvextract', 'chapters', '--simple', tf], universal_newlines = True).splitlines():
-		if imps('^CHAPTER(\d+)=(\d+):(\d+):(\d+\.?\d*)$',l):
-			chaptimes.append(3600*float(img[1])+60*float(img[2])+float(img[3]))
-		elif imps('^CHAPTER(\d+)NAME=(.*)$',l):
-			chapnames.append(img[1])
+		if rser('^CHAPTER(\d+)=(\d+):(\d+):(\d+\.?\d*)$',l):
+			chaptimes.append(3600*float(rget(1))+60*float(rget(2))+float(rget(3)))
+		elif rser('^CHAPTER(\d+)NAME=(.*)$',l):
+			chapnames.append(rget(1))
 	chapchange=False
 	
 	if len(chaptimes)>=2 and chaptimes[1]-chaptimes[0]<1.0:
