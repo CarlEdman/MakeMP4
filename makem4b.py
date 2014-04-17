@@ -1,38 +1,13 @@
 #!/usr/bin/python
 # -*- coding: latin-1 -*-
-# Version: 0.1
 # Author: Carl Edman (email full name as one word at gmail.com)
 
 prog='MakeM4B'
-version='0.1'
+version='0.2'
 author='Carl Edman (CarlEdman@gmail.com)'
 
 import logging, re, os, os.path, argparse, subprocess, math, sys, glob, logging
-
-def debug(*args):
-	logging.debug(*args)
-def info(*args):
-	logging.info(*args)
-def warn(*args):
-	logging.warn(*args)
-def error(*args):
-	logging.error(*args)
-def critical(*args):
-	logging.critical(*args)
-	exit(1)
-
-im=None
-img=None
-def imps(p,s):
-	global im
-	global img
-	im=re.search(p,s)
-	if im:
-		img=im.groups()
-		return True
-	else:
-		img=None
-		return False
+from cetools import *
 
 parser = argparse.ArgumentParser(description='Convert audio files to m4b audiobook, creating chapters as necessary.')
 parser.add_argument('--version', action='version', version='%(prog)s ' + version)
