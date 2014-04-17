@@ -7,14 +7,14 @@ version='3.8'
 author='Carl Edman (CarlEdman@gmail.com)'
 
 import shutil, re, os, sys, argparse, logging, subprocess, tempfile, time, math
-from os.path import exists, isfile, getmtime, getsize, join, basename, splitext, abspath, dirname
+from os.path import exists, isfile, isdir, getmtime, getsize, join, basename, splitext, abspath, dirname
 from fractions import Fraction
 from AdvConfig import AdvConfig
 #from logging import debug, info, warn, error, critical
 
 from cetools import *
 
-langNameToISO6392T = { 'English':'eng', 'FranÃ§ais': 'fra', 'Japanese':'jpn', 'EspaÃ±ol':'esp' , 'German':'deu', 'Deutsch':'deu', 'Svenska':'swe', 'Latin':'lat', 'Dutch':'nld', 'Chinese':'zho' }
+langNameToISO6392T = { 'English':'eng', 'Français': 'fra', 'Japanese':'jpn', 'Español':'esp' , 'German':'deu', 'Deutsch':'deu', 'Svenska':'swe', 'Latin':'lat', 'Dutch':'nld', 'Chinese':'zho' }
 iso6392BtoT = { 'alb':'sqi', 'arm':'hye', 'baq':'eus', 'bur':'mya', 'chi':'zho', 'cze':'ces', 'dut':'nld', 'fre':'fra', 'geo':'kat', 'ger':'deu', 'gre':'ell', 'ice':'isl', 'mac':'mkd', 'mao':'mri', 'may':'msa', 'per':'fas', 'rum':'ron', 'slo':'slk', 'tib':'bod', 'wel':'cym' }
 
 def cookout(s):
@@ -1106,13 +1106,10 @@ if 'parser' not in globals():
   parser.add_argument('--version', action='version', version='%(prog)s '+version)
   parser.add_argument('-v','--verbose',dest='loglevel',action='store_const', const=logging.INFO)
   parser.add_argument('-d','--debug',dest='loglevel',action='store_const', const=logging.DEBUG)
-  parser.set_defaults(loglevel=logging.INFO)
+  parser.set_defaults(loglevel=logging.WARN)
   parser.add_argument('-n','--nice',dest='niceness',action='store', type=int, default=0)
   parser.add_argument('-l','--log',dest='logfile',action='store')
-  parser.add_argument('--mkvdir',dest='mkvdir',action='store',help='directory of .mkv files to be processed')
-  parser.add_argument('--tivodir',dest='tivodir',action='store',help='directory of .TiVo and .mpg files to be processed')
-  parser.add_argument('--vobdir',dest='vobdir',action='store',help='directory of .vob files to be processed')
-#  parser.add_argument('sourcedirs', nargs='*', help='directories to search for source files')
+  parser.add_argument('sourcedirs', nargs='*', metavar='DIR', help='directories to search for source files')
   parser.add_argument('--outdir',dest='outdir',action='store',help='directory for finalized .mp4 files')
 #  parser.add_argument('--tmpdir',dest='tmpdir',action='store',help='directory for temporary files') # XXX Unused
   parser.add_argument('--descdir',dest='descdir',action='store',help='directory for .txt files with descriptive data')
@@ -1127,26 +1124,36 @@ info(prog + ' ' + version + ' starting up.')
 nice(args.niceness)
 progmodtime=getmtime(sys.argv[0])
 
+sources=[]
+for d in args.sourcedirs:
+  if not exists(d):
+    warn('Source directory "'+d+'" does not exists')
+  elif not isdir(d):
+    warn('Source directory "'+d+'" is not a directory')
+#  elif not isreadable(d):
+#    warn('Source directory "'+d+'" is not readable')
+  else:
+    sources.append(d)
+
 while True:
   working=False
   if getmtime(sys.argv[0])>progmodtime:
     exec(compile(open(sys.argv[0]).read(), sys.argv[0], 'exec')) # execfile(sys.argv[0])
   
-  if args.tivodir:
-    for f in reglob(r'.*\.TiVo',args.tivodir):
-      prepare_tivo(f)
-  
-  if args.tivodir:
-    for f in reglob(r'.*\.mpg',args.tivodir):
-      prepare_mpg(f)
-  
-  if args.mkvdir:
-    for f in reglob(r'.*\.mkv',args.mkvdir):
-      prepare_mkv(f)
-  
-  if args.vobdir:
-    for f in reglob(r'.*\.vob',args.vobdir):
-      prepare_vob(f)
+  for d in sources:
+    for f in sorted(os.listdir(d)):
+      if not isfile(join(d,f)):
+        continue
+      elif f.endswith('.TiVo'):
+        prepare_tivo(join(d,f))
+      elif f.endswith('.mpg'):
+        prepare_mpg(join(d,f))
+      elif f.endswith('.vob'):
+        prepare_vob(join(d,f))
+      elif f.endswith('.mkv'):
+        prepare_mkv(join(d,f))
+      else:
+        warn('Source file type not recognized "' + join(d,f) + '"')
   
   for f in reglob(r'.*\.cfg'):
     update_coverart(f)
