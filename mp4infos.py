@@ -1,16 +1,21 @@
 #!/usr/bin/python
 # -*- coding: latin-1 -*-
-# Version: 2.1
+
+prog='mp4infos'
+version='2.1'
+author='Carl Edman (CarlEdman@gmail.com)'
 
 import logging, re, shlex, os, os.path, argparse, sys, subprocess
 from cetools import *
 
 parser = argparse.ArgumentParser(description='Tabular list of mp4 metadata in directory and all subdirectories.')
-parser.add_argument('--version', action='version', version='%(prog)s 2.0')
-parser.add_argument('--debug', action='store_true', default=False, help='output debugging messages')
+parser.add_argument('--version', action='version', version='%(prog)s ' + version)
+parser.add_argument('-v','--verbose',dest='loglevel',action='store_const', const=logging.INFO)
+parser.add_argument('-d','--debug',dest='loglevel',action='store_const', const=logging.DEBUG)
+parser.set_defaults(loglevel=logging.WARN)
 parser.add_argument('directory', nargs='?', default='.', help='Directory to collect from (default: current)')
 args = parser.parse_args()
-startlogging(None,logging.DEBUG)
+startlogging(None,args.loglevel)
 
 cats=['Filename']
 tcats=[]
