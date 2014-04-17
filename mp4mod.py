@@ -4,41 +4,11 @@
 # Author: Carl Edman (email full name as one word at gmail.com)
 
 prog='MP4mod'
-version='0.2'
+version='0.3'
 author='Carl Edman (CarlEdman@gmail.com)'
 
-import logging, re, os, os.path, argparse, subprocess, math, sys, glob
-
-def debug(*args):
-	logging.debug(*args)
-def info(*args):
-	logging.info(*args)
-def warn(*args):
-	logging.warn(*args)
-def error(*args):
-	logging.error(*args)
-def critical(*args):
-	logging.critical(*args)
-	exit(1)
-
-im=None
-img=None
-def imps(p,s):
-	global im
-	global img
-	im=re.search(p,s)
-	if im:
-		img=im.groups()
-		return True
-	else:
-		img=None
-		return False
-
-def dict_inverse(d):
-	return { v:k for k,v in d.items()}
-
-def myglob(pat,dir='.'):
-	return sorted([f if dir=='.' else join(dir,f) for f in os.listdir(dir) if imps(r'^' + pat + r'$',f)],key=(lambda s:re.sub(r'\d+',lambda m: m.group(0).zfill(6),s)))
+import re, os, os.path, argparse, subprocess, glob
+from cetools import *
 
 tags = {
 	'-A':'\s*Album:\s*(.+)', # -album       STR  Set the album title
@@ -118,7 +88,7 @@ def mp4meta_export(f):
 		if not args.force:
 			critical('cannot export metadata from "' + f + '" because "' + t + '" already exists')
 		os.remove(t)
-	cs = myglob(re.escape(b)+r'\.cover\.art\[\d+\]\.(jpg|png|gif|bmp)')
+	cs = reglob(re.escape(b)+r'(\.cover|)\.art\[\d+\]\.(jpg|png|gif|bmp)')
 	if cs:
 		if not args.force:
 			critical('cannot export metadata from "' + f + '" because "' + '","'.join(cs) + '" already exist(s)')
@@ -136,29 +106,29 @@ def mp4meta_import(f):
 	with open(t,'r') as td:
 		for line in td:
 			line = line.rstrip()
-			if imps(r'^mp4info version',line):
+			if rser(r'^mp4info version',line):
 				continue
-			if imps(r'^' + re.escape(f) + ':$',line):
+			if rser(r'^' + re.escape(f) + ':$',line):
 				continue
-			if imps(r'^Track\s+Type\s+Info\s*$',line):
+			if rser(r'^Track\s+Type\s+Info\s*$',line):
 				continue
-			if imps(r'^\d+\s+',line):
+			if rser(r'^\d+\s+',line):
 				continue
-			if imps(r'^\s*$',line):
+			if rser(r'^\s*$',line):
 				continue
-			if imps(r'^\s*Cover Art pieces:\s*\d+',line):
+			if rser(r'^\s*Cover Art pieces:\s*\d+',line):
 				continue
 			foundit = False
 			for arg, pat in tags.items():
 				foundit = True
-				if imps(pat, line):
+				if rser(pat, line):
 					ts.append(arg)
 					if arg[1] in 'i':
-						ts.append(media_n2t[img[0]])
+						ts.append(media_n2t[rget(0)])
 					elif arg[1] in 'HB':
-						ts.append('1' if img[0] == 'yes' else '0')
+						ts.append('1' if rget(0) == 'yes' else '0')
 					else:
-						ts.append(img[0])
+						ts.append(rget(0))
 			if foundit:
 				continue
 			warn('Could not interpret "' + line + '" for "' + f + '"')
@@ -173,7 +143,7 @@ def mp4meta_import(f):
 	
 	subprocess.call(['mp4art', '--art-any', '--remove', f])
 	if args.loglevel <= logging.DEBUG: debug('After art remove info:\n' + subprocess.check_output(['mp4info', f]).decode(encoding='cp1252'))
-	cs = myglob(re.escape(b)+r'\.cover\.art\[\d+\]\.(jpg|png|gif|bmp)')
+	cs = reglob(re.escape(b)+r'(\.cover|)\.art\[\d+\]\.(jpg|png|gif|bmp)')
 	if cs:
 		call  = ['mp4art']
 		if not args.nooptimize: call.append('--optimize')
