@@ -46,39 +46,38 @@ def readytomake(file,*comps):
 
 def do_call(args,outfile=None,infile=None):
   from subprocess import call, check_call, CalledProcessError, Popen, PIPE, STDOUT, list2cmdline
-  try:
-    cs=[[]]
-    for a in args:
-      if a=='|':
-        cs.append([])
-      else:
-        cs[-1].append(str(a))
-    debug('Executing: '+' | '.join([list2cmdline(c) for c in cs]))
-    
-    ps=[]
-    for c in cs:
-      ps.append(Popen(c, stdin=ps[-1].stdout if ps else infile, stdout=PIPE, stderr=PIPE))
-    outstr, errstrl = ps[-1].communicate()
-    outstr=outstr.decode(encoding='cp1252')
-    errstrl=errstrl.decode(encoding='cp1252')
-  except KeyboardInterrupt:
-    if outfile and exists(outfile): os.remove(outfile)
-    raise
-  else:
-    errstr=""
-    for p in ps:
-      e = "" if p.stderr.closed else p.stderr.read().decode(encoding='cp1252')
-      if p.poll()!=0:
-        error('Fatal Error:'+repr(e))
-        if outfile: open(outfile,'w').truncate(0)
-        return None
-      errstr+=e
-    errstr+=errstrl
-    outstr=cookout(outstr)
-    errstr=cookout(errstr)
-    if outstr: debug('Output: '+repr(outstr))
-    if errstr: debug('Error: '+repr(errstr))
-    return outstr+errstr
+  cs=[[]]
+  for a in args:
+    if a=='|':
+      cs.append([])
+    else:
+      cs[-1].append(str(a))
+  debug('Executing: '+' | '.join([list2cmdline(c) for c in cs]))
+  workfile_set(outfile)
+  ps=[]
+  for c in cs:
+    ps.append(Popen(c, stdin=ps[-1].stdout if ps else infile, stdout=PIPE, stderr=PIPE))
+  outstr, errstrl = ps[-1].communicate()
+  outstr=outstr.decode(encoding='cp1252')
+  errstrl=errstrl.decode(encoding='cp1252')
+  errstr=""
+  
+  for p in ps:
+    e = "" if p.stderr.closed else p.stderr.read().decode(encoding='cp1252')
+    if p.poll()!=0:
+      error('Fatal Error:'+repr(e))
+      if outfile:
+        open(outfile,'w').truncate(0)
+        workfile_unset(outfile)
+      return None
+    errstr+=e
+  workfile_unset(outfile)
+  errstr+=errstrl
+  outstr=cookout(outstr)
+  errstr=cookout(errstr)
+  if outstr: debug('Output: '+repr(outstr))
+  if errstr: debug('Error: '+repr(errstr))
+  return outstr+errstr
 
 def make_srt(cfg,track,files):
   return True
@@ -1149,6 +1148,8 @@ for d in args.sourcedirs:
 #    warn('Source directory "'+d+'" is not readable')
   else:
     sources.append(d)
+
+workfile_clear()
 
 while True:
   working=False

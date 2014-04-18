@@ -2,7 +2,7 @@
 # -*- coding: latin-1 -*-
 # Various utility functions
 
-import os, re, logging, logging.handlers
+import os, os.path, re, logging, logging.handlers
 
 loggername = 'DEFAULT'
 
@@ -131,3 +131,35 @@ def rser(p,s):
 def rget(n=None):
   global rmat
   return rmat if n==None else rmat[n]
+
+workfile='working_on'
+def workfile_set(file):
+  print('Set: ' + file)
+  if not file: return
+  if os.path.exists(workfile):
+    with open(workfile,'r') as f: ofile=f.read()
+    error('New worklock "' + file + '" set while worklock still exists for "' + ofile + '"')
+    os.remove(workfile)
+  with open(workfile,'w') as f: f.write(file)
+
+def workfile_unset(file):
+  print('Unset: ' + file)
+  if not file: return
+  if os.path.exists(workfile):
+    with open(workfile,'r') as f: ofile=f.read()
+    if ofile!=file:
+      error('Creating worklock for "' + file + '" while worklock still exists for "' + ofile + '"')
+  else:
+    error('Non-existing worklock unset for "' + file + '" while no old worklock exists')
+  os.remove('working_on')
+
+def workfile_clear():
+  print('Clear')
+  if not os.path.exists('working_on'): return False
+  with open('working_on','r') as f: file=f.read()
+  if '/'.find(file) == -1:
+    if os.path.exists(file): os.remove(file)
+  else:
+    error('Attempted to clear worklock for path "' + file + '"')
+  os.remove('working_on')
+  return True
