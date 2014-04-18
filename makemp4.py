@@ -292,6 +292,10 @@ def prepare_mpg(mpgfile):
     cfg.sync()
   
   if make_srt(cfg,track+1,[mpgfile]): track+=1
+  
+  if args.delete_source:
+    os.remove(mpgfile)
+  
   cfg.sync()
 
 def prepare_mkv(mkvfile):
@@ -517,6 +521,9 @@ def prepare_mkv(mkvfile):
       config_from_idxfile(cfg,splitext(file)[0]+'.idx')
       # remove idx file
 
+  if args.delete_source:
+    os.remove(mkvfile)
+      
 def prepare_vob(vobfile):
   base=splitext(basename(vobfile))[0]
   if rser(r'^(.*)_(\d+)$',base):
@@ -527,36 +534,38 @@ def prepare_vob(vobfile):
   cfg=AdvConfig(cfgfile)
   config_from_base(cfg,base)
   
-  #TODO
-  #dgindex & rename
+#  TODO
+#  dgindex & rename
   
-  #vob -> idx, sub
-  #basefile=myjoin(root, file[:-6])
-  #idxfile=basefile+".idx"
-  #avsfile=basefile+".video.avs"
-  #if exists(idxfile): continue
-  #ifofile=basefile+"_0.ifo"
-  #if exists(ifofile) and getsize(ifofile)>0:
-  #  pgc=1
-  #  trueifofile=ifofile
-  #elif ifofile[-13:-8] == "_PGC_" and exists(ifofile[:-13]+"_0.ifo"):
-  #  pgc=int(ifofile[-8:-6])
-  #  trueifofile=ifofile[:-13]+"_0.ifo"
-  #else:
-  #  continue
-  #
-  #vobsubfile=r'C:\Windows\Temp\vobsub'
-  #info('Generating "%(vobfile)s" -> "%(idxfile)s"' % locals())
-  #open(vobsubfile,'w').write('%(ifofile)s\n%(basefile)s\n%(pgc)d\n0\nALL\nCLOSE\n' % locals())
-  #if trueifofile!=ifofile: copyfile(trueifofile,ifofile)
-  #do_call([r'C:\Windows\SysWOW64\rundll32.exe','vobsub.dll,Configure',vobsubfile],vobsubfile)
-  #if trueifofile!=ifofile: os.remove(ifofile)
-  ##if not exists(idxfile): open(idxfile,'w').truncate(0)
+#  vob -> idx, sub
+#  basefile=myjoin(root, file[:-6])
+#  idxfile=basefile+".idx"
+#  avsfile=basefile+".video.avs"
+#  if exists(idxfile): continue
+#  ifofile=basefile+"_0.ifo"
+#  if exists(ifofile) and getsize(ifofile)>0:
+#    pgc=1
+#    trueifofile=ifofile
+#  elif ifofile[-13:-8] == "_PGC_" and exists(ifofile[:-13]+"_0.ifo"):
+#    pgc=int(ifofile[-8:-6])
+#    trueifofile=ifofile[:-13]+"_0.ifo"
+#  else:
+#    continue
+#  
+#  vobsubfile=r'C:\Windows\Temp\vobsub'
+#  info('Generating "%(vobfile)s" -> "%(idxfile)s"' % locals())
+#  open(vobsubfile,'w').write('%(ifofile)s\n%(basefile)s\n%(pgc)d\n0\nALL\nCLOSE\n' % locals())
+#  if trueifofile!=ifofile: copyfile(trueifofile,ifofile)
+#  do_call([r'C:\Windows\SysWOW64\rundll32.exe','vobsub.dll,Configure',vobsubfile],vobsubfile)
+#  if trueifofile!=ifofile: os.remove(ifofile)
+##  if not exists(idxfile): open(idxfile,'w').truncate(0)
 
-  #if make_srt(cfg,track+1,vobfiles): track+=1
+#  if make_srt(cfg,track+1,vobfiles): track+=1
   
-  #chapter txt -> cfg
+#  chapter txt -> cfg
   cfg.sync()
+#  if args.delete_source:
+#    os.remove(vobfile)
 
 def update_coverart(cfgfile):
   cfg=AdvConfig(cfgfile)
@@ -590,7 +599,7 @@ def update_description_tvshow(cfg,txt):
   if i>=0: h[i]='Series Episode'
   sei=lfind(h,'Series Episode')
   
-  epi=lfind(h,'#','No.','No. in series','Episode number')
+  epi=lfind(h,'#','No.','No. in season','Episode number')
   if epi<0: return False # Fix
   tii=lfind(h,'Title','Episode title','Episode name','Episode Title','Episode Name')
   dei=lfind(h,'Description')
@@ -637,6 +646,10 @@ def update_description_tvshow(cfg,txt):
 
 def update_description_movie(cfg,txt):
   txt=re.sub(r'(This movie is:|Cast:|Director:|Genres:|Availability:|Language:|Format:)\s*',r'\n\1 ',txt)
+  txt=re.sub(r'Rate 5 starsRate 4 starsRate 3 starsRate 2 starsRate 1 starRate not interested','',txt)
+  
+  #Average rating: 4.4
+
   tl=[t.strip() for t in txt.splitlines() if t.strip()]
   if len(tl)>0 and rser(r'^(.*?)\s*(\((.*)\))?$',tl[0]):
     cfg.set('show',rget(0))
@@ -1067,7 +1080,7 @@ def build_results(cfgfile):
   if song: call+=['-song', song]
   
   cfg.sync()
-  # TODO: Deal with quotes/special characters
+#   TODO: Deal with quotes/special characters
   desc=cfg.get('description','')
   if len(desc)>255:
     call += [ '-desc', desc[:255], '-longdesc', desc ]
@@ -1110,11 +1123,13 @@ if 'parser' not in globals():
   parser.add_argument('-n','--nice',dest='niceness',action='store', type=int, default=0)
   parser.add_argument('-l','--log',dest='logfile',action='store')
   parser.add_argument('sourcedirs', nargs='*', metavar='DIR', help='directories to search for source files')
-  parser.add_argument('--outdir',dest='outdir',action='store',help='directory for finalized .mp4 files')
+  parser.add_argument('--outdir',dest='outdir',action='store',help='directory for finalized .mp4 files; if unspecified use working directory')
 #  parser.add_argument('--tmpdir',dest='tmpdir',action='store',help='directory for temporary files') # XXX Unused
   parser.add_argument('--descdir',dest='descdir',action='store',help='directory for .txt files with descriptive data')
   parser.add_argument('--artdir',dest='artdir',action='store',help='directory for .jpg and .png cover art')
   parser.add_argument('--mak',dest='mak',action='store',help='your TiVo MAK key to decrypt .TiVo files to .mpg')
+  parser.add_argument('--move-source',action='store_true', default=False, help='move source files to working directory before extraction')
+  parser.add_argument('--delete-source',action='store_true', default=False, help='delete source file after successful extraction')
   inifile='{}.ini'.format(splitext(sys.argv[0])[0])
   if exists(inifile): sys.argv.insert(1,'@'+inifile)
   args = parser.parse_args()
@@ -1144,13 +1159,13 @@ while True:
     for f in sorted(os.listdir(d)):
       if not isfile(join(d,f)):
         continue
-      elif f.endswith('.TiVo'):
+      elif f.endswith(('.TIVO','.tivo','.TiVo')):
         prepare_tivo(join(d,f))
-      elif f.endswith('.mpg'):
+      elif f.endswith(('.MPG','.MPEG','.mpg','.mpeg')):
         prepare_mpg(join(d,f))
-      elif f.endswith('.vob'):
+      elif f.endswith(('.VOB','.vob')):
         prepare_vob(join(d,f))
-      elif f.endswith('.mkv'):
+      elif f.endswith(('.MKV','.mkv')):
         prepare_mkv(join(d,f))
       else:
         warn('Source file type not recognized "' + join(d,f) + '"')
