@@ -27,7 +27,7 @@ def cookout(s):
 def readytomake(file,*comps):
   for f in comps:
     if not f: continue
-    if not exists(f) or not isfile(f) or getsize(f)==0: return False
+    if not exists(f) or not isfile(f) or getsize(f)==0 or work_locked(f): return False
     fd=os.open(f,os.O_RDONLY|os.O_EXCL)
     if fd<0:
       return False
@@ -53,7 +53,7 @@ def do_call(args,outfile=None,infile=None):
     else:
       cs[-1].append(str(a))
   debug('Executing: '+' | '.join([list2cmdline(c) for c in cs]))
-  workfile_set(outfile)
+  work_lock(outfile)
   ps=[]
   for c in cs:
     ps.append(Popen(c, stdin=ps[-1].stdout if ps else infile, stdout=PIPE, stderr=PIPE))
@@ -61,6 +61,7 @@ def do_call(args,outfile=None,infile=None):
   outstr=outstr.decode(encoding='cp1252')
   errstrl=errstrl.decode(encoding='cp1252')
   errstr=""
+  work_unlock(outfile)
   
   for p in ps:
     e = "" if p.stderr.closed else p.stderr.read().decode(encoding='cp1252')
@@ -68,10 +69,8 @@ def do_call(args,outfile=None,infile=None):
       error('Fatal Error:'+repr(e))
       if outfile:
         open(outfile,'w').truncate(0)
-        workfile_unset(outfile)
       return None
     errstr+=e
-  workfile_unset(outfile)
   errstr+=errstrl
   outstr=cookout(outstr)
   errstr=cookout(errstr)
@@ -249,6 +248,7 @@ def prepare_mpg(mpgfile):
   if not readytomake(cfgfile,mpgfile): return False
   cfg=AdvConfig(cfgfile)
   config_from_base(cfg,base)
+  work_lock(cfgfile)
   
   track=1
   dgifile='{} T{:02d}.d2v'.format(base,track)
@@ -296,6 +296,7 @@ def prepare_mpg(mpgfile):
     os.remove(mpgfile)
   
   cfg.sync()
+  work_unlock(cfgfile)
 
 def prepare_mkv(mkvfile):
   base=splitext(basename(mkvfile))[0]
@@ -303,6 +304,7 @@ def prepare_mkv(mkvfile):
   if not readytomake(cfgfile,mkvfile): return False
   cfg=AdvConfig(cfgfile)
   config_from_base(cfg,base)
+  work_lock(cfgfile)
   
   track=0
   
@@ -423,7 +425,6 @@ def prepare_mkv(mkvfile):
   chap_enabled=[]
   chap_name=[]
   chap_lang=[]
-  
   for l in subprocess.check_output(['mkvextract','chapters',mkvfile]).decode(encoding='cp1252').splitlines():
     if rser('^\s*<ChapterUID>(.*)</ChapterUID>\s*$',l):
       chap_uid.append(rget(0))
@@ -473,6 +474,7 @@ def prepare_mkv(mkvfile):
     if t2cfile and not exists(t2cfile) and mkvtrack>=0: call.append('{:d}:{}'.format(mkvtrack,t2cfile))
   if call: do_call(['mkvextract', 'timecodes_v2', mkvfile] + call)
   cfg.sync()
+  work_unlock(cfgfile)
   
   for vt in sorted([t for t in cfg.sections() if t.startswith('TRACK') and not cfg.get('disable',section=t) and cfg.get('type',section=t)=='video']):
     cfg.setsection(vt)
@@ -492,7 +494,6 @@ def prepare_mkv(mkvfile):
             debug('Log: "' + logfile + '" contains: "' + repr(f.read().strip()) + '"')
           os.remove(logfile)
       config_from_dgifile(cfg,dgifile)
-    
 
   for vt in sorted([t for t in cfg.sections() if t.startswith('TRACK') and not cfg.get('disable',section=t)]):
     cfg.setsection(vt)
@@ -532,6 +533,7 @@ def prepare_vob(vobfile):
   if not readytomake(cfgfile,vobfile): return
   cfg=AdvConfig(cfgfile)
   config_from_base(cfg,base)
+  work_lock(cfgfile)
   
 #  TODO
 #  dgindex & rename
@@ -563,6 +565,7 @@ def prepare_vob(vobfile):
   
 #  chapter txt -> cfg
   cfg.sync()
+  work_unlock(cfgfile)
 #  if args.delete_source:
 #    os.remove(vobfile)
 
@@ -577,7 +580,7 @@ def update_coverart(cfgfile):
   
   cfg.setsection('MAIN')
   
-  for p in reglob(r'.*\.(jpg|jpeg|png)',args.artdir if args.artdir else '.'):
+  for p in reglob(r'.*\.(jpg|jpeg|png)',args.artdir if args.artdir else os.getcwd()):
     b=splitext(basename(p))[0]
     if rser(r'^(.*)\s+P[\d+]',b):
       b=rget(0)
@@ -1149,7 +1152,7 @@ for d in args.sourcedirs:
   else:
     sources.append(d)
 
-workfile_clear()
+work_lock_delete()
 
 while True:
   working=False

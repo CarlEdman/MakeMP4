@@ -93,10 +93,9 @@ def nice(niceness):
   elif niceness>2: win32process.SetPriorityClass(handle, priorityclasses[0])
   else: win32process.SetPriorityClass(handle, priorityclasses[2-niceness])
 
-def reglob(pat,dir='.'):
+def reglob(pat,dir=None):
   '''A replacement for glob.glob which uses regular expressions and sorts numbers up to 10 digits correctly.'''
-  
-  return sorted([f if dir=='.' else os.path.join(dir,f) for f in os.listdir(dir) if re.search(r'^' + pat + r'$',f)],key=(lambda s:re.sub(r'\d+',lambda m: m.group(0).zfill(10),s)))
+  return sorted([os.path.join(dir,f) if dir else f for f in os.listdir(dir if dir else os.getcwd()) if re.search(r'^' + pat + r'$',f)],key=(lambda s:re.sub(r'\d+',lambda m: m.group(0).zfill(10),s)))
 
 def secsToParts(s):
   '''Convert a number of seconds (given as float) into a tuple of (neg (string), hours (int), mins (int), secs (int), msecs (int)).'''
@@ -132,34 +131,40 @@ def rget(n=None):
   global rmat
   return rmat if n==None else rmat[n]
 
-workfile='working_on'
-def workfile_set(file):
-  print('Set: ' + file)
-  if not file: return
-  if os.path.exists(workfile):
-    with open(workfile,'r') as f: ofile=f.read()
-    error('New worklock "' + file + '" set while worklock still exists for "' + ofile + '"')
-    os.remove(workfile)
-  with open(workfile,'w') as f: f.write(file)
-
-def workfile_unset(file):
-  print('Unset: ' + file)
-  if not file: return
-  if os.path.exists(workfile):
-    with open(workfile,'r') as f: ofile=f.read()
-    if ofile!=file:
-      error('Creating worklock for "' + file + '" while worklock still exists for "' + ofile + '"')
-  else:
-    error('Non-existing worklock unset for "' + file + '" while no old worklock exists')
-  os.remove('working_on')
-
-def workfile_clear():
-  print('Clear')
-  if not os.path.exists('working_on'): return False
-  with open('working_on','r') as f: file=f.read()
-  if '/'.find(file) == -1:
-    if os.path.exists(file): os.remove(file)
-  else:
-    error('Attempted to clear worklock for path "' + file + '"')
-  os.remove('working_on')
+worklock='.working'
+def work_lock(file):
+  if not file:
+    return False
+  if os.path.exists(file+worklock):
+    warning('File "' + file + '" already worklocked')
+    return False
+  open(file+worklock,'w').truncate(0)
   return True
+
+def work_unlock(file):
+  if not file:
+    return False
+  if not os.path.exists(file+worklock):
+    warning('File "' + file + '" not worklocked')
+    return False
+  if os.path.getsize(file+worklock) != 0:
+    error('Worklock for "' + file + '" not empty!')
+    return False
+  os.remove(file+worklock)
+
+def work_locked(file):
+  return os.path.exists(file+worklock)
+
+def work_lock_delete():
+  for l in os.listdir(os.getcwd()):
+    if not l.endswith(worklock): continue
+    if os.path.getsize(l) != 0:
+       error('Worklock for "' + file + '" not empty!')
+       continue
+    os.remove(l)
+    f = l[:-len(worklock)]
+    if not os.path.exists(f):
+      warn('No file existed for worklock "' + l + '"')
+      continue
+    os.remove(f)
+
