@@ -164,7 +164,7 @@ def work_lock_delete():
     os.remove(l)
     f = l[:-len(worklock)]
     if not os.path.exists(f):
-      warn('No file existed for worklock "' + l + '"')
+      warning('No file existed for worklock "' + l + '"')
       continue
     os.remove(f)
 

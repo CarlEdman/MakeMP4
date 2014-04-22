@@ -647,64 +647,62 @@ def update_description_tvshow(cfg,txt):
   cfg.sync()
 
 def update_description_movie(cfg,txt):
-  txt=re.sub(r'(This movie is:|Cast:|Director:|Genres:|Availability:|Language:|Format:)\s*',r'\n\1 ',txt)
+  txt=re.sub(r'(This movie is|Cast|Director|Genres|Availability|Language|Format)(:|\n)\s*',r'\n\1: ',txt)
   txt=re.sub(r'Rate 5 starsRate 4 starsRate 3 starsRate 2 starsRate 1 starRate not interested','',txt)
-  
-  #Average rating: 4.4
-
-  tl=[t.strip() for t in txt.splitlines() if t.strip()]
-  if len(tl)>0 and rser(r'^(.*?)\s*(\((.*)\))?$',tl[0]):
-    cfg.set('show',rget(0))
+  txt=re.sub(r'\nMovie Details\n','\n',txt)
+  txt=re.sub(r'\s*\n+\s*','\n',txt)
+  tl=txt.splitlines()
+  if rser(r'^(.*?)\s*(\((.*)\))?$',tl[0]):
+    tl=tl[1:]
+    if cfg.hasno('title'): cfg.set('title',rget(0))
     if rget(2):
       alt = 'Alternate Title: ' + rget(2)
       cmt = cfg.get('comment','')
       if alt not in cmt: cfg.set('comment',  (cmt+';' if cmt else '')+ alt)
-  if len(tl)>1 and rser(r'^([12]\d\d\d)\s*(G|PG|PG-13|R|NC-17|UR|NR|TV-14)?\s*(\d+)\s*minutes$',tl[1]):
+  if rser(r'^([12]\d\d\d)\s*(G|PG|PG-13|R|NC-17|UR|NR|TV-14)?\s*(\d+)\s*minutes$',tl[0]):
+    tl=tl[1:]
     cfg.set('year',rget(0))
     rat = 'Rating: ' + rget(1)
     cmt = cfg.get('comment','')
     if rat not in cmt: cfg.set('comment',  (cmt+';' if cmt else '')+ rat)
-  description= tl[2] if len(tl)>2 else ''
-  for t in tl[3:]:
-    if not rser(r'^(.*?):\s*(.+?)\s*$',t): continue
-    atr=rget(0)
-    val=rget(1)
-    if atr=='Genres' and cfg.hasno('genre'):
-      if rser(r'\bMusicals\b',val): cfg.set('genre','Musical')
-      elif rser(r'\bAnimes\b',val): cfg.set('genre','Anime')
-      elif rser(r'\bOperas\b',val): cfg.set('genre','Opera')
-      elif rser(r'\bSci-Fi\b',val): cfg.set('genre','Science Fiction')
-      elif rser(r'\bFantasy\b',val): cfg.set('genre','Fantasy')
-      elif rser(r'\bHorror\b',val): cfg.set('genre','Horror')
-      elif rser(r'\bDocumentaries\b',val): cfg.set('genre','Documentary')
-      elif rser(r'\bSuperhero\b',val): cfg.set('genre','Superhero')
-      elif rser(r'\bWestern\b',val): cfg.set('genre','Westerns')
-      elif rser(r'\bClassics\b',val): cfg.set('genre','Classics')
-      elif rser(r'\bComedies\b',val): cfg.set('genre','Comedy')
-      elif rser(r'\bCrime\b',val): cfg.set('genre','Crime')
-      elif rser(r'\bThrillers\b',val): cfg.set('genre','Thriller')
-      elif rser(r'\bRomantic\b',val): cfg.set('genre','Romance')
-      elif rser(r'\bAnimation\b',val): cfg.set('genre','Animation')
-      elif rser(r'\bCartoons\b',val): cfg.set('genre','Animation')
-      elif rser(r'\bPeriod Pieces\b',val): cfg.set('genre','History')
-      elif rser(r'\bAction\b',val): cfg.set('genre','Action')
-      elif rser(r'\bAdventure\b',val): cfg.set('genre','Adventure')
-      elif rser(r'\bDramas\b',val): cfg.set('genre','Drama')
-      else: cfg.set('genre',val)
-      cmt = cfg.get('comment','')
-      if t not in cmt: cfg.set('comment',  (cmt+';' if cmt else '')+ t)
-    elif atr=='Director':
-      description += '  '+t+'.'
-    elif atr=='Writer' and cfg.hasno('writer'):
+    if not cfg.has('duration'): cfg.add('duration',int(rget(2))*60)
+  description = ''
+  for t in tl:
+    if rser(r'^Genres?:\s*(.+?)\s*$',t):
+      if cfg.has('genre'): continue
+      g=rget(0)
+      if rser(r'\bMusicals\b',g): cfg.set('genre','Musical')
+      elif rser(r'\bAnimes\b',g): cfg.set('genre','Anime')
+      elif rser(r'\bOperas\b',g): cfg.set('genre','Opera')
+      elif rser(r'\bSci-Fi\b',g): cfg.set('genre','Science Fiction')
+      elif rser(r'\bFantasy\b',g): cfg.set('genre','Fantasy')
+      elif rser(r'\bHorror\b',g): cfg.set('genre','Horror')
+      elif rser(r'\bDocumentaries\b',g): cfg.set('genre','Documentary')
+      elif rser(r'\bSuperhero\b',g): cfg.set('genre','Superhero')
+      elif rser(r'\bWestern\b',g): cfg.set('genre','Westerns')
+      elif rser(r'\bClassics\b',g): cfg.set('genre','Classics')
+      elif rser(r'\bComedies\b',g): cfg.set('genre','Comedy')
+      elif rser(r'\bCrime\b',g): cfg.set('genre','Crime')
+      elif rser(r'\bThrillers\b',g): cfg.set('genre','Thriller')
+      elif rser(r'\bRomantic\b',g): cfg.set('genre','Romance')
+      elif rser(r'\bAnimation\b',g): cfg.set('genre','Animation')
+      elif rser(r'\bCartoons\b',g): cfg.set('genre','Animation')
+      elif rser(r'\bPeriod Pieces\b',g): cfg.set('genre','History')
+      elif rser(r'\bAction\b',g): cfg.set('genre','Action')
+      elif rser(r'\bAdventure\b',g): cfg.set('genre','Adventure')
+      elif rser(r'\bDramas\b',g): cfg.set('genre','Drama')
+      else: cfg.set('genre',g)
+    elif rser(r'^(Writers?):\s*(.+?)\s*$',t):
+      description = (description+'  ' if description else '') + rget(0) + ': ' + rget(1) +'.'
+      if cfg.has('writer'): continue
       cfg.set('writer',val)
-    elif atr=='Cast':
-      description += '  '+t+'.'
+    elif rser(r'^(.+?):\s*(.+?)\s*$',t):
+      description = (description+'  ' if description else '') + rget(0) + ': ' + rget(1) +'.'
     else:
-      cmt = cfg.get('comment','')
-      if t not in cmt: cfg.set('comment',  (cmt+';' if cmt else '')+ t)
+      description = t + ('  ' + description if description else '')
+  
   if cfg.hasno('description') and description:
     cfg.set('description',description)
-  
   cfg.sync()
 
 def update_description(cfgfile):
@@ -718,11 +716,11 @@ def update_description(cfgfile):
     exit(1)
   n=join(args.descdir if args.descdir else '',str(n)+'.txt')
   if not exists(n): return
-  txt=open(n,'r').read()
-  if txt.startswith("\xef\xbb\xbf"): txt=txt[3:]
+  txt=open(n,'rb').read().decode()
   txt=txt.strip()
   txt=re.sub(r' *\[(\d+|[a-z])\] *','',txt)
   txt=re.sub(r' -- ',r'--',txt)
+  txt=re.sub(r'\r\n',r'\n',txt)
   if cfg.get('type')=='tvshow': update_description_tvshow(cfg,txt)
   elif cfg.get('type')=='movie': update_description_movie(cfg,txt)
 
@@ -1071,23 +1069,25 @@ def build_results(cfgfile):
   if cfg.has('writer'): call += [ '-writer' , cfg.get('writer') ]
 #  if cfg.has('rating'): call += [ '-rating' , cfg.get('rating') ]
   if cfg.has('macroblocks',section='TRACK01'): call += [ '-hdvideo' , '1' if cfg.get('macroblocks',section='TRACK01')>=3600 else '0']
-  if cfg.has('show'): call += [ '-show' , str(cfg.get('show'))]
+  if cfg.has('title'): call += [ '-show' , str(cfg.get('title'))]
+  elif cfg.has('show'): call += [ '-show' , str(cfg.get('show'))]
   
   song=None
   if cfg.get('type')=='movie':
-    if cfg.has('show') and cfg.has('song'): song = str(cfg.get('show')) + ": " + str(cfg.get('song'))
-    elif cfg.has('show'): song = str(cfg.get('show'))
+    if cfg.has('title') and cfg.has('song'): song = str(cfg.get('title')) + ": " + str(cfg.get('song'))
+    elif cfg.has('title'): song = str(cfg.get('title'))
     elif cfg.has('song'): song = str(cfg.get('song'))
   elif cfg.has('song'): song = str(cfg.get('song'))
   if song: call+=['-song', song]
   
   cfg.sync()
+  if cfg.has('description'):
 #   TODO: Deal with quotes/special characters
-  desc=cfg.get('description','')
-  if len(desc)>255:
-    call += [ '-desc', desc[:255], '-longdesc', desc ]
-  elif len(desc)>0:
-    call += [ '-desc' , desc ]
+    desc=cfg.get('description')
+    if len(desc)>255:
+      call += [ '-desc', desc[:255], '-longdesc', desc ]
+    elif len(desc)>0:
+      call += [ '-desc' , desc ]
   if cfg.has('comment'): call += [ '-comment' , cfg.get('comment') ]
   if call: do_call(['mp4tags'] + call + [outfile],outfile)
   
@@ -1133,6 +1133,10 @@ if 'parser' not in globals():
   parser.add_argument('--move-source',action='store_true', default=False, help='move source files to working directory before extraction')
   parser.add_argument('--delete-source',action='store_true', default=False, help='delete source file after successful extraction')
   inifile='{}.ini'.format(splitext(sys.argv[0])[0])
+  if exists(inifile): sys.argv.insert(1,'@'+inifile)
+  inifile=prog + '.ini'
+  if exists(inifile): sys.argv.insert(1,'@'+inifile)
+  inifile='..\\' + prog + '.ini'
   if exists(inifile): sys.argv.insert(1,'@'+inifile)
   args = parser.parse_args()
 
