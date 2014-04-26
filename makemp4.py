@@ -447,16 +447,17 @@ def prepare_mkv(mkvfile):
     elif rser('^\s*<ChapterLanguage>(\w+)</ChapterLanguage>\s*',l):
       chap_lang.append(iso6392BtoT[rget(0)] if rget(0) in iso6392BtoT else rget(0))
 
-  cfg.setsection('MAIN')
-  cfg.set('chapter_delay',0.0)
-  cfg.set('chapter_elongation',1.0)
-  cfg.set('chapter_uid',';'.join(chap_uid))
-  cfg.set('chapter_time',';'.join(chap_time))
-  cfg.set('chapter_hidden',';'.join(chap_hidden))
-  cfg.set('chapter_enabled',';'.join(chap_enabled))
-  cfg.set('chapter_name',';'.join(chap_name))
-  cfg.set('chapter_language', ';'.join(chap_lang))
-  cfg.sync()
+  if chap_uid or chap_time or chap_hidden or chap_enabled or chap_name or chap_lang:
+    cfg.setsection('MAIN')
+    cfg.set('chapter_delay',0.0)
+    cfg.set('chapter_elongation',1.0)
+    cfg.set('chapter_uid',';'.join(chap_uid))
+    cfg.set('chapter_time',';'.join(chap_time))
+    cfg.set('chapter_hidden',';'.join(chap_hidden))
+    cfg.set('chapter_enabled',';'.join(chap_enabled))
+    cfg.set('chapter_name',';'.join(chap_name))
+    cfg.set('chapter_language', ';'.join(chap_lang))
+    cfg.sync()
   
   call=[]
   for vt in sorted([t for t in cfg.sections() if t.startswith('TRACK') and not cfg.get('disable',section=t)]):
@@ -830,7 +831,7 @@ def build_audio(cfg):
   cfg.sync()
   return True
 
-def build_videos(cfg):
+def build_video(cfg):
   infile = cfg.get('file')
   inext = cfg.get('extension')
   dgifile = cfg.get('dgi_file', None)
@@ -851,21 +852,15 @@ def build_videos(cfg):
     avs+='ColorMatrix(hints = true, interlaced=false)\n'
   else:
     warning('No video index file from "{}"'.format(cfg.get('file')))
-    return
+    return False
   
-  if cfg.hasno('unblock') or cfg.get('unblock',None)==False:
-    pass
-  elif cfg.get('unblock',None)==True and cfg.has('x264_tune'):
-    if cfg.get('x264_tune',None)=='animation':
-      avs += 'unblock(cartoon=true)'
-    else:
-      avs += 'unblock(photo=true)'
-  elif cfg.get('unblock',None)=='normal':
-    avs += 'unblock()'
-  elif cfg.get('unblock',None)=='cartoon':
+  unblock=cfg.get('unblock',None)
+  if unblock == 'cartoon' or (unblock==True and cfg.get('x264_tune', None)=='animation'):
     avs += 'unblock(cartoon=true)'
-  elif cfg.get('unblock',None)=='photo':
+  elif unblock == 'photo' or (unblock==True and cfg.has('x264_tune')):
     avs += 'unblock(photo=true)'
+  elif unblock == 'normal' or unblock==True:
+    avs += 'unblock()'
   
   avs+='KillAudio()\n'
   
@@ -1079,22 +1074,24 @@ def build_result(cfg):
   if cfg.has('comment'): call += [ '-comment' , cfg.get('comment') ]
   if call: do_call(['mp4tags'] + call + [outfile],outfile)
   
-  if cfg.has('chapter_time'):
-    debug('Adding chapters to "{}"'.format(outfile))
-    chapterfile=splitext(outfile)[0]+'.chapters.txt'
-    chapters_made=not(exists(chapterfile))
+  debug('Adding chapters to "{}"'.format(outfile))
+  chapterfile=splitext(outfile)[0]+'.chapters.txt'
+  if exists(chapterfile):
+#    warning('Not adding chapters from config file because "' + chapterfile + '" exists')
+    do_call(['mp4chaps', '--import', outfile],outfile)
+  elif cfg.has('chapter_time') and cfg.has('chapter_name'):
     delay=cfg.get('chapter_delay',0.0)
     elong=cfg.get('chapter_elongation',1.0)
-    if chapters_made:
-      cts=cfg.get('chapter_time')
-      cts=[float(i) for i in cts.split(';')] if isinstance(cts,str) else [cts]
-      cns=cfg.get('chapter_name').split(';')
-      with open(chapterfile,'w') as f:
-        for (ct,cn) in zip(cts,cns):
-          (neg,hours,mins,secs,msecs)=secsToParts(ct*elong+delay)
-          f.write('{}{:02d}:{:02d}:{:02d}.{:03d} {} ({:d}m {:d}s)\n'.format(neg,hours,mins,secs,msecs,cn,(-1 if neg else 1)*hours*60+mins,secs))
+    c=cfg.get('chapter_time')
+    cts=[float(i) for i in c.split(';')] if isinstance(c,str) else [c]
+    c=cfg.get('chapter_name')
+    cts=[strip(i) for i in c.split(';')] if isinstance(c,str) else [c]
+    with open(chapterfile,'w') as f:
+      for (ct,cn) in zip(cts,cns):
+        (neg,hours,mins,secs,msecs)=secsToParts(ct*elong+delay)
+        f.write('{}{:02d}:{:02d}:{:02d}.{:03d} {} ({:d}m {:d}s)\n'.format(neg,hours,mins,secs,msecs,cn,(-1 if neg else 1)*hours*60+mins,secs))
     do_call(['mp4chaps', '--import', outfile],outfile)
-    if chapters_made: os.remove(chapterfile)
+    os.remove(chapterfile)
   cfg.sync()
   
   for i in coverfiles:
