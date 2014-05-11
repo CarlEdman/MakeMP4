@@ -53,12 +53,19 @@ class TitleHandler(logging.Handler):
         import ctypes
         ctypes.windll.kernel32.SetConsoleTitleA(self.format(record).encode())
 
-def startlogging(logfile,loglevel):
+def startlogging(logfile,loglevel,loginterval=None):
   logger = logging.getLogger(loggername)
   logger.setLevel(logging.DEBUG)
   logformat = logging.Formatter('%(asctime)s [%(levelname)s]: %(message)s')
   if logfile:
-    flogger=logging.handlers.WatchedFileHandler(logfile)
+    if isinstance(loginterval, str):
+      w=loginterval.lstrip('0123456789')
+      i=int(loginterval.rstrip('abcdefghijklmnopqrstuvxyzABCDEFGHIJKLMNOPQRSTUVXYZ'))
+      flogger=logging.handlers.TimedRotatingFileHandler(logfile,when=w,interval=i)
+    elif isinstance(loginterval, int):
+      flogger=logging.handlers.TimedRotatingFileHandler(logfile,when='d',interval=loginterval)
+    else:
+      flogger=logging.handlers.WatchedFileHandler(logfile)
     flogger.setLevel(logging.DEBUG)
     flogger.setFormatter(logformat)
     logger.addHandler(flogger)

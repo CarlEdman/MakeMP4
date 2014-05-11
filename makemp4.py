@@ -52,7 +52,8 @@ def do_call(args,outfile=None,infile=None):
       cs.append([])
     else:
       cs[-1].append(str(a))
-  debug('Executing: '+' | '.join([list2cmdline(c) for c in cs]))
+  cstr = ' | '.join([list2cmdline(c) for c in cs])
+  debug('Executing: '+ cstr)
   work_lock(outfile)
   ps=[]
   for c in cs:
@@ -66,7 +67,7 @@ def do_call(args,outfile=None,infile=None):
   for p in ps:
     e = "" if p.stderr.closed else p.stderr.read().decode(encoding='cp1252')
     if p.poll()!=0:
-      error('Fatal Error:'+repr(e))
+      error('Fatal Error in ' + cstr + ((':' + repr(e)) if e else ''))
       if outfile:
         open(outfile,'w').truncate(0)
       return None
@@ -655,7 +656,7 @@ def update_description_tvshow(cfg,txt):
 
 def update_description_movie(cfg,txt):
   txt=re.sub(r'(This movie is|Cast|Director|Genres|Availability|Language|Format)(:|\n)\s*',r'\n\1: ',txt)
-  txt=re.sub(r'Rate 5 starsRate 4 starsRate 3 starsRate 2 starsRate 1 starRate not interested','',txt)
+  txt=re.sub(r'Rate 5 starsRate 4 starsRate 3 starsRate 2 starsRate 1 starRate not interested(Clear Rating)?','',txt)
   txt=re.sub(r'\nMovie Details\n','\n',txt)
   txt=re.sub(r'\s*\n+\s*','\n',txt)
   tl=txt.splitlines()
@@ -756,6 +757,8 @@ def build_subtitle(cfg):
     do_call(['mp4box','-ttxt','temp.srt'],outfile)
     if exists('temp.ttxt'): os.rename('temp.ttxt',outfile)
     if exists('temp.srt'): os.remove('temp.srt')
+  elif inext=='sup' && getsize(infile)<1024:
+    pass
   elif inext=='sup':
     outfile = splitext(infile)[0]+'.idx'
     cfg.set('out_file', outfile)
@@ -763,13 +766,13 @@ def build_subtitle(cfg):
     call = ['bdsup2sub++']
     call += ['--resolution','keep']
     if d!=0: call += ['--delay',str(d*1000.0)]
-    fps = cfg.get('frame_rate_ratio',section='TRACK01')
-    if fps == Fraction(30000,1001):
-      call += [ '--fps-target', '30p' ]
-    elif fps == Fraction(24000,1001):
+    fps = cfg.get('frame_rate_ratio_out',cfg.get('frame_rate_ratio',section='TRACK01'),section='TRACK01')
+    if fps in [24, 24.0, Fraction(24000,1001)]:
       call += [ '--fps-target', '24p' ]
-    elif fps == Fraction(25000,1000) or fps == 25 or fps == 25.0:
+    elif fps in [25, 25.0, Fraction(25000,1001)]:
       call += [ '--fps-target', '25p' ]
+    elif fps in [30, 30.0, Fraction(30000,1001)]:
+      call += [ '--fps-target', '30p' ]
     call += ['--output',outfile,infile]
     do_call(call,outfile) # '--fix-invisible',
   elif (d!=0.0 or e!=1.0) and inext=='idx':
@@ -851,7 +854,7 @@ def build_video(cfg):
     avs+='DGSource("{}", deinterlace=1, use_pf = true)\n'.format(abspath(dgifile))
     avs+='ColorMatrix(hints = true, interlaced=false)\n'
   else:
-    warning('No video index file from "{}"'.format(cfg.get('file')))
+    warning('No valid video index file from "{}"'.format(infile))
     return False
   
   unblock=cfg.get('unblock',None)
@@ -865,23 +868,23 @@ def build_video(cfg):
   avs+='KillAudio()\n'
   
   di=cfg.get('deinterlace','none')
-  fr=cfg.get('frame_rate_ratio',Fraction(30000,1001))
+  fri=cfg.get('frame_rate_ratio',Fraction(30000,1001))
   
   if di == 'telecide':
-    fro*=fr*Fraction(4,5)
+    fro=fri*Fraction(4,5)
     cfg.set('frames',math.ceil(cfg.get('frames')*5.0/4.0))
     avs+='tfm().tdecimate(hybrid=1)\n'
 #      avs+='tfm().tdecimate(hybrid=1,d2v="{}")\n'.format(abspath(d2vfile))
 #      avs+='Telecide(post={:d},guide=0,blend=True)'.format(0 if lp>0.99 else 2)
 #      avs+='Decimate(mode={:d},cycle=5)'.format(0 if lp>0.99 else 3)
   elif di == 'bob':
-    fro = fr
+    fro = fri
     avs+='Bob()\n'
 #      avs+='TomsMoComp(1,5,1)\n'
 #      avs+='LeakKernelDeint()\n'
 #      avs+='TDeint(mode=2, type={:d}, tryWeave=True, full=False)\n'.format(3 if cfg.get('x264_tune','animation' if cfg.get('genre',section='MAIN') in ['Anime', 'Animation'] else 'film')=='animation' else 2)
   else:
-    fro = fr
+    fro = fri
   cfg.set('frame_rate_ratio_out',fro)
 
   if cfg.has('crop'):
@@ -916,7 +919,7 @@ def build_video(cfg):
   if degrain>0:
     avs+='MDegrain{:d}(super,thSAD=400,planar=true,{})\n'.format(degrain,','.join(['bv{:d},fv{:d}'.format(i,i) for i in range(1,degrain+1)]))
   if di=='bob':
-    avs+='MFlowFps(super, bv1, fv1, num={:d}, den={:d}, ml=100)\n'.format(fr.numerator,fr.denominator)
+    avs+='MFlowFps(super, bv1, fv1, num={:d}, den={:d}, ml=100)\n'.format(fro.numerator,fro.denominator)
   if procs!=1: avs+='Distributor()\n'
   
   avsfile=tempfile.mkstemp(suffix='.avs')
@@ -930,7 +933,7 @@ def build_video(cfg):
   call += ['--tune', cfg.get('x264_tune','film')]
   call += ['--preset', cfg.get('x264_preset', 'veryslow')]
   call += ['--crf', cfg.get('x264_rate_factor', 20.0)]
-  call += ['--fps', str(fr)]
+  call += ['--fps', str(fro)]
   sarf=cfg.get('sample_aspect_ratio')
   call += ['--sar', '{:d}:{:d}'.format(sarf.numerator if sarf else 1,sarf.denominator if sarf else 1)]
   if not cfg.get('x264_deterministic',False): call += ['--non-deterministic']
@@ -948,7 +951,8 @@ def build_video(cfg):
   if res and rser(r'\bencoded (\d+) frames\b',res):
     cfg.sync()
     frames=int(rget(0))
-    if cfg.has('frames') and abs(frames-cfg.get('frames'))>1:
+    oframes = int(fro/fri*cfg.get('frames')) # Adjust oframes for difference between frame-rate-in and frame-rate-out
+    if cfg.has('frames') and abs(frames-oframes)>1:
       warning('Encoding changed frames in "{}" from {:d} to {:d}'.format(infile,oframes,frames))
     cfg.set('frames',frames)
     cfg.set('duration',float(int(rget(0))/fro))
@@ -1085,7 +1089,7 @@ def build_result(cfg):
     c=cfg.get('chapter_time')
     cts=[float(i) for i in c.split(';')] if isinstance(c,str) else [c]
     c=cfg.get('chapter_name')
-    cts=[strip(i) for i in c.split(';')] if isinstance(c,str) else [c]
+    cns=[i.strip() for i in c.split(';')] if isinstance(c,str) else [c]
     with open(chapterfile,'w') as f:
       for (ct,cn) in zip(cts,cns):
         (neg,hours,mins,secs,msecs)=secsToParts(ct*elong+delay)
@@ -1126,7 +1130,7 @@ if 'parser' not in globals():
   if exists(inifile): sys.argv.insert(1,'@'+inifile)
   args = parser.parse_args()
 
-startlogging(args.logfile,args.loglevel)
+startlogging(args.logfile,args.loglevel,'7D')
 info(prog + ' ' + version + ' starting up.')
 nice(args.niceness)
 progmodtime=getmtime(sys.argv[0])
