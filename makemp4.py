@@ -26,7 +26,6 @@ def cookout(s):
 
 def readytomake(file,*comps):
   for f in comps:
-    if not f: continue
     if not exists(f) or not isfile(f) or getsize(f)==0 or work_locked(f): return False
     fd=os.open(f,os.O_RDONLY|os.O_EXCL)
     if fd<0:
@@ -180,7 +179,7 @@ def config_from_dgifile(cfg,dgifile):
 #  cfg.set('file', dgip[1].splitlines()[0])
   cfg.set('dgi_file', dgifile)
   cfg.set('interlace_type', ilt)
-  cfg.set('interlace_percent', ilp)
+  cfg.set('interlace_type_percent', ilp)
   cfg.set('field_operation', fio)
   cfg.set('frame_rate_ratio', str(frf))
   if ilt == 'VIDEO':
@@ -203,13 +202,13 @@ def config_from_dgifile(cfg,dgifile):
     cfg.set('x264_rate_factor',16.0)
   elif mbs<=3600: # 720p@30fps
     cfg.set('avc_level',3.1)
-    cfg.set('x264_rate_factor',18.0)
+    cfg.set('x264_rate_factor',17.0)
   elif mbs<=8192: # 1080p@30fps
     cfg.set('avc_level',4.0)
-    cfg.set('x264_rate_factor',19.0)
+    cfg.set('x264_rate_factor',18.0)
   elif mbs<=22080: # 1080p@72fps; 1920p@30fps
     cfg.set('avc_level',5.0)
-    cfg.set('x264_rate_factor',20.0)
+    cfg.set('x264_rate_factor',19.0)
   else: # 1080p@120fps; 2048@30fps
     cfg.set('avc_level',5.1)
     cfg.set('x264_rate_factor',20.0)
@@ -346,8 +345,8 @@ def prepare_mkv(mkvfile):
         cfg.set('t2c_file','{} T{:02d}.t2c'.format(base,track))
         cfg.set('dgi_file','{} T{:02d}.dgi'.format(base,track))
       elif rget(2) in ('V_MS/VFW/FOURCC, WVC1'):
-        cfg.set('extension','avi')
-        cfg.set('file','{} T{:02d}.avi'.format(base,track))
+        cfg.set('extension','wvc')
+        cfg.set('file','{} T{:02d}.wvc'.format(base,track))
         cfg.set('t2c_file','{} T{:02d}.t2c'.format(base,track))
         cfg.set('dgi_file','{} T{:02d}.dgi'.format(base,track))
       elif rget(2) in ('A_AC3','A_EAC3','AC3/EAC3'):
@@ -500,6 +499,7 @@ def prepare_mkv(mkvfile):
           continue
         logfile = splitext(dgifile)[0]+'.log'
         if exists(logfile):
+          time.sleep(1)
           with open(logfile,'r') as f:
             debug('Log: "' + logfile + '" contains: "' + repr(f.read().strip()) + '"')
           os.remove(logfile)
@@ -609,7 +609,7 @@ def update_description_tvshow(cfg,txt):
   if i>=0: h[i]='Series Episode'
   sei=lfind(h,'Series Episode')
   
-  epi=lfind(h,'#','No.','No. in season','Episode number')
+  epi=lfind(h,'#','No.','No. in season','No. in Season','Episode number')
   if epi<0: return False # Fix
   tii=lfind(h,'Title','Episode title','Episode name','Episode Title','Episode Name')
   dei=lfind(h,'Description')
@@ -667,7 +667,7 @@ def update_description_movie(cfg,txt):
       alt = 'Alternate Title: ' + rget(2)
       cmt = cfg.get('comment','')
       if alt not in cmt: cfg.set('comment',  (cmt+';' if cmt else '')+ alt)
-  if rser(r'^([12]\d\d\d)\s*(G|PG|PG-13|R|NC-17|UR|NR|TV-14)?\s*(\d+)\s*minutes$',tl[0]):
+  if rser(r'^([12]\d\d\d)\s*(G|PG|PG-13|R|NC-17|UR|NR|TV-14|TV-MA)?\s*(\d+)\s*minutes$',tl[0]):
     tl=tl[1:]
     cfg.set('year',rget(0))
     rat = 'Rating: ' + rget(1)
@@ -757,7 +757,8 @@ def build_subtitle(cfg):
     do_call(['mp4box','-ttxt','temp.srt'],outfile)
     if exists('temp.ttxt'): os.rename('temp.ttxt',outfile)
     if exists('temp.srt'): os.remove('temp.srt')
-  elif inext=='sup' && getsize(infile)<1024:
+  elif inext=='sup' and getsize(infile)<1024:
+    outfile = splitext(infile)[0]+'.idx'
     pass
   elif inext=='sup':
     outfile = splitext(infile)[0]+'.idx'
@@ -851,7 +852,7 @@ def build_video(cfg):
     avs+='DGDecode_mpeg2source("{}", info=3, idct=4, cpu=3)\n'.format(abspath(dgifile))
     avs+='ColorMatrix(hints = true,interlaced=true)\n'.format(abspath(dgifile))
   elif dgifile.endswith('.dgi'):
-    avs+='DGSource("{}", deinterlace=1, use_pf = true)\n'.format(abspath(dgifile))
+    avs+='DGSource("{}", deinterlace=0, use_pf = true)\n'.format(abspath(dgifile))
     avs+='ColorMatrix(hints = true, interlaced=false)\n'
   else:
     warning('No valid video index file from "{}"'.format(infile))
@@ -942,7 +943,7 @@ def build_video(cfg):
   if cfg.has('avc_profile'): call += ['--profile', cfg.get('avc_profile')]
   if cfg.has('avc_level'): call += ['--level', cfg.get('avc_level')]
   #if cfg.has('t2cfile'): call += ['--timebase', '1000', '--tcfile-in', cfg.get('t2cfile')]
-  if cfg.has('frames'): call += ['--frames', cfg.get('frames')]
+  if cfg.get('deinterlace','none')=='none' and cfg.has('frames'): call += ['--frames', cfg.get('frames')]
   call += [ '--output', outfile ]
   
   cfg.sync()
@@ -952,7 +953,7 @@ def build_video(cfg):
     cfg.sync()
     frames=int(rget(0))
     oframes = int(fro/fri*cfg.get('frames')) # Adjust oframes for difference between frame-rate-in and frame-rate-out
-    if cfg.has('frames') and abs(frames-oframes)>1:
+    if cfg.has('frames') and abs(frames-oframes)>2:
       warning('Encoding changed frames in "{}" from {:d} to {:d}'.format(infile,oframes,frames))
     cfg.set('frames',frames)
     cfg.set('duration',float(int(rget(0))/fro))
@@ -1138,11 +1139,11 @@ progmodtime=getmtime(sys.argv[0])
 sources=[]
 for d in args.sourcedirs:
   if not exists(d):
-    warn('Source directory "'+d+'" does not exists')
+    warning('Source directory "'+d+'" does not exists')
   elif not isdir(d):
-    warn('Source directory "'+d+'" is not a directory')
+    warning('Source directory "'+d+'" is not a directory')
 #  elif not isreadable(d):
-#    warn('Source directory "'+d+'" is not readable')
+#    warning('Source directory "'+d+'" is not readable')
   else:
     sources.append(d)
 
@@ -1166,7 +1167,7 @@ while True:
       elif f.endswith(('.MKV','.mkv')):
         prepare_mkv(join(d,f))
       else:
-        warn('Source file type not recognized "' + join(d,f) + '"')
+        warning('Source file type not recognized "' + join(d,f) + '"')
   
   for f in reglob(r'.*\.cfg'):
     cfg = AdvConfig(f)
