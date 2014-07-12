@@ -1,5 +1,4 @@
 #!/usr/bin/python
-# -*- coding: latin-1 -*-
 # Various utility functions
 
 import os, os.path, re, logging, logging.handlers

@@ -40,7 +40,7 @@ class AdvConfig(ConfigParser):
       with open(self.filename, 'w') as fp: self.write(fp)
     elif dirty or self.modified:
       if self.mtime<getmtime(self.filename):
-        warn('Overwriting external edits in "{}"'.format(self.filename))
+        warning('Overwriting external edits in "{}"'.format(self.filename))
 #      print('Overwriting: '+self.filename)
       with open(self.filename, 'w') as fp: self.write(fp)
     elif self.mtime<getmtime(self.filename):
