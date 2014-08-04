@@ -9,6 +9,7 @@ author='Carl Edman (CarlEdman@gmail.com)'
 import logging, re, os, argparse, subprocess, math, sys
 from os.path import exists, isfile, getmtime, getsize, join, basename, splitext, abspath, dirname
 from cetools import *
+from regex import *
 
 parser = argparse.ArgumentParser(description='Chop an mkv file into subfiles at timecodes or chapters.')
 parser.add_argument('--version', action='version', version='%(prog)s '+version)

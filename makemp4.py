@@ -21,6 +21,7 @@ from fractions import Fraction
 
 from AdvConfig import AdvConfig
 from cetools import *
+from regex import *
 
 langNameToISO6392T = { 'English':'eng', 'Français': 'fra', 'Japanese':'jpn', 'Español':'esp' , 'German':'deu', 'Deutsch':'deu', 'Svenska':'swe', 'Latin':'lat', 'Dutch':'nld', 'Chinese':'zho' }
 iso6392BtoT = { 'alb':'sqi', 'arm':'hye', 'baq':'eus', 'bur':'mya', 'chi':'zho', 'cze':'ces', 'dut':'nld', 'fre':'fra', 'geo':'kat', 'ger':'deu', 'gre':'ell', 'ice':'isl', 'mac':'mkd', 'mao':'mri', 'may':'msa', 'per':'fas', 'rum':'ron', 'slo':'slk', 'tib':'bod', 'wel':'cym' }
@@ -958,7 +959,7 @@ def build_video(cfg):
     avs+='MFlowFps(super, bv1, fv1, num={:d}, den={:d}, ml=100)\n'.format(fro.numerator,fro.denominator)
   if procs!=1: avs+='Distributor()\n'
   
-  if not exists(avsfile) or getmtime(cfgfile)>getmtime(avsfile):
+  if not exists(avsfile) or getmtime(cfg.filename)>getmtime(avsfile):
     with open(avsfile, 'wt') as fp: fp.write(avs)
     debug('Created AVS file: ' + repr(avs))
   

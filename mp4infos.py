@@ -7,6 +7,7 @@ author='Carl Edman (CarlEdman@gmail.com)'
 
 import logging, re, shlex, os, os.path, argparse, sys, subprocess
 from cetools import *
+from regex import *
 
 parser = argparse.ArgumentParser(description='Tabular list of mp4 metadata in directory and all subdirectories.')
 parser.add_argument('--version', action='version', version='%(prog)s ' + version)

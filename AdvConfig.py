@@ -1,5 +1,4 @@
 #!/usr/bin/python
-# -*- coding: latin-1 -*-
 # A subclass of ConfigParser with advanced features
 
 from configparser import ConfigParser

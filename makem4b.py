@@ -8,6 +8,7 @@ author='Carl Edman (CarlEdman@gmail.com)'
 
 import logging, re, os, os.path, argparse, subprocess, math, sys, glob, logging
 from cetools import *
+from regex import *
 
 parser = argparse.ArgumentParser(description='Convert audio files to m4b audiobook, creating chapters as necessary.')
 parser.add_argument('--version', action='version', version='%(prog)s ' + version)

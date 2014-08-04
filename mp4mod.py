@@ -9,6 +9,7 @@ author='Carl Edman (CarlEdman@gmail.com)'
 
 import re, os, os.path, argparse, subprocess, glob
 from cetools import *
+from regex import *
 
 tags = {
 	'-A':'\s*Album:\s*(.+)', # -album       STR  Set the album title

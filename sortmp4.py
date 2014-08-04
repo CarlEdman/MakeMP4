@@ -8,6 +8,7 @@ author='Carl Edman (CarlEdman@gmail.com)'
 import shutil, re, shlex, os, argparse, logging, subprocess, logging
 from os.path import exists, isfile, isdir, getmtime, getsize, join, basename, splitext, abspath, dirname
 from cetools import *
+from regex import *
 
 parser = argparse.ArgumentParser(description='Sort mp4s from current directory to target subdirectories',fromfile_prefix_chars='@',prog=prog,epilog='Written by: '+author)
 parser.add_argument('-v','--verbose',dest='loglevel',action='store_const', const=logging.INFO)

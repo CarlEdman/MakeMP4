@@ -99,10 +99,6 @@ def nice(niceness):
   elif niceness>2: win32process.SetPriorityClass(handle, priorityclasses[0])
   else: win32process.SetPriorityClass(handle, priorityclasses[2-niceness])
 
-def reglob(pat,dir=None):
-  '''A replacement for glob.glob which uses regular expressions and sorts numbers up to 10 digits correctly.'''
-  return sorted([os.path.join(dir,f) if dir else f for f in os.listdir(dir if dir else os.getcwd()) if re.search(r'^' + pat + r'$',f)],key=(lambda s:re.sub(r'\d+',lambda m: m.group(0).zfill(10),s)))
-
 def secsToParts(s):
   '''Convert a number of seconds (given as float) into a tuple of (neg (string), hours (int), mins (int), secs (int), msecs (int)).'''
   
@@ -122,20 +118,6 @@ def dict_inverse(d):
   '''Create an inverse dict from a dict.'''
   
   return { v:k for k,v in d.items()}
-
-rmat=None
-def rser(p,s):
-  global rmat
-  m = re.search(p,s)
-  if m:
-    rmat=m.groups()
-    return True
-  else:
-    rmat=None
-    return False
-def rget(n=None):
-  global rmat
-  return rmat if n==None else rmat[n]
 
 worklock='.working'
 def work_lock(file):
