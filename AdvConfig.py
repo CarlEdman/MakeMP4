@@ -30,8 +30,8 @@ class AdvConfig(ConfigParser):
   
   def __del__(self):
     self.sync()
-    del AdvConfig._configs[self.filename]
-    return ConfigParser.__del__(self)
+    if self.filename in AdvConfig._configs: del AdvConfig._configs[self.filename]
+#    return ConfigParser.__del__(self)
   
   def sync(self, dirty=False):
     if not exists(self.filename):

@@ -82,7 +82,6 @@ def startlogging(logfile,loglevel,loginterval=None):
   
 def nice(niceness):
   '''Nice for Windows Processes.  Nice is a value between -3-2 where 0 is normal priority.'''
-  
   if os.name != 'nt': return os.nice(niceness)
   
   import win32api,win32process,win32con

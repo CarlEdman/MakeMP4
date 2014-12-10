@@ -89,7 +89,7 @@ def mp4meta_export(f):
 		if not args.force:
 			critical('cannot export metadata from "' + f + '" because "' + t + '" already exists')
 		os.remove(t)
-	cs = reglob(re.escape(b)+r'(\.cover|)\.art\[\d+\]\.(jpg|png|gif|bmp)')
+	cs = reglob(re.escape(b)+r'(\.cover)?(\.art\[\d+\])?\.(jpg|png|gif|bmp)')
 	if cs:
 		if not args.force:
 			critical('cannot export metadata from "' + f + '" because "' + '","'.join(cs) + '" already exist(s)')
@@ -144,7 +144,7 @@ def mp4meta_import(f):
 	
 	subprocess.call(['mp4art', '--art-any', '--remove', f])
 	if args.loglevel <= logging.DEBUG: debug('After art remove info:\n' + subprocess.check_output(['mp4info', f]).decode(encoding='cp1252'))
-	cs = reglob(re.escape(b)+r'(\.cover|)\.art\[\d+\]\.(jpg|png|gif|bmp)')
+	cs = reglob(re.escape(b)+r'(\.cover)?(\.art\[\d+\])?\.(jpg|png|gif|bmp)')
 	if cs:
 		call  = ['mp4art']
 		if not args.nooptimize: call.append('--optimize')
