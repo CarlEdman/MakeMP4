@@ -295,7 +295,7 @@ def prepare_mpg(mpgfile):
   
   track=1
   dgifile='{} T{:02d}.d2v'.format(base,track)
-  if not exists(d2vfile):
+  if not exists(dgifile):
     do_call(['dgindex', '-i', mpgfile, '-fo', '0', '-ia', '3', '-om', '2', '-exit'],base+'.d2v')
     os.rename(base+'.d2v',dgifile)
   if not exists(dgifile): return
@@ -712,7 +712,7 @@ def update_description_movie(cfg,txt):
       alt = 'Alternate Title: ' + r[2]
       cmt = cfg.get('comment','')
       if alt not in cmt: cfg.set('comment',  (cmt+';' if cmt else '')+ alt)
-  if r(r'^([12]\d\d\d)\s*(G|PG|PG-13|R|NC-17|UR|NR|TV-14|TV-MA)?\s*(\d+)\s*minutes$',tl[0]):
+  if r(r'^([12]\d\d\d)\s*(G|PG|PG-13|R|NC-17|UR|NR|TV-14|TV-MA)?\s*(\d+)\s*(minutes|mins)$',tl[0]):
     tl=tl[1:]
     cfg.set('year',r[0])
     rat = 'Rating: ' + r[1]
@@ -772,6 +772,7 @@ def update_description(cfg):
   if not exists(n): return
   txt=open(n,'rt').read()
   txt=txt.strip()
+  txt=re.sub(r'Add to Google Calendar','',txt)
   txt=re.sub(r' *\[(\d+|[a-z])\] *','',txt)
   txt=re.sub(r' -- ',r'--',txt)
   txt=re.sub(r'%','percent',txt)
@@ -927,7 +928,7 @@ def build_video(cfg):
     fro=fri*Fraction(4,5)
     cfg.set('frames',math.ceil(cfg.get('frames')*5.0/4.0))
     avs+='tfm().tdecimate(hybrid=1)\n'
-#    avs+='tfm().tdecimate(hybrid=1,d2v="{}")\n'.format(abspath(d2vfile))
+#    avs+='tfm().tdecimate(hybrid=1,d2v="{}")\n'.format(abspath(dgifile))
 #    avs+='Telecide(post={:d},guide=0,blend=True)'.format(0 if lp>0.99 else 2)
 #    avs+='Decimate(mode={:d},cycle=5)'.format(0 if lp>0.99 else 3)
   elif di == 'bob':

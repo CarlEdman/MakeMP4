@@ -201,6 +201,6 @@ if __name__ == '__main__':
 	elif args.operation=='swap':
 		if len(args.files) != 2:
 			critical('swap operation requires exactly two arguments')
-		mp4_swap(args.files[0],args.files[1])
+		mp4meta_swap(args.files[0],args.files[1])
 	else:
 		critical('operation argument must be one of: ' + ', '.join(ops))

@@ -8,7 +8,7 @@ from weakref import WeakValueDictionary
 
 class AdvConfig(ConfigParser):
   """A subclass of ConfigParser for with advanced features"""
-  _configs=WeakValueDictionary()
+  _configs=dict() # WeakValueDictionary()
   
   def __new__(cls,filename):
     if filename in AdvConfig._configs:
