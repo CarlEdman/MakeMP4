@@ -296,8 +296,8 @@ def prepare_mpg(mpgfile):
   track=1
   dgifile='{} T{:02d}.d2v'.format(base,track)
   if not exists(dgifile):
-    do_call(['dgindex', '-i', mpgfile, '-fo', '0', '-ia', '3', '-om', '2', '-exit'],base+'.d2v')
-    os.rename(base+'.d2v',dgifile)
+    do_call(['dgindex', '-i', mpgfile, '-o', splitext(base)[0], '-fo', '0', '-ia', '3', '-om', '2', '-hide', '-exit'],base+'.d2v')
+#    do_call(['DGIndexNV', '-i', mpgfile, '-a', '-o', dgifile, '-h', '-e'],dgifile)
   if not exists(dgifile): return
   cfg.setsection('TRACK{:02d}'.format(track))
   cfg.set('file',mpgfile)
@@ -342,7 +342,6 @@ def prepare_mpg(mpgfile):
   cfg.sync()
   work_unlock(cfgfile)
 
-
 def prepare_mkv(mkvfile):
   base=splitext(basename(mkvfile))[0]
   cfgfile=base+'.cfg'
@@ -375,8 +374,8 @@ def prepare_mkv(mkvfile):
         cfg.set('extension','mpg')
         cfg.set('file','{} T{:02d}.mpg'.format(base,track))
         cfg.set('t2c_file','{} T{:02d}.t2c'.format(base,track))
-#        cfg.set('dgi_file','{} T{:02d}.dgi'.format(base,track))
-        cfg.set('dgi_file','{} T{:02d}.d2v'.format(base,track))
+        cfg.set('dgi_file','{} T{:02d}.dgi'.format(base,track))
+#        cfg.set('dgi_file','{} T{:02d}.d2v'.format(base,track))
       elif r[2] in ('V_MPEG4/ISO/AVC','MPEG-4p10/AVC/h.264'):
         cfg.set('extension','264')
         cfg.set('file','{} T{:02d}.264'.format(base,track))
@@ -421,7 +420,7 @@ def prepare_mkv(mkvfile):
         cfg.set('file','{} T{:02d}.idx'.format(base,track))
         cfg.set('delay',0.0)
         cfg.set('elongation',1.0)
-      elif r[2] in ('S_HDMV/PGS','PGS'):
+      elif r[2] in ('S_HDMV/PGS','HDMV PGS','PGS'):
         cfg.set('extension','sup')
         cfg.set('file','{} T{:02d}.sup'.format(base,track))
         cfg.set('delay',0.0)

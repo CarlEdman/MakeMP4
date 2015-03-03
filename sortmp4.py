@@ -40,7 +40,7 @@ for f in reglob(r'.*\.(mp4|m4r|m4b)'):
       warning('No tv show "{}" in {}.'.format(f))
       continue
     show=rget(0).strip()
-    dir = join(join(args.target,'TV Shows'),show)
+    dir = join(join(args.target,'TV'),show)
     if not exists(dir):
       os.mkdir(dir)
     if exists(join(dir,f)):

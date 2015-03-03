@@ -28,7 +28,11 @@ for root, dirs, files in os.walk(args.directory):
     f=os.path.join(root,file)
     debug('Processing "' + f + '"')
     vals.append(dict({'Filename':f}))
-    for l in subprocess.check_output(['mp4info',f]).decode(encoding='cp1252').splitlines():
+    try:
+      mi = subprocess.check_output(['mp4info',f])
+    except subprocess.CalledProcessError:
+      continue
+    for l in mi.decode(errors='ignore').splitlines():
       if rser(r'^\s+(.+?)\s*:\s*(.+?)\s*$',l):
         if rget(0) not in cats: cats.append(rget(0))
         vals[-1][rget(0)]=rget(1)
