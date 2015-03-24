@@ -118,6 +118,20 @@ def dict_inverse(d):
   
   return { v:k for k,v in d.items()}
 
+def alphabetize(s):
+  s=s.strip()
+  if s.startswith("The "):
+    s=s[4:]
+  elif s.startswith("A "):
+    s=s[2:]
+  elif s.startswith("An "):
+    s=s[3:]
+  
+  if s.endswith("."):
+    s=s[:-1]
+  
+  return s
+  
 worklock='.working'
 def work_lock(file):
   if not file:

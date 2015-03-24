@@ -5,17 +5,8 @@ prog='MakeMP4'
 version='4.0'
 author='Carl Edman (CarlEdman@gmail.com)'
 
-import re
-import os
-import sys
-import argparse
-import logging
-import time
-import math
-import shutil
-import tempfile
-from subprocess import check_output
-from subprocess import call, check_call, CalledProcessError, Popen, PIPE, STDOUT, list2cmdline
+import string, re, os, sys, argparse, logging, time, math, shutil, tempfile
+from subprocess import call, check_call, check_output, CalledProcessError, Popen, PIPE, STDOUT, list2cmdline
 from os.path import exists, isfile, isdir, getmtime, getsize, join, basename, splitext, abspath, dirname
 from fractions import Fraction
 
@@ -213,12 +204,19 @@ def config_from_dgifile(cfg,dgifile):
   cfg.set('interlace_type_percent', ilp)
   cfg.set('field_operation', fio)
   cfg.set('frame_rate_ratio', str(frf))
-  if ilt == 'VIDEO' or int(fio)==1:
+  if ilt == 'VIDEO':
     cfg.set('deinterlace','bob')
-  elif int(fio) != 1 and ilt == 'FILM':
+  elif ilt == 'FILM':
     cfg.set('deinterlace','telecide')
+  elif ilt == 'PROGRESSIVE':
+    if fio==1:
+      cfg.set('deinterlace','telecide')
+    elif fio==2:
+      cfg.set('deinterlace','bob')
+    else:
+      cfg.set('deinterlace','none')
   else:
-    cfg.set('deinterlace','none')
+    cfg.set('deinterlace','bob' if int(fio)==1 else 'telecide')
   
   cfg.set('crop', 'auto' if cl==cr==ct==cb==0 else '0,0,0,0')
 #  cfg.set('aspect_ratio',str(arf))
@@ -671,8 +669,8 @@ def update_description_tvshow(cfg,txt):
   for t in tl:
     if not t: continue
     l=t.split('\t')
-    if cfg.has('episode'):
-      if l[epi]!=str(cfg.get('episode')): continue
+    if cfg.has('episode') and not l[epi].strip(string.digits):
+      if int(l[epi])!=cfg.get('episode'): continue
     else:
       if l[epi]!='*': continue
 #    if l[epi].lstrip(' 0')!=str(cfg.get('episode','*')): continue
@@ -699,7 +697,10 @@ def update_description_tvshow(cfg,txt):
 
 def update_description_movie(cfg,txt):
   txt=re.sub(r'(This movie is|Cast|Director|Genres|Availability|Language|Format)(:|\n)\s*',r'\n\1: ',txt)
-  txt=re.sub(r'Rate 5 starsRate 4 starsRate 3 starsRate 2 starsRate 1 starRate not interested(Clear Rating)?','',txt)
+  txt=re.sub(r'\nRate 5 starsRate 4 starsRate 3 starsRate 2 starsRate 1 starRate not interested(Clear Rating)?\n','\n',txt)
+  txt=re.sub(r'\nRate 5 starsRate 4 starsRate 3 starsRate 2 starsRate 1 stars\n','\n',txt)
+  txt=re.sub(r'\nNot Interested\n','\n',txt)
+  txt=re.sub(r'\n[0-5]\.[0-9]\n','\n',txt)
   txt=re.sub(r'\nMovie Details\n','\n',txt)
   txt=re.sub(r'\s*\n+\s*','\n',txt)
   tl=txt.splitlines()
@@ -724,23 +725,23 @@ def update_description_movie(cfg,txt):
       if cfg.has('genre'): continue
       description = (description+'  ' if description else '') + 'Genres: ' + r[0] +'.'
       g=r[0]
-      if r(r'\bMusicals\b',g): cfg.set('genre','Musical')
-      elif r(r'\bAnimes\b',g): cfg.set('genre','Anime')
-      elif r(r'\bOperas\b',g): cfg.set('genre','Opera')
+      if r(r'\bMusicals?\b',g): cfg.set('genre','Musical')
+      elif r(r'\bAnimes?\b',g): cfg.set('genre','Anime')
+      elif r(r'\bOperas?\b',g): cfg.set('genre','Opera')
       elif r(r'\bSci-Fi\b',g): cfg.set('genre','Science Fiction')
       elif r(r'\bFantasy\b',g): cfg.set('genre','Fantasy')
       elif r(r'\bHorror\b',g): cfg.set('genre','Horror')
-      elif r(r'\bDocumentaries\b',g): cfg.set('genre','Documentary')
+      elif r(r'\bDocumentar(y|ies)\b',g): cfg.set('genre','Documentary')
       elif r(r'\bSuperhero\b',g): cfg.set('genre','Superhero')
       elif r(r'\bWestern\b',g): cfg.set('genre','Westerns')
-      elif r(r'\bClassics\b',g): cfg.set('genre','Classics')
-      elif r(r'\bComedies\b',g): cfg.set('genre','Comedy')
+      elif r(r'\bClassics?\b',g): cfg.set('genre','Classics')
+      elif r(r'\bComed(y|ies)\b',g): cfg.set('genre','Comedy')
       elif r(r'\bCrime\b',g): cfg.set('genre','Crime')
-      elif r(r'\bThrillers\b',g): cfg.set('genre','Thriller')
+      elif r(r'\bThrillers?\b',g): cfg.set('genre','Thriller')
       elif r(r'\bRomantic\b',g): cfg.set('genre','Romance')
       elif r(r'\bAnimation\b',g): cfg.set('genre','Animation')
       elif r(r'\bCartoons\b',g): cfg.set('genre','Animation')
-      elif r(r'\bPeriod Pieces\b',g): cfg.set('genre','History')
+      elif r(r'\bPeriod Pieces?\b',g): cfg.set('genre','History')
       elif r(r'\bAction\b',g): cfg.set('genre','Action')
       elif r(r'\bAdventure\b',g): cfg.set('genre','Adventure')
       elif r(r'\bDramas\b',g): cfg.set('genre','Drama')
@@ -769,6 +770,7 @@ def update_description(cfg):
     exit(1)
   n=join(args.descdir if args.descdir else '',str(n)+'.txt')
   if not exists(n): return
+  #txt=open(n,'rb').read().decode(errors='replace')
   txt=open(n,'rt').read()
   txt=txt.strip()
   txt=re.sub(r'Add to Google Calendar','',txt)
@@ -1028,10 +1030,7 @@ def build_result(cfg):
   outfile=''
   if cfg.get('type')=='movie':
     if cfg.has('show') and not cfg.get('suppress_show',False):
-      outfile=str(cfg.get('show')) + ' '
-      if outfile.startswith('The '): outfile = outfile[4:]
-      elif outfile.startswith('A '): outfile = outfile[2:]
-      elif outfile.startswith('An '): outfile = outfile[3:]
+      outfile=str(alphabetize(cfg.get('show'))) + ' '
     if cfg.has('episode'): outfile+= 'pt. {} '.format(str(cfg.get('episode')))
     if cfg.has('year'): outfile+='({:04d}) '.format(cfg.get('year'))
     if cfg.has('song'): outfile+='{} '.format(str(cfg.get('song')))
