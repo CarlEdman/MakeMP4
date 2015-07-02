@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # Various utility functions
 
-import os, os.path, re, logging, logging.handlers
+import os, os.path, time, re, logging, logging.handlers
 
 loggername = 'DEFAULT'
 
@@ -169,3 +169,20 @@ def work_lock_delete():
       continue
     os.remove(f)
 
+def sleep_change_directories(dirs,state=None):
+  '''Sleep until any of the files in any of the dirs has changed.'''
+  
+  while True:
+    nstate = { os.path.join(d,f): os.stat(os.path.join(d,f)) for d in dirs for f in os.listdir(d) }
+    if nstate != state: return nstate
+    
+    if os.name == 'nt':
+      import win32file, win32event, win32con
+      watches = win32con.FILE_NOTIFY_CHANGE_FILE_NAME | win32con.FILE_NOTIFY_CHANGE_ATTRIBUTES | win32con.FILE_NOTIFY_CHANGE_LAST_WRITE
+      try:
+        chs = [ win32file.FindFirstChangeNotification(d, 0, watches) for d in dirs ]
+        while win32event.WaitForMultipleObjects(chs, 0, 1000) == win32con.WAIT_TIMEOUT: pass
+      finally:
+        for ch in chs: win32file.FindCloseChangeNotification(ch)
+    else:
+      time.sleep(10)
