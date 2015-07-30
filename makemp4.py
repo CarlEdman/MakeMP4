@@ -99,8 +99,9 @@ def config_from_base(cfg,base):
   cfg.set('genre','')
   cfg.set('song','')
   cfg.set('description','')
+  cfg.set('audio_languages','eng')
   r=regex.RegEx()
-  if r(r'^(?P<show>.*?) (pt\. (?P<episode>\d+) *)?\((?P<year>\d*)\) *(?P<song>.*?)$',base):
+  if r(r'^(?P<show>.*?) (pt\.? *(?P<episode>\d+) *)?\((?P<year>\d*)\) *(?P<song>.*?)$',base):
     cfg.set('type','movie')
     cfg.set('show',r.show)
     if r.episode: cfg.set('episode',int(r.episode))
@@ -150,7 +151,11 @@ def config_from_dgifile(cfg,dgifile):
       exit(1)
     psx=int(r.sizex)
     psy=int(r.sizey)
-    sarf=Fraction(1,1)
+    # HACK TODO
+    if psx==720 and psy==480:
+      sarf=Fraction(32,27)
+    else:
+      sarf=Fraction(1,1)
     if not r(r'\bORDER *(?P<order>\d+)',dgip[3]):
       critical('No ORDER in ' + dgifile)
       exit(1)
@@ -450,6 +455,8 @@ def prepare_mkv(mkvfile):
       cfg.set('chaptercount',int(r[0]),section='MAIN')
     elif r(r'^Tags for track ID (\d+): (\d+) entries$',l):
       pass
+    elif r(r'^Attachment ID (\d+): type \'([a-z/]+)\', size (\d+) bytes, file name \'(.*)\' \[uid:(\d+)\]$',l):
+      pass
     else:
       warning('Unrecognized mkvmerge identify line {}: {}'.format(mkvfile,l))
   cfg.sync()
@@ -518,15 +525,16 @@ def prepare_mkv(mkvfile):
     dgifile=cfg.get('dgi_file', None)
     if dgifile:
       if not exists(dgifile):
+        time.sleep(1)
         if dgifile.endswith('.dgi'):
           do_call(['DGIndexNV', '-i', cfg.get('file'), '-o', dgifile, '-h', '-e'],dgifile)
         elif dgifile.endswith('.d2v'):
           do_call(['dgindex', '-i', cfg.get('file'), '-o', splitext(dgifile)[0], '-fo', '0', '-ia', '3', '-om', '2', '-hide', '-exit'],dgifile)
         else:
           continue
+        time.sleep(1)
         logfile = splitext(dgifile)[0]+'.log'
         if exists(logfile):
-          time.sleep(1)
           with open(logfile,'rt') as f:
             debug('Log: "' + logfile + '" contains: "' + repr(f.read().strip()) + '"')
           os.remove(logfile)
@@ -703,7 +711,7 @@ def update_description_movie(cfg,txt):
     rat = 'Rating: ' + r[1]
     cmt = cfg.get('comment','')
     if rat not in cmt: cfg.set('comment',  (cmt+';' if cmt else '')+ rat)
-    if not cfg.has('duration') and cfg.get('show') in ['','HD','pt. 1 HD','pt. 2 HD']: cfg.add('duration',int(r[2])*60)
+#    if not cfg.has('duration'): cfg.add('duration',int(r[2])*60)
   description = ''
   for t in tl:
     if r(r'^Genres?:\s*(.+?)\s*$',t):
@@ -1019,7 +1027,7 @@ def build_result(cfg):
   if cfg.get('type')=='movie':
     if cfg.has('show') and not cfg.get('suppress_show',False):
       outfile=str(alphabetize(cfg.get('show'))) + ' '
-    if cfg.has('episode'): outfile+= 'pt. {} '.format(str(cfg.get('episode')))
+    if cfg.has('episode'): outfile+= '- pt{:d} '.format(cfg.get('episode'))
     if cfg.has('year'): outfile+='({:04d}) '.format(cfg.get('year'))
     if cfg.has('song'): outfile+='{} '.format(str(cfg.get('song')))
   elif cfg.get('type')=='tvshow':
@@ -1058,6 +1066,7 @@ def build_result(cfg):
   for track in sorted([t for t in cfg.sections() if t.startswith('TRACK') and not cfg.get('disable',section=t)]):
     cfg.setsection(track)
     if cfg.hasno('out_file'): continue
+    if cfg.get('type')=='audio' and cfg.has('language') and cfg.has('audio_languages',section='MAIN') and cfg.get('language') not in cfg.get('audio_languages',section='MAIN').split(";"): continue
     of=cfg.get('out_file')
     if cfg.has('duration',section='MAIN') and cfg.has('duration'):
       mdur=cfg.get('duration',section='MAIN')
@@ -1208,6 +1217,7 @@ def main():
       cfg.setsection(track)
       if cfg.get('type')!='audio': continue
       if cfg.get('disable',False): continue
+      if cfg.has('language') and cfg.has('audio_languages',section='MAIN') and cfg.get('language') not in cfg.get('audio_languages',section='MAIN').split(";"): continue
       build_audio(cfg)
   
   for f in regex.reglob(r'.*\.cfg'):
@@ -1265,4 +1275,5 @@ if __name__ == "__main__":
   while True:
     sleep_state = sleep_change_directories(['.'] + sources, sleep_state)
     main()
+    debug('Sleeping.')
 

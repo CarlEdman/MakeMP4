@@ -80,4 +80,4 @@ def rget(n=None):
 
 def reglob(pat,dir=None):
   '''A replacement for glob.glob which uses regular expressions and sorts numbers up to 10 digits correctly.'''
-  return sorted([os.path.join(dir,f) if dir else f for f in os.listdir(dir if dir else os.getcwd()) if re.search(r'^' + pat + r'$',f)],key=(lambda s:re.sub(r'\d+',lambda m: m.group(0).zfill(10),s)))
+  return sorted([os.path.join(dir,f) if dir else f for f in os.listdir(dir if dir else os.getcwd()) if re.search(r'^' + pat + r'$',f,flags=re.IGNORECASE if os.name == 'nt' else 0)],key=(lambda s:re.sub(r'\d+',lambda m: m.group(0).zfill(10),s)))

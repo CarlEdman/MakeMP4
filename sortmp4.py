@@ -18,17 +18,19 @@ parser.add_argument('--target', action='store', default= 'Y:\\')
 args = parser.parse_args()
 logging.basicConfig(level=args.loglevel,format='%(asctime)s [%(levelname)s]: %(message)s')
 
-def move(f,dir):
+def move(oname,dir,nname=None):
+  if nname==None:
+    nname=oname
   if not os.path.exists(dir):
     os.mkdir(dir)
-  if os.path.exists(os.path.join(dir,f)):
-    warning('{} already in {}, skipping.'.format(f,dir))
+  if os.path.exists(os.path.join(dir,nname)):
+    warning('{} already in {}, skipping.'.format(nname,dir))
     return
-  info("Moving {} to {}".format(f,dir))
+  info("Moving {} to {}".format(oname,os.path.join(dir,nname)))
   try:
-    shutil.move(f,dir)
+    shutil.move(f,os.path.join(dir,nname))
   except:
-    os.remove(os.path.join(dir,f))
+    os.remove(os.path.join(dir,nname))
     raise
 
 for f in reglob(r'.*\.(mp4|m4r|m4b)'):
@@ -54,24 +56,30 @@ for f in reglob(r'.*\.(mp4|m4r|m4b)'):
       continue
     move(f,os.path.join(args.target,'TV',alphabetize(rget(0))))
   elif type=='Movie':
-    dir=os.path.join(args.target,'Movies',genre)
-    if not os.path.isdir(dir):
+    if not os.path.isdir(os.path.join(args.target,'Movies',genre)):
       warning('Genre "{}" in {} not recognized, skipping.'.format(genre,f))
       continue
-    if rser(r'^.*\(\d+\)\s*(.*)\.\w+$',f):
-      sub=rget(0)
-      if sub=="" or sub.startswith('pt. '):
-        pass
+    if rser(r'^(.*\(\d+\))\s*(.*)(\.\w+)$',f):
+      main=rget(0)
+      sub=rget(1)
+      ext=rget(2)
+      if sub=="" or sub.startswith('- pt'):
+        nname=None
+      elif sub.find('Interview')>=0:
+        nname=sub+"-interview"+ext
+      elif sub.find('Scene')>=0:
+        nname=sub+"-scene"+ext
+      elif sub.find('Deleted')>=0:
+        nname=sub+"-deleted"+ext
       elif sub.startswith('Trailer'):
-        dir=os.path.join(dir,'Trailers')
+        nname=sub+"-trailer"+ext
       else:
-        dir=os.path.join(dir,'Extras')
-    move(f,dir)
+        nname=sub+"-behindthescenes"+ext
+    move(f,os.path.join(args.target,'Movies',genre,main),nname)
   elif type=='Audio Book':
     move(f,os.path.join(args.target,'Books'))
   elif type=='Ringtone':
-    dir=os.path.join(args.target,'Music','Ringtones')
-    move(f,dir)
+    move(f,os.path.join(args.target,'Music','Ringtones'))
   else:
     warning('Media Type "{}" in {} not recognized, skipping.'.format(type,f))
     continue
