@@ -1,6 +1,8 @@
 #!/usr/bin/python
 # A subclass of ConfigParser with advanced features
 
+import cetools
+
 from configparser import ConfigParser
 from os.path import exists, isfile, getmtime, getsize, join, basename, splitext, abspath, dirname
 from fractions import Fraction
@@ -8,7 +10,7 @@ from weakref import WeakValueDictionary
 
 class AdvConfig(ConfigParser):
   """A subclass of ConfigParser for with advanced features"""
-  _configs=dict() # WeakValueDictionary()
+  _configs = dict()
   
   def __new__(cls,filename):
     if filename in AdvConfig._configs:
@@ -21,7 +23,7 @@ class AdvConfig(ConfigParser):
   
   def __init__(self,filename):
     if hasattr(self,'mtime'): return 
-    ConfigParser.__init__(self,allow_no_value=True)
+    super().__init__(allow_no_value=True)
     self.filename=filename
     self.currentsection=None
     self.modified=False
@@ -31,20 +33,17 @@ class AdvConfig(ConfigParser):
   def __del__(self):
     self.sync()
     if self.filename in AdvConfig._configs: del AdvConfig._configs[self.filename]
-#    return ConfigParser.__del__(self)
+    #return super().__del__()
   
   def sync(self, dirty=False):
     if not exists(self.filename):
-#      print('Writing new: '+self.filename)
       with open(self.filename, 'w') as fp: self.write(fp)
     elif dirty or self.modified:
       if self.mtime<getmtime(self.filename):
         warning('Overwriting external edits in "{}"'.format(self.filename))
-#      print('Overwriting: '+self.filename)
       with open(self.filename, 'w') as fp: self.write(fp)
     elif self.mtime<getmtime(self.filename):
       with open(self.filename, 'r') as fp: self.read_file(fp)
-#      print('Reading: '+self.filename)
     self.mtime=getmtime(self.filename)
     self.modified=False
 

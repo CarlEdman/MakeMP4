@@ -59,10 +59,12 @@ def do_call(args,outfile=None,infile=None):
   for c in cs:
     ps.append(Popen(c, stdin=ps[-1].stdout if ps else infile, stdout=PIPE, stderr=PIPE))
   outstr, errstr = ps[-1].communicate()
+  
   work_unlock(outfile)
-  outstr = outstr.decode(encoding='cp1252')
-  errstr = errstr.decode(encoding='cp1252')
-  errstr += "".join([p.stderr.read().decode(encoding='cp1252') for p in ps if not p.stderr.closed])
+  # encname='cp1252'/ encname='utf-8'
+  outstr = outstr.decode(errors='replace')
+  errstr = errstr.decode(errors='replace')
+  errstr += "".join([p.stderr.read().decode(errors='replace') for p in ps if not p.stderr.closed])
   outstr=cookout(outstr)
   errstr=cookout(errstr)
   if outstr: debug('Output: '+repr(outstr))
@@ -130,120 +132,8 @@ def config_from_base(cfg,base):
   cfg.sync(True)
 
 
-def config_from_dgifile(cfg,dgifile):
-  with open(dgifile, 'rt') as fp: dgi=fp.read()
-  dgip=dgi.split('\n\n')
-  if len(dgip)!=4:
-    critical('Malformed index file ' + dgifile)
-    exit(1)
-  r=regex.RegEx()
-  if r(r'^(DGAVCIndexFileNV14|DGMPGIndexFileNV14|DGVC1IndexFileNV14)',dgip[0]):
-    if not r(r'\bCLIP\ *(?P<left>\d+) *(?P<right>\d+) *(?P<top>\d+) *(?P<bottom>\d+)',dgip[2]):
-      critical('No CLIP in ' + dgifile)
-      exit(1)
-    cl=int(r.left)
-    cr=int(r.right)
-    ct=int(r.top)
-    cb=int(r.bottom)
-    cl=cr=ct=cb=0
-    if not r(r'\bSIZ *(?P<sizex>\d+) *x *(?P<sizey>\d+)',dgip[3]):
-      critical('No SIZ in ' + dgifile)
-      exit(1)
-    psx=int(r.sizex)
-    psy=int(r.sizey)
-    # HACK TODO
-    if psx==720 and psy==480:
-      sarf=Fraction(32,27)
-    else:
-      sarf=Fraction(1,1)
-    if not r(r'\bORDER *(?P<order>\d+)',dgip[3]):
-      critical('No ORDER in ' + dgifile)
-      exit(1)
-    fio=int(r.order)
-    if not r(r'\bFPS *(?P<num>\d+) */ *(?P<denom>\d+) *',dgip[3]):
-      critical('No FPS in ' + dgifile)
-      exit(1)
-    frf=Fraction(int(r.num),int(r.denom))
-    if not r(r'\b(?P<ipercent>\d*\.\d*)% *FILM',dgip[3]):
-      critical('No FILM in ' + dgifile)
-      exit(1)
-    ilp = float(r.ipercent)/100.0
-    
-    if fio == 0:
-      ilt = 'PROGRESSIVE'
-    elif ilp>0.5:
-      ilt = 'FILM'
-    else:
-      ilt = 'INTERLACE'
-    
-    if not r(r'\bPLAYBACK *(?P<playback>\d+)',dgip[3]): # ALSO 'CODED' FRAMES
-      critical('No PLAYBACK in ' + dgifile)
-      exit(1)
-    frames = int(r.playback)
-  elif r(r'^DGIndexProjectFile16',dgip[0]):
-    if not r(r'^FINISHED\s+([0-9.]+)%\s+(.*?)\s*$',dgip[3]): return False
-    ilp=float(r[0])/100.0
-    ilt=r[1]
-    if not r(r'\bAspect_Ratio=(\d+):(\d+)',dgip[1]): return False
-    arf=Fraction(int(r[0]),int(r[1]))
-    if not r(r'\bClipping=\ *(\d+) *, *(\d+) *, *(\d+) *, *(\d+)',dgip[1]): return False
-    cl,cr,ct,cb=[int(r[i]) for i in range(4)]
-    if not r(r'\bPicture_Size= *(\d+)x(\d+)',dgip[1]): return False
-    psx,psy=[int(r[i]) for i in range(2)]
-    sarf=arf/Fraction(psx,psy)
-    if not r(r'\bField_Operation= *(\d+)',dgip[1]): return False
-    fio=int(r[0])
-    if not r(r'\bFrame_Rate= *(\d+) *\((\d+)/(\d+)\)',dgip[1]): return False
-    frm=float(r[0])/1000.0
-    frf=Fraction(int(r[1]),int(r[2]))
-    
-    frames=0
-    for l in dgip[2].splitlines():
-      if r(r'^([0-9a-f]+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(?P<flags>([0-9a-f]+ +)*[0-9a-f]+)\s*$',l):
-        frames += len(r[7].split())
-  else:
-    critical('Unrecognize index file ' + dgifile)
-    exit(1)
-  
-  cfg.set('type', 'video')
-#  cfg.set('file', dgip[1].splitlines()[0])
-  cfg.set('dgi_file', dgifile)
-  cfg.set('interlace_type', ilt)
-  cfg.set('interlace_type_fraction', ilp)
-  cfg.set('field_operation', fio)
-  cfg.set('frame_rate_ratio', str(frf))
-  
-  cfg.set('crop', 'auto' if cl==cr==ct==cb==0 else '0,0,0,0')
-#  cfg.set('aspect_ratio',str(arf))
-  cfg.set('picture_size', "{:d}x{:d}".format(psx,psy))
-  
-  cfg.set('sample_aspect_ratio',str(sarf))
-  mbs = int(math.ceil((psx-cl-cr)/16.0))*int(math.ceil((psy-ct-cb)/16.0))
-  cfg.set('macroblocks',mbs)
-  cfg.set('avc_profile','high')
-  if mbs<=1620: # 480p@30fps; 576p@25fps
-    cfg.set('avc_level',3.0)
-    cfg.set('x264_rate_factor',16.0)
-  elif mbs<=3600: # 720p@30fps
-    cfg.set('avc_level',3.1)
-    cfg.set('x264_rate_factor',18.0)
-  elif mbs<=8192: # 1080p@30fps
-    cfg.set('avc_level',4.0)
-    cfg.set('x264_rate_factor',19.0)
-  elif mbs<=22080: # 1080p@72fps; 1920p@30fps
-    cfg.set('avc_level',5.0)
-    cfg.set('x264_rate_factor',20.0)
-  else: # 1080p@120fps; 2048@30fps
-    cfg.set('avc_level',5.1)
-    cfg.set('x264_rate_factor',21.0)
-  if frames!=0:
-    cfg.set('frames', frames)
-  cfg.sync()
-  return True
-
-
 def config_from_idxfile(cfg,idxfile):
-  with open(idxfile, 'rt') as fp: idx=fp.read()
+  with open(idxfile, 'rt', encoding='utf-8', errors='replace') as fp: idx=fp.read()
   timestamp=[]
   filepos=[]
   r=regex.RegEx()
@@ -346,7 +236,7 @@ def prepare_mkv(mkvfile):
   track=0
   
   r=regex.RegEx()
-  for l in check_output(['mkvmerge','--identify-verbose',mkvfile]).decode(encoding='cp1252').splitlines():
+  for l in check_output(['mkvmerge','--identify-verbose',mkvfile]).decode(errors='replace').splitlines():
     if r('^\s*$',l):
       continue
     elif r(r'^\s*File\s*(.*):\s*container:\s*(\w*)\s*\[(.*)\]\s*$',l):
@@ -366,18 +256,18 @@ def prepare_mkv(mkvfile):
       if r[2] in ('V_MPEG2','MPEG-1/2'):
         cfg.set('extension','mpg')
         cfg.set('file','{} T{:02d}.mpg'.format(base,track))
-        cfg.set('t2c_file','{} T{:02d}.t2c'.format(base,track))
+#        cfg.set('t2c_file','{} T{:02d}.t2c'.format(base,track))
         cfg.set('dgi_file','{} T{:02d}.dgi'.format(base,track))
 #        cfg.set('dgi_file','{} T{:02d}.d2v'.format(base,track))
       elif r[2] in ('V_MPEG4/ISO/AVC','MPEG-4p10/AVC/h.264'):
         cfg.set('extension','264')
         cfg.set('file','{} T{:02d}.264'.format(base,track))
-        cfg.set('t2c_file','{} T{:02d}.t2c'.format(base,track))
+#        cfg.set('t2c_file','{} T{:02d}.t2c'.format(base,track))
         cfg.set('dgi_file','{} T{:02d}.dgi'.format(base,track))
-      elif r[2] in ('V_MS/VFW/FOURCC, WVC1'):
+      elif r[2] in ('V_MS/VFW/FOURCC, WVC1','VC-1'):
         cfg.set('extension','wvc')
         cfg.set('file','{} T{:02d}.wvc'.format(base,track))
-        cfg.set('t2c_file','{} T{:02d}.t2c'.format(base,track))
+#        cfg.set('t2c_file','{} T{:02d}.t2c'.format(base,track))
         cfg.set('dgi_file','{} T{:02d}.dgi'.format(base,track))
       elif r[2] in ('A_AC3','A_EAC3','AC3/EAC3'):
         cfg.set('extension','ac3')
@@ -394,7 +284,7 @@ def prepare_mkv(mkvfile):
         cfg.set('delay',0.0)
 #        cfg.set('elongation',1.0)
 #        cfg.set('normalize',False)
-      elif r[2] in ('A_DTS','DTS','DTS-ES'):
+      elif r[2] in ('A_DTS','DTS','DTS-ES','DTS-HD Master Audio'):
         cfg.set('extension','dts')
         cfg.set('file','{} T{:02d}.dts'.format(base,track))
         cfg.set('quality',60)
@@ -432,6 +322,10 @@ def prepare_mkv(mkvfile):
         cfg.set('display_width',int(r[0]))
         cfg.set('display_height',int(r[1]))
         
+      if r(r'\bpixel_dimensions:(\d+)x(\d+)\b',dets):
+        cfg.set('pixel_width',int(r[0]))
+        cfg.set('pixel_height',int(r[1]))
+        
 #      if r(r'\bdefault_track:(\d+)\b',dets):
 #        cfg.set('defaulttrack',int(r[0])!=0)
       
@@ -467,7 +361,7 @@ def prepare_mkv(mkvfile):
   chap_enabled=[]
   chap_name=[]
   chap_lang=[]
-  for l in check_output(['mkvextract','chapters',mkvfile]).decode(encoding='cp1252').splitlines():
+  for l in check_output(['mkvextract','chapters',mkvfile]).decode(errors='replace').splitlines():
     if r('^\s*<ChapterUID>(.*)</ChapterUID>\s*$',l):
       chap_uid.append(r[0])
     elif r('^\s*<ChapterTimeStart>(\d+):(\d+):(\d+\.?\d*)</ChapterTimeStart>\s*$',l):
@@ -517,34 +411,14 @@ def prepare_mkv(mkvfile):
     if t2cfile and not exists(t2cfile) and mkvtrack>=0: call.append('{:d}:{}'.format(mkvtrack,t2cfile))
   if call: do_call(['mkvextract', 'timecodes_v2', mkvfile] + call)
   cfg.sync()
+  
   work_unlock(cfgfile)
   
-  for vt in sorted([t for t in cfg.sections() if t.startswith('TRACK') and not cfg.get('disable',section=t) and cfg.get('type',section=t)=='video']):
-    cfg.setsection(vt)
-    file=cfg.get('file')
-    dgifile=cfg.get('dgi_file', None)
-    if dgifile:
-      if not exists(dgifile):
-        time.sleep(1)
-        if dgifile.endswith('.dgi'):
-          do_call(['DGIndexNV', '-i', cfg.get('file'), '-o', dgifile, '-h', '-e'],dgifile)
-        elif dgifile.endswith('.d2v'):
-          do_call(['dgindex', '-i', cfg.get('file'), '-o', splitext(dgifile)[0], '-fo', '0', '-ia', '3', '-om', '2', '-hide', '-exit'],dgifile)
-        else:
-          continue
-        time.sleep(1)
-        logfile = splitext(dgifile)[0]+'.log'
-        if exists(logfile):
-          with open(logfile,'rt') as f:
-            debug('Log: "' + logfile + '" contains: "' + repr(f.read().strip()) + '"')
-          os.remove(logfile)
-      config_from_dgifile(cfg,dgifile)
-
   for vt in sorted([t for t in cfg.sections() if t.startswith('TRACK') and not cfg.get('disable',section=t)]):
     cfg.setsection(vt)
     t2cfile=cfg.get('t2c_file',None)
     if not t2cfile: continue
-    with open(t2cfile,'rt') as fp:
+    with open(t2cfile,'rt', encoding='utf-8', errors='replace') as fp:
       t2cl = [float(l) for l in fp.readlines() if l.strip(string.whitespace).strip(string.digits) in ['','.']]
     if len(t2cl)==0: continue
 #    oframes = cfg.get('frames',-1)
@@ -642,11 +516,11 @@ def update_description_tvshow(cfg,txt):
   tl=txt.splitlines()
   h=tl[0].split('\t')
   tl=tl[1:]
-  i=lfind(h,"\xe2\x84\x96",'?','No. in series','Total','Series number')
+  i=lfind(h,"\xe2\x84\x96",'?','No. in series','Total','Series number','Nº')
   if i>=0: h[i]='Series Episode'
   sei=lfind(h,'Series Episode')
   
-  epi=lfind(h,'#','No.','No. in season','No. in Season','Episode number')
+  epi=lfind(h,'#','No.','No. in season','No. in Season','Episode number','Ep','Ep.')
   if epi<0: return False # Fix
   tii=lfind(h,'Title','Episode title','Episode name','Episode Title','Episode Name')
   dei=lfind(h,'Description')
@@ -659,9 +533,10 @@ def update_description_tvshow(cfg,txt):
       tl[i-1]=tl[i-1]+'\t'+tl[i]
       tl[i]=''
     i+=1
-  wri=lfind(h,'Written by','Writer')
+  # 'Directed by*','Director'
+  wri=lfind(h,'Written by','Written by:','Writer')
   dai=lfind(h,'Original Airdate','Original air date','Original airdate','Airdate','Release date','Aired on','Recorded on')
-  pci=lfind(h,'Production code','Prod. code','prod. code','Prod.code')
+  pci=lfind(h,'Production code','Prod. code','prod. code','Prod.code','PC')
   
   r=regex.RegEx()
   for t in tl:
@@ -686,7 +561,7 @@ def update_description_tvshow(cfg,txt):
       if i in [epi,tii,wri,pci,dei]: continue
       s=l[i].strip()
       if not s: continue
-      s=(h[i].strip() if i<len(h) else '')+': '+s
+      s=(h[i].strip().rstrip(':') if i<len(h) else '')+': '+s
       cmt = cfg.get('comment','')
       if s not in cmt: cfg.set('comment',  (cmt+';' if cmt else '')+ s)
   
@@ -766,8 +641,7 @@ def update_description(cfg):
     exit(1)
   n=join(args.descdir if args.descdir else '',str(n)+'.txt')
   if not exists(n): return
-  #txt=open(n,'rb').read().decode(errors='replace')
-  txt=open(n,'rt').read()
+  txt=open(n,'rt', encoding='utf-8', errors='replace').read()
   txt=txt.strip()
   txt=re.sub(r'Add to Google Calendar','',txt)
   txt=re.sub(r' *\[(\d+|[a-z])\] *','',txt)
@@ -776,6 +650,163 @@ def update_description(cfg):
   if cfg.get('type')=='tvshow': update_description_tvshow(cfg,txt)
   elif cfg.get('type')=='movie': update_description_movie(cfg,txt)
 
+
+def config_from_dgifile(cfg,dgifile):
+  logfile = splitext(dgifile)[0]+'.log'
+  r=regex.RegEx()
+  
+  t = str.maketrans(string.ascii_uppercase,string.ascii_lowercase,string.whitespace)
+  while True:
+    time.sleep(1)
+    if not (exists (logfile)): continue
+    with open(logfile,'rt', encoding='utf-8', errors='replace') as f: log = f.read()
+    for l in log.splitlines():
+      if not r('^([^:]*):(.*)$',l):
+        warning('Unrecognized DGIndex log line: "' + repr(l) + '"')
+        continue
+      k='dg'+r[0].translate(t)
+      v=r[1].strip()
+      if not v: continue
+      cfg.set(k,v)
+    if cfg.get('dginfo')=='Finished!': break
+  os.remove(logfile)
+  cfg.sync()
+  
+  with open(dgifile, 'rt', encoding='utf-8', errors='replace') as fp: dgi=fp.read()
+  dgip=dgi.split('\n\n')
+  if len(dgip)!=4:
+    critical('Malformed index file ' + dgifile)
+    exit(1)
+  r=regex.RegEx()
+  if r(r'^(DGAVCIndexFileNV14|DGMPGIndexFileNV14|DGVC1IndexFileNV14)',dgip[0]):
+    if not r(r'\bCLIP\ *(?P<left>\d+) *(?P<right>\d+) *(?P<top>\d+) *(?P<bottom>\d+)',dgip[2]):
+      critical('No CLIP in ' + dgifile)
+      exit(1)
+    cl=int(r.left)
+    cr=int(r.right)
+    ct=int(r.top)
+    cb=int(r.bottom)
+    cl=cr=ct=cb=0
+    if not r(r'\bSIZ *(?P<sizex>\d+) *x *(?P<sizey>\d+)',dgip[3]):
+      critical('No SIZ in ' + dgifile)
+      exit(1)
+    psx=int(r.sizex)
+    psy=int(r.sizey)
+    
+    if cfg.has('dgsar'):
+      sarf=cfg.get('dgsar')
+    elif cfg.has('display_width') and cfg.has('display_height') and cfg.has('pixel_width') and cfg.has('pixel_height'):
+      sarf=Fraction(cfg.get('display_width')*cfg.get('pixel_height'),cfg.get('display_height')*cfg.get('pixel_width'))
+#    elif r(r'^\s*(\d+)\s*x\s*(\d+)\s*XXX\s*(\d+)\s*:(\d+)',cfg.get('dgdisplaysize','')+'XXX'+cfg.get('dgaspectratio','')):
+#      sarf=Fraction(int(r[1])*int(r[2]),int(r[0])*int(r[3]))
+#    elif r(r'^\s*(\d+)\s*x\s*(\d+)\s*XXX\s*(\d+)\s*:(\d+)',cfg.get('dgcodedsize','')+'XXX'+cfg.get('dgaspectratio','')):
+#      sarf=Fraction(int(r[1])*int(r[2]),int(r[0])*int(r[3]))
+#    elif cfg.has('display_width') and cfg.has('display_height') and r(r'^\s*(\d+)\s*x\s*(\d+)\s*$',cfg.get('picture_size','')):
+#      sarf=Fraction(cfg.get('display_width')*int(r[0]),cfg.get('display_height')*int(r[1]))
+    else:
+      warning('Guessing 1:1 SAR for ' + dgifile)
+      sarf=Fraction(1,1)
+    
+    if not r(r'\bORDER *(?P<order>\d+)',dgip[3]):
+      critical('No ORDER in ' + dgifile)
+      exit(1)
+    fio=int(r.order)
+    if not r(r'\bFPS *(?P<num>\d+) */ *(?P<denom>\d+) *',dgip[3]):
+      critical('No FPS in ' + dgifile)
+      exit(1)
+    frf=Fraction(int(r.num),int(r.denom))
+    if not r(r'\b(?P<ipercent>\d*\.\d*)% *FILM',dgip[3]):
+      critical('No FILM in ' + dgifile)
+      exit(1)
+    ilp = float(r.ipercent)/100.0
+    
+    if fio == 0:
+      ilt = 'PROGRESSIVE'
+    elif ilp>0.5:
+      ilt = 'FILM'
+    else:
+      ilt = 'INTERLACE'
+    
+    if not r(r'\bPLAYBACK *(?P<playback>\d+)',dgip[3]): # ALSO 'CODED' FRAMES
+      critical('No PLAYBACK in ' + dgifile)
+      exit(1)
+    frames = int(r.playback)
+  elif r(r'^DGIndexProjectFile16',dgip[0]):
+    if not r(r'^FINISHED\s+([0-9.]+)%\s+(.*?)\s*$',dgip[3]): return False
+    ilp=float(r[0])/100.0
+    ilt=r[1]
+    if not r(r'\bAspect_Ratio=(\d+):(\d+)',dgip[1]): return False
+    arf=Fraction(int(r[0]),int(r[1]))
+    if not r(r'\bClipping=\ *(\d+) *, *(\d+) *, *(\d+) *, *(\d+)',dgip[1]): return False
+    cl,cr,ct,cb=[int(r[i]) for i in range(4)]
+    if not r(r'\bPicture_Size= *(\d+)x(\d+)',dgip[1]): return False
+    psx,psy=[int(r[i]) for i in range(2)]
+    sarf=arf/Fraction(psx,psy)
+    if not r(r'\bField_Operation= *(\d+)',dgip[1]): return False
+    fio=int(r[0])
+    if not r(r'\bFrame_Rate= *(\d+) *\((\d+)/(\d+)\)',dgip[1]): return False
+    frm=float(r[0])/1000.0
+    frf=Fraction(int(r[1]),int(r[2]))
+    
+    frames=0
+    for l in dgip[2].splitlines():
+      if r(r'^([0-9a-f]+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(?P<flags>([0-9a-f]+ +)*[0-9a-f]+)\s*$',l):
+        frames += len(r[7].split())
+  else:
+    critical('Unrecognize index file ' + dgifile)
+    exit(1)
+  
+  cfg.set('type', 'video')
+#  cfg.set('file', dgip[1].splitlines()[0])
+  cfg.set('dgi_file', dgifile)
+  cfg.set('interlace_type', ilt)
+  cfg.set('interlace_type_fraction', ilp)
+  cfg.set('field_operation', fio)
+  cfg.set('frame_rate_ratio', str(frf))
+  
+  cfg.set('crop', 'auto' if cl==cr==ct==cb==0 else '0,0,0,0')
+#  cfg.set('aspect_ratio',str(arf))
+  cfg.set('picture_size', "{:d}x{:d}".format(psx,psy))
+  
+  cfg.set('sample_aspect_ratio',str(sarf))
+  mbs = int(math.ceil((psx-cl-cr)/16.0))*int(math.ceil((psy-ct-cb)/16.0))
+  cfg.set('macroblocks',mbs)
+  cfg.set('avc_profile','high')
+  if mbs<=1620: # 480p@30fps; 576p@25fps
+    cfg.set('avc_level',3.0)
+    cfg.set('x264_rate_factor',16.0)
+  elif mbs<=3600: # 720p@30fps
+    cfg.set('avc_level',3.1)
+    cfg.set('x264_rate_factor',18.0)
+  elif mbs<=8192: # 1080p@30fps
+    cfg.set('avc_level',4.0)
+    cfg.set('x264_rate_factor',19.0)
+  elif mbs<=22080: # 1080p@72fps; 1920p@30fps
+    cfg.set('avc_level',5.0)
+    cfg.set('x264_rate_factor',20.0)
+  else: # 1080p@120fps; 2048@30fps
+    cfg.set('avc_level',5.1)
+    cfg.set('x264_rate_factor',21.0)
+  if frames!=0:
+    cfg.set('frames', frames)
+  cfg.sync()
+  return True
+
+
+def build_indices(cfg):
+  for vt in sorted([t for t in cfg.sections() if t.startswith('TRACK') and not cfg.get('disable',section=t) and cfg.get('type',section=t)=='video']):
+    cfg.setsection(vt)
+    file=cfg.get('file')
+    dgifile=cfg.get('dgi_file', None)
+    if not dgifile or exists(dgifile): continue
+    if dgifile.endswith('.dgi'):
+      do_call(['DGIndexNV', '-i', cfg.get('file'), '-o', dgifile, '-h', '-e'],dgifile)
+    elif dgifile.endswith('.d2v'):
+      do_call(['dgindex', '-i', cfg.get('file'), '-o', splitext(dgifile)[0], '-fo', '0', '-ia', '3', '-om', '2', '-hide', '-exit'],dgifile)
+    else:
+      continue
+    
+    config_from_dgifile(cfg,dgifile)
 
 def build_subtitle(cfg):
   infile = cfg.get('file')
@@ -790,7 +821,7 @@ def build_subtitle(cfg):
     outfile = splitext(infile)[0]+'.ttxt'
     cfg.set('out_file', outfile)
     if exists(outfile): return # Should be not readytomake(outfile,)
-    with open(infile, 'rt') as i, open('temp.srt', 'wt') as o:
+    with open(infile, 'rt', encoding='utf-8', errors='replace') as i, open('temp.srt', 'wt', encoding='utf-8', errors='replace') as o:
       inp=i.read()
       for l in inp.split('\n\n'):
         if not r(r'^(?s)(?P<beg>\s*\d*\s*)(?P<neg1>-?)(?P<hours1>\d+):(?P<mins1>\d+):(?P<secs1>\d+),(?P<msecs1>\d+)(?P<mid> --> )(?P<neg2>-?)(?P<hours2>\d+):(?P<mins2>\d+):(?P<secs2>\d+),(?P<msecs2>\d+)\b(?P<end>.*)$',l):
@@ -829,7 +860,7 @@ def build_subtitle(cfg):
     if not exists(splitext(infile)[0]+'.adj.sub'):
       shutil.copy(splitext(infile)[0]+'.sub',splitext(infile)[0]+'.adj.sub')
     if exists(outfile): return  # Should be not readytomake(outfile,)
-    with open(infile, 'rt') as i, open(outfile, 'wt') as o:
+    with open(infile, 'rt', encoding='utf-8', errors='replace') as i, open(outfile, 'wt', encoding='utf-8', errors='replace') as o:
       for l in i:
         if not r(r'^(?s)(?P<beg>\s*timestamp:\s*)(?P<neg>-?)(?P<hours>\d+):(?P<mins>\d+):(?P<secs>\d+):(?P<msecs>\d+)\b(?P<end>.*)$',l):
           o.write(l)
@@ -874,7 +905,7 @@ def build_audio(cfg):
     warning('Invalid downmix "{:d}"'.format(cfg.get('downmix')))
 #    if cfg.get('normalize',False): call.append('-normalize')
   
-  call += [ '|', 'qaac', '--threading', '--ignorelength', '--no-optimize', '--tvbr', str(cfg.get('quality',60)), '--quality', '2', '-', '-o', outfile]
+  call += [ '|', 'qaac64', '--threading', '--ignorelength', '--no-optimize', '--tvbr', str(cfg.get('quality',60)), '--quality', '2', '-', '-o', outfile]
   
   res=do_call(call, outfile)
   if res and r(r'\bwrote (\d+\.?\d*) seconds\b',res):
@@ -945,8 +976,8 @@ def build_video(cfg):
       cl,cr,ct,cb=[int(r[i]) for i in range(4)]
       if r('^\s*(\d+)\s*x\s*(\d+)\s*$',cfg.get('picture_size','')):
         px, py=[int(r[i]) for i in range(2)]
-      if (px-cl-cr) % 2!=0: cr+=1
-      if (py-ct-cb) % 2!=0: cb+=1
+        if (px-cl-cr) % 2!=0: cr+=1
+        if (py-ct-cb) % 2!=0: cb+=1
       if cl or cr or ct or cb:
         avs+='crop({:d},{:d},{:d},{:d},align=true)\n'.format(cl,ct,-cr,-cb)
     elif cfg.get('crop')=='auto':
@@ -973,7 +1004,7 @@ def build_video(cfg):
   if procs!=1: avs+='Distributor()\n'
   
   if not exists(avsfile) or getmtime(cfg.filename)>getmtime(avsfile):
-    with open(avsfile, 'wt') as fp: fp.write(avs)
+    with open(avsfile, 'wt', encoding='utf-8', errors='replace') as fp: fp.write(avs)
     debug('Created AVS file: ' + repr(avs))
   
   call = ['avs2pipemod', '-y4mp', avsfile, '|' , 'x264', '--demuxer', 'y4m', '-']
@@ -985,7 +1016,7 @@ def build_video(cfg):
   call += ['--crf', cfg.get('x264_rate_factor', 20.0)]
   call += ['--fps', str(fro)]
   sarf=cfg.get('sample_aspect_ratio')
-  call += ['--sar', '{:d}:{:d}'.format(sarf.numerator if sarf else 1,sarf.denominator if sarf else 1)]
+  if isinstance(sarf,Fraction): call += ['--sar', '{:d}:{:d}'.format(sarf.numerator,sarf.denominator)]
   if not cfg.get('x264_deterministic',False): call += ['--non-deterministic']
   if not cfg.get('x264_fast_pskip',False): call += ['--no-fast-pskip']
   if not cfg.get('x264_dct_decimate',False): call += ['--no-dct-decimate']
@@ -1016,6 +1047,7 @@ def build_result(cfg):
   r=regex.RegEx()
   for track in sorted([t for t in cfg.sections() if t.startswith('TRACK') and not cfg.get('disable',section=t)]):
     cfg.setsection(track)
+    if cfg.get('type')=='audio' and cfg.has('language') and cfg.has('audio_languages',section='MAIN') and cfg.get('language') not in cfg.get('audio_languages',section='MAIN').split(";"): continue
     file=cfg.get('file')
     outfile=cfg.get('out_file',None)
     if not outfile: return False
@@ -1065,8 +1097,8 @@ def build_result(cfg):
   sts=0
   for track in sorted([t for t in cfg.sections() if t.startswith('TRACK') and not cfg.get('disable',section=t)]):
     cfg.setsection(track)
-    if cfg.hasno('out_file'): continue
     if cfg.get('type')=='audio' and cfg.has('language') and cfg.has('audio_languages',section='MAIN') and cfg.get('language') not in cfg.get('audio_languages',section='MAIN').split(";"): continue
+    if cfg.hasno('out_file'): continue
     of=cfg.get('out_file')
     if cfg.has('duration',section='MAIN') and cfg.has('duration'):
       mdur=cfg.get('duration',section='MAIN')
@@ -1148,8 +1180,8 @@ def build_result(cfg):
   
   debug('Adding chapters to "{}"'.format(outfile))
   chapterfile=splitext(outfile)[0]+'.chapters.txt'
-  if exists(chapterfile):
-#    warning('Not adding chapters from config file because "' + chapterfile + '" exists')
+  if exists(chapterfile) and getsize(chapterfile)!=0:
+    warning('Adding chapters from existing config file "' + chapterfile + '"')
     do_call(['mp4chaps', '--import', outfile],outfile)
   elif cfg.has('chapter_time') and cfg.has('chapter_name'):
     delay=cfg.get('chapter_delay',0.0)
@@ -1158,7 +1190,7 @@ def build_result(cfg):
     cts=[float(i) for i in c.split(';')] if isinstance(c,str) else [c]
     c=cfg.get('chapter_name')
     cns=[i.strip() for i in c.split(';')] if isinstance(c,str) else [c]
-    with open(chapterfile,'wt') as f:
+    with open(chapterfile,'wt', encoding='utf-8', errors='replace') as f:
       for (ct,cn) in zip(cts,cns):
         (neg,hours,mins,secs,msecs)=secsToParts(ct*elong+delay)
         f.write('{}{:02d}:{:02d}:{:02d}.{:03d} {} ({:d}m {:d}s)\n'.format(neg,hours,mins,secs,msecs,cn,(-1 if neg else 1)*hours*60+mins,secs))
@@ -1172,7 +1204,7 @@ def build_result(cfg):
   if not(coverfiles):
       warning('"'+outfile+'" has no cover art')
   
-  do_call(['mp4file', '--optimize', outfile])
+  #do_call(['mp4file', '--optimize', outfile])
   return True
 
 def main():
@@ -1200,6 +1232,15 @@ def main():
     update_coverart(cfg)
     update_description(cfg)
     build_result(cfg)
+  
+  for f in regex.reglob(r'.*\.cfg'):
+    cfg = AdvConfig(f)
+    if not cfg: continue
+    for track in sorted([t for t in cfg.sections() if t.startswith('TRACK')]):
+      cfg.setsection(track)
+      if cfg.get('type')!='video': continue
+      if cfg.get('disable',False): continue
+      build_indices(cfg)
   
   for f in regex.reglob(r'.*\.cfg'):
     cfg = AdvConfig(f)

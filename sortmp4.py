@@ -18,7 +18,7 @@ parser.add_argument('--target', action='store', default= 'Y:\\')
 args = parser.parse_args()
 logging.basicConfig(level=args.loglevel,format='%(asctime)s [%(levelname)s]: %(message)s')
 
-def move(oname,dir,nname=None):
+def optAndMove(oname,dir,nname=None):
   if nname==None:
     nname=oname
   if not os.path.exists(dir):
@@ -26,6 +26,7 @@ def move(oname,dir,nname=None):
   if os.path.exists(os.path.join(dir,nname)):
     warning('{} already in {}, skipping.'.format(nname,dir))
     return
+  subprocess.check_call(['mp4file', '--optimize', f])
   info("Moving {} to {}".format(oname,os.path.join(dir,nname)))
   try:
     shutil.move(f,os.path.join(dir,nname))
@@ -34,7 +35,7 @@ def move(oname,dir,nname=None):
     raise
 
 for f in reglob(r'.*\.(mp4|m4r|m4b)'):
-  ifo=subprocess.check_output(['mp4info',f]).decode(errors='ignore')
+  ifo=subprocess.check_output(['mp4info',f]).decode(errors='replace')
   if not rser(r'^(?m)\s*Media Type:\s*(.*)$',ifo):
     warning('No Media Type in {}, skipping.'.format(f))
     continue
@@ -50,11 +51,12 @@ for f in reglob(r'.*\.(mp4|m4r|m4b)'):
     warning('No Cover Art in {}, skipping.'.format(f))
     continue
   
+  
   if type=='TV Show':
     if not rser(r'(?m)^\s*TV Show:\s*(.*)$',ifo):
       warning('No tv show "{}" in {}.'.format(f))
       continue
-    move(f,os.path.join(args.target,'TV',alphabetize(rget(0))))
+    optAndMove(f,os.path.join(args.target,'TV',alphabetize(rget(0))))
   elif type=='Movie':
     if not os.path.isdir(os.path.join(args.target,'Movies',genre)):
       warning('Genre "{}" in {} not recognized, skipping.'.format(genre,f))
@@ -75,11 +77,11 @@ for f in reglob(r'.*\.(mp4|m4r|m4b)'):
         nname=sub+"-trailer"+ext
       else:
         nname=sub+"-behindthescenes"+ext
-    move(f,os.path.join(args.target,'Movies',genre,main),nname)
+    optAndMove(f,os.path.join(args.target,'Movies',genre,main),nname)
   elif type=='Audio Book':
-    move(f,os.path.join(args.target,'Books'))
+    optAndMove(f,os.path.join(args.target,'Books'))
   elif type=='Ringtone':
-    move(f,os.path.join(args.target,'Music','Ringtones'))
+    optAndMove(f,os.path.join(args.target,'Music','Ringtones'))
   else:
     warning('Media Type "{}" in {} not recognized, skipping.'.format(type,f))
     continue

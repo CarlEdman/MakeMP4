@@ -94,17 +94,17 @@ def mp4meta_export(f):
 		if not args.force:
 			critical('cannot export metadata from "' + f + '" because "' + '","'.join(cs) + '" already exist(s)')
 		for c in cs: os.remove(c)
-	subprocess.check_call(['mp4info', f], stdout=open(t, "w"))
+	subprocess.check_call(['mp4info', f], stdout=open(t, "wt", encoding='utf-8', errors='replace'))
 	subprocess.check_output(['mp4art', '--extract', f])
 
 def mp4meta_import(f):
 	b,e = mp4_valid(f)
-	if args.loglevel <= logging.DEBUG: debug('Before import info:\n' + subprocess.check_output(['mp4info', f]).decode(encoding='cp1252'))
+	if args.loglevel <= logging.DEBUG: debug('Before import info:\n' + subprocess.check_output(['mp4info', f]).decode(encoding='utf-8', errors='replace'))
 	t = b + '.txt'
 	if not os.path.exists(t):
 		critical('cannot extract metadata from "' + f + '" because "' + t + '" does not exist')
 	ts = []
-	with open(t,'r') as td:
+	with open(t,'rt', encoding='utf-8', errors='replace') as td:
 		for line in td:
 			line = line.rstrip()
 			if rser(r'^mp4info version',line):
