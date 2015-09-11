@@ -45,7 +45,7 @@ def do_call(args,outfile=None,infile=None):
     s=re.sub(r'\n+',r'\n',s)
     s=re.sub(r'\n \*(.*?) \*',r'\n\1',s)
     return s.strip()
-  
+
   cs=[[]]
   for a in args:
     if a=='|':
@@ -59,7 +59,7 @@ def do_call(args,outfile=None,infile=None):
   for c in cs:
     ps.append(Popen(c, stdin=ps[-1].stdout if ps else infile, stdout=PIPE, stderr=PIPE))
   outstr, errstr = ps[-1].communicate()
-  
+
   work_unlock(outfile)
   # encname='cp1252'/ encname='utf-8'
   outstr = outstr.decode(errors='replace')
@@ -101,7 +101,7 @@ def config_from_base(cfg,base):
   cfg.set('genre','')
   cfg.set('song','')
   cfg.set('description','')
-  cfg.set('audio_languages','eng')
+  #cfg.set('audio_languages','eng') # Set if we want to keep only some languages
   r=regex.RegEx()
   if r(r'^(?P<show>.*?) (pt\.? *(?P<episode>\d+) *)?\((?P<year>\d*)\) *(?P<song>.*?)$',base):
     cfg.set('type','movie')
@@ -162,7 +162,7 @@ def prepare_tivo(tivofile):
   if exists(tivofile+'.error'): return False
   mpgfile = tivofile[:-5]+'.mpg'
   if not readytomake(mpgfile,tivofile): return False
-  
+
   if args.mak:
     do_call(['tivodecode','--mak',args.mak,'--out',mpgfile,tivofile],mpgfile)
     if exists(mpgfile) and getsize(mpgfile)>0: os.remove(tivofile)
@@ -175,7 +175,7 @@ def prepare_mpg(mpgfile):
   cfg=AdvConfig(cfgfile)
   config_from_base(cfg,base)
   work_lock(cfgfile)
-  
+
   track=1
   dgifile='{} T{:02d}.d2v'.format(base,track)
   if not exists(dgifile):
@@ -216,12 +216,12 @@ def prepare_mpg(mpgfile):
     if r(r'\b([0-9]+)rate\b',feat): cfg.set('sample_rate',r[0])
     if r(r'\b([a-z]{3})-lang\b',feat):  cfg.set('language',r[0])
     cfg.sync()
-  
+
   if make_srt(cfg,track+1,[mpgfile]): track+=1
-  
+
   if args.delete_source:
     os.remove(mpgfile)
-  
+
   cfg.sync()
   work_unlock(cfgfile)
 
@@ -232,9 +232,9 @@ def prepare_mkv(mkvfile):
   cfg=AdvConfig(cfgfile)
   config_from_base(cfg,base)
   work_lock(cfgfile)
-  
+
   track=0
-  
+
   r=regex.RegEx()
   for l in check_output(['mkvmerge','--identify-verbose',mkvfile]).decode(errors='replace').splitlines():
     if r('^\s*$',l):
@@ -245,7 +245,7 @@ def prepare_mkv(mkvfile):
       dets=r[2]
       if r(r'\bduration:(\d+)\b',dets):
         cfg.set('duration',int(r[0])/1000000000.0,section='MAIN')
-      
+
     elif r('^\s*Track ID (\d+): (\w+)\s*\((.*)\)\s*\[(.*)\]\s*$',l):
       track+=1
       cfg.setsection('TRACK{:02d}'.format(track))
@@ -314,37 +314,37 @@ def prepare_mkv(mkvfile):
       else:
         warning('Unrecognized track type {} in {}'.format(r[2],mkvfile))
         cfg.set('disable',True)
-      
+
       if r(r'\blanguage:(\w+)\b',dets):
         cfg.set('language',iso6392BtoT[r[0]] if r[0] in iso6392BtoT else r[0])
-      
+
       if r(r'\bdisplay_dimensions:(\d+)x(\d+)\b',dets):
         cfg.set('display_width',int(r[0]))
         cfg.set('display_height',int(r[1]))
-        
+
       if r(r'\bpixel_dimensions:(\d+)x(\d+)\b',dets):
         cfg.set('pixel_width',int(r[0]))
         cfg.set('pixel_height',int(r[1]))
-        
+
 #      if r(r'\bdefault_track:(\d+)\b',dets):
 #        cfg.set('defaulttrack',int(r[0])!=0)
-      
+
       if r(r'\bforced_track:(\d+)\b',dets):
         cfg.set('forcedtrack',int(r[0])!=0)
-      
+
       if r(r'\bdefault_duration:(\d+)\b',dets):
         cfg.set('frameduration',int(r[0])/1000000000.0)
-      
+
       if r(r'\btrack_name:(.+?)\b',dets):
         cfg.set('trackname',r[0])
-      
+
       if r(r'\baudio_sampling_frequency:(\d+)\b',dets):
         cfg.set('samplerate',int(r[0]))
-      
+
       if r(r'\baudio_channels:(\d+)\b',dets):
         cfg.set('channels',int(r[0]))
 #        if int(r[0])>2: cfg.set('downmix',2)
-      
+
     elif r(r'^Chapters: (\d+) entries$',l):
       cfg.set('chaptercount',int(r[0]),section='MAIN')
     elif r(r'^Tags for track ID (\d+): (\d+) entries$',l):
@@ -386,7 +386,7 @@ def prepare_mkv(mkvfile):
     cfg.set('chapter_name',';'.join(chap_name))
     cfg.set('chapter_language', ';'.join(chap_lang))
     cfg.sync()
-  
+
   call=[]
   for vt in sorted([t for t in cfg.sections() if t.startswith('TRACK') and not cfg.get('disable',section=t)]):
     cfg.setsection(vt)
@@ -396,13 +396,13 @@ def prepare_mkv(mkvfile):
       call.append('{:d}:{}'.format(mkvtrack,file))
   if call: do_call(['mkvextract', 'tracks', mkvfile] + call)
   cfg.sync()
-  
+
   for vt in sorted([t for t in cfg.sections() if t.startswith('TRACK') and not cfg.get('disable',section=t) and cfg.get('type',section=t)=='video']):
     cfg.setsection(vt)
     file=cfg.get('file')
     if make_srt(cfg,track+1,[file]): track+=1
   cfg.sync()
-  
+
   call=[]
   for vt in sorted([t for t in cfg.sections() if t.startswith('TRACK') and not cfg.get('disable',section=t)]):
     cfg.setsection(vt)
@@ -411,9 +411,9 @@ def prepare_mkv(mkvfile):
     if t2cfile and not exists(t2cfile) and mkvtrack>=0: call.append('{:d}:{}'.format(mkvtrack,t2cfile))
   if call: do_call(['mkvextract', 'timecodes_v2', mkvfile] + call)
   cfg.sync()
-  
+
   work_unlock(cfgfile)
-  
+
   for vt in sorted([t for t in cfg.sections() if t.startswith('TRACK') and not cfg.get('disable',section=t)]):
     cfg.setsection(vt)
     t2cfile=cfg.get('t2c_file',None)
@@ -432,7 +432,7 @@ def prepare_mkv(mkvfile):
       warning('Encoding changed duration in "{}" from {:f} to {:f}'.format(file,oduration,duration))
     cfg.set('duration',duration)
     cfg.sync()
-  
+
   for vt in sorted([t for t in cfg.sections() if t.startswith('TRACK') and not cfg.get('disable',section=t) and cfg.get('type',section=t)=='subtitles']):
     cfg.setsection(vt)
     file=cfg.get('file')
@@ -443,7 +443,7 @@ def prepare_mkv(mkvfile):
 
   if args.delete_source:
     os.remove(mkvfile)
-      
+
 def prepare_vob(vobfile):
   base=splitext(basename(vobfile))[0]
   r=regex.RegEx()
@@ -455,10 +455,10 @@ def prepare_vob(vobfile):
   cfg=AdvConfig(cfgfile)
   config_from_base(cfg,base)
   work_lock(cfgfile)
-  
+
 #  TODO
 #  dgindex & rename
-  
+
 #  vob -> idx, sub
 #  basefile=myjoin(root, file[:-6])
 #  idxfile=basefile+".idx"
@@ -473,7 +473,7 @@ def prepare_vob(vobfile):
 #    trueifofile=ifofile[:-13]+"_0.ifo"
 #  else:
 #    continue
-#  
+#
 #  vobsubfile=r'C:\Windows\Temp\vobsub'
 #  info('Generating "%(vobfile)s" -> "%(idxfile)s"' % locals())
 #  open(vobsubfile,'wt').write('%(ifofile)s\n%(basefile)s\n%(pgc)d\n0\nALL\nCLOSE\n' % locals())
@@ -483,7 +483,7 @@ def prepare_vob(vobfile):
 ##  if not exists(idxfile): open(idxfile,'wt').truncate(0)
 
 #  if make_srt(cfg,track+1,vobfiles): track+=1
-  
+
 #  chapter txt -> cfg
   cfg.sync()
   work_unlock(cfgfile)
@@ -494,16 +494,16 @@ def prepare_vob(vobfile):
 def update_coverart(cfg):
   cfg.setsection('MAIN')
   if cfg.has('coverart'): return
-  
+
   show=cfg.get('show','')
   season=cfg.get('season',-1)
   base=cfg.get('base','')
-  
+
   if show and season>=0: n='{} S{:d}'.format(show,season)
   elif base: n=base.partition(' ()')[0]
   elif show: n=show
   n=re.escape(n)+r'(\s+P[\d+])?\.(jpg|jpeg|png)'
-  
+
   cfg.set('coverart', ';'.join(regex.reglob(n,args.artdir if args.artdir else os.getcwd())))
   cfg.sync()
 
@@ -519,7 +519,7 @@ def update_description_tvshow(cfg,txt):
   i=lfind(h,"\xe2\x84\x96",'?','No. in series','Total','Series number','Nº')
   if i>=0: h[i]='Series Episode'
   sei=lfind(h,'Series Episode')
-  
+
   epi=lfind(h,'#','No.','No. in season','No. in Season','Episode number','Ep','Ep.')
   if epi<0: return False # Fix
   tii=lfind(h,'Title','Episode title','Episode name','Episode Title','Episode Name')
@@ -537,7 +537,7 @@ def update_description_tvshow(cfg,txt):
   wri=lfind(h,'Written by','Written by:','Writer')
   dai=lfind(h,'Original Airdate','Original air date','Original airdate','Airdate','Release date','Aired on','Recorded on')
   pci=lfind(h,'Production code','Prod. code','prod. code','Prod.code','PC')
-  
+
   r=regex.RegEx()
   for t in tl:
     if not t: continue
@@ -564,7 +564,7 @@ def update_description_tvshow(cfg,txt):
       s=(h[i].strip().rstrip(':') if i<len(h) else '')+': '+s
       cmt = cfg.get('comment','')
       if s not in cmt: cfg.set('comment',  (cmt+';' if cmt else '')+ s)
-  
+
   cfg.sync()
 
 
@@ -572,7 +572,7 @@ def update_description_movie(cfg,txt):
   txt=re.sub(r'(This movie is|Cast|Director|Genres|Availability|Language|Format)(:|\n)\s*',r'\n\1: ',txt)
   r=regex.RegEx(regex=r'^(Rate 5 starsRate 4 starsRate 3 starsRate 2 starsRate 1 starRate not interested(Clear Rating)?|Rate 5 starsRate 4 starsRate 3 starsRate 2 starsRate 1 stars|Not Interested(Clear)?|[0-5]\.[0-9]|Movie Details|\s*)$')
   tl=[l for l in txt.splitlines() if l and not r(text=l)]
-  
+
   if r(r'^(.*?)\s*(\((.*)\))?$',tl[0]):
     tl=tl[1:]
     if cfg.hasno('title'): cfg.set('title',r[0])
@@ -622,7 +622,7 @@ def update_description_movie(cfg,txt):
       description = description + '  ' + r[0] + ': ' + r[1] +'.'
     else:
       description = '  ' + t + description
-    
+
   if cfg.hasno('description') and description:
     cfg.set('description',description[2:])
   cfg.sync()
@@ -654,7 +654,7 @@ def update_description(cfg):
 def config_from_dgifile(cfg,dgifile):
   logfile = splitext(dgifile)[0]+'.log'
   r=regex.RegEx()
-  
+
   t = str.maketrans(string.ascii_uppercase,string.ascii_lowercase,string.whitespace)
   while True:
     time.sleep(1)
@@ -671,7 +671,7 @@ def config_from_dgifile(cfg,dgifile):
     if cfg.get('dginfo')=='Finished!': break
   os.remove(logfile)
   cfg.sync()
-  
+
   with open(dgifile, 'rt', encoding='utf-8', errors='replace') as fp: dgi=fp.read()
   dgip=dgi.split('\n\n')
   if len(dgip)!=4:
@@ -692,7 +692,7 @@ def config_from_dgifile(cfg,dgifile):
       exit(1)
     psx=int(r.sizex)
     psy=int(r.sizey)
-    
+
     if cfg.has('dgsar'):
       sarf=cfg.get('dgsar')
     elif cfg.has('display_width') and cfg.has('display_height') and cfg.has('pixel_width') and cfg.has('pixel_height'):
@@ -706,7 +706,7 @@ def config_from_dgifile(cfg,dgifile):
     else:
       warning('Guessing 1:1 SAR for ' + dgifile)
       sarf=Fraction(1,1)
-    
+
     if not r(r'\bORDER *(?P<order>\d+)',dgip[3]):
       critical('No ORDER in ' + dgifile)
       exit(1)
@@ -719,14 +719,14 @@ def config_from_dgifile(cfg,dgifile):
       critical('No FILM in ' + dgifile)
       exit(1)
     ilp = float(r.ipercent)/100.0
-    
+
     if fio == 0:
       ilt = 'PROGRESSIVE'
     elif ilp>0.5:
       ilt = 'FILM'
     else:
       ilt = 'INTERLACE'
-    
+
     if not r(r'\bPLAYBACK *(?P<playback>\d+)',dgip[3]): # ALSO 'CODED' FRAMES
       critical('No PLAYBACK in ' + dgifile)
       exit(1)
@@ -747,7 +747,7 @@ def config_from_dgifile(cfg,dgifile):
     if not r(r'\bFrame_Rate= *(\d+) *\((\d+)/(\d+)\)',dgip[1]): return False
     frm=float(r[0])/1000.0
     frf=Fraction(int(r[1]),int(r[2]))
-    
+
     frames=0
     for l in dgip[2].splitlines():
       if r(r'^([0-9a-f]+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(?P<flags>([0-9a-f]+ +)*[0-9a-f]+)\s*$',l):
@@ -755,7 +755,7 @@ def config_from_dgifile(cfg,dgifile):
   else:
     critical('Unrecognize index file ' + dgifile)
     exit(1)
-  
+
   cfg.set('type', 'video')
 #  cfg.set('file', dgip[1].splitlines()[0])
   cfg.set('dgi_file', dgifile)
@@ -763,11 +763,11 @@ def config_from_dgifile(cfg,dgifile):
   cfg.set('interlace_type_fraction', ilp)
   cfg.set('field_operation', fio)
   cfg.set('frame_rate_ratio', str(frf))
-  
+
   cfg.set('crop', 'auto' if cl==cr==ct==cb==0 else '0,0,0,0')
 #  cfg.set('aspect_ratio',str(arf))
   cfg.set('picture_size', "{:d}x{:d}".format(psx,psy))
-  
+
   cfg.set('sample_aspect_ratio',str(sarf))
   mbs = int(math.ceil((psx-cl-cr)/16.0))*int(math.ceil((psy-ct-cb)/16.0))
   cfg.set('macroblocks',mbs)
@@ -805,7 +805,7 @@ def build_indices(cfg):
       do_call(['dgindex', '-i', cfg.get('file'), '-o', splitext(dgifile)[0], '-fo', '0', '-ia', '3', '-om', '2', '-hide', '-exit'],dgifile)
     else:
       continue
-    
+
     config_from_dgifile(cfg,dgifile)
 
 def build_subtitle(cfg):
@@ -813,7 +813,7 @@ def build_subtitle(cfg):
   inext = cfg.get('extension')
   d=cfg.get('delay',0.0)
   e=cfg.get('elongation',1.0)
-  
+
   r=regex.RegEx()
   if getsize(infile)==0:
     pass
@@ -876,7 +876,7 @@ def build_subtitle(cfg):
   else:
     outfile = infile
     cfg.set('out_file', outfile)
-  
+
   if getsize(infile)==0 or not exists(outfile):
     cfg.set('disable',True)
   cfg.sync()
@@ -889,7 +889,7 @@ def build_audio(cfg):
   cfg.set('out_file',outfile)
   cfg.sync()
   if not readytomake(outfile,infile): return False
-  
+
   r=regex.RegEx()
   call = [ 'eac3to', infile, 'stdout.wav', '-no2ndpass', '-log=nul' ]
   if cfg.get('delay',0.0)!=0.0: call.append('{:+f}ms'.format(cfg.get('delay')*1000.0))
@@ -904,9 +904,9 @@ def build_audio(cfg):
   else:
     warning('Invalid downmix "{:d}"'.format(cfg.get('downmix')))
 #    if cfg.get('normalize',False): call.append('-normalize')
-  
+
   call += [ '|', 'qaac64', '--threading', '--ignorelength', '--no-optimize', '--tvbr', str(cfg.get('quality',60)), '--quality', '2', '-', '-o', outfile]
-  
+
   res=do_call(call, outfile)
   if res and r(r'\bwrote (\d+\.?\d*) seconds\b',res):
     cfg.set('duration',float(r[0]))
@@ -926,13 +926,13 @@ def build_video(cfg):
   cfg.set('avs_file',avsfile)
   cfg.sync()
   if not readytomake(outfile,infile,dgifile): return False
-  
+
   r=regex.RegEx()
   avs=''
-  
+
   ilt=cfg.get('interlace_type')
   fri=cfg.get('frame_rate_ratio')
-  
+
   procs=cfg.get('processors',6)
   if procs!=1: avs += 'SetMTMode(5,{:d})\n'.format(procs)
   avs += 'SetMemoryMax(1024)\n'
@@ -943,7 +943,7 @@ def build_video(cfg):
   else:
     warning('No valid video index file from "{}"'.format(infile))
     return False
-  
+
 #  avs+='ColorMatrix(hints = true, interlaced=false)\n'.format(abspath(dgifile))
 
   unblock=cfg.get('unblock',None)
@@ -953,7 +953,7 @@ def build_video(cfg):
     avs += 'unblock(photo=true)'
   elif unblock == 'normal' or unblock==True:
     avs += 'unblock()'
-  
+
   if ilt in ['FILM']:
     fro=fri*Fraction(4,5)
 #    cfg.set('frames',math.ceil(cfg.get('frames')*5.0/4.0))
@@ -982,10 +982,10 @@ def build_video(cfg):
         avs+='crop({:d},{:d},{:d},{:d},align=true)\n'.format(cl,ct,-cr,-cb)
     elif cfg.get('crop')=='auto':
       avs+='autocrop(threshold=30,wMultOf=2, hMultOf=2,samples=51, mode=0)\n'
-  
+
   blocksize=16 if cfg.get('macroblocks',0)>1620 else 8
   if procs!=1: avs+='SetMTMode(2)\n'
-  
+
   degrain=cfg.get('degrain',3)
   if degrain>=1: # or ilt in ['VIDEO', 'INTERLACE']
     avs+='super = MSuper(planar=true)\n'
@@ -1002,15 +1002,15 @@ def build_video(cfg):
 #  if ilt in ['VIDEO', 'INTERLACE']:
 #    avs+='MFlowFps(super, bv1, fv1, num={:d}, den={:d}, ml=100)\n'.format(fro.numerator,fro.denominator)
   if procs!=1: avs+='Distributor()\n'
-  
+
   if not exists(avsfile) or getmtime(cfg.filename)>getmtime(avsfile):
     with open(avsfile, 'wt', encoding='utf-8', errors='replace') as fp: fp.write(avs)
     debug('Created AVS file: ' + repr(avs))
-  
+
   call = ['avs2pipemod', '-y4mp', avsfile, '|' , 'x264', '--demuxer', 'y4m', '-']
 #  call = ['x264', '--demuxer', 'avs', avsfile]
-  
-  
+
+
   call += ['--preset', cfg.get('x264_preset', 'veryslow')]
   call += ['--tune', cfg.get('x264_tune','film')]
   call += ['--crf', cfg.get('x264_rate_factor', 20.0)]
@@ -1025,7 +1025,7 @@ def build_video(cfg):
   #if cfg.has('t2cfile'): call += ['--timebase', '1000', '--tcfile-in', cfg.get('t2cfile')]
   if cfg.get('deinterlace','none')=='none' and cfg.has('frames'): call += ['--frames', cfg.get('frames')]
   call += [ '--output', outfile ]
-  
+
   cfg.sync()
   res=do_call(call,outfile)
   if res and r(r'\bencoded (\d+) frames\b',res):
@@ -1051,10 +1051,10 @@ def build_result(cfg):
     file=cfg.get('file')
     outfile=cfg.get('out_file',None)
     if not outfile: return False
-  
+
   cfg.setsection('MAIN')
   base=cfg.get('base')
-  
+
   outfile=''
   if cfg.get('type')=='movie':
     if cfg.has('show') and not cfg.get('suppress_show',False):
@@ -1080,7 +1080,7 @@ def build_result(cfg):
     outfile=cfg.get('base')
   outfile=outfile.strip().translate(str.maketrans('','',r':"/\:*?<>|'))+'.mp4'
   if args.outdir: outfile=join(args.outdir,outfile)
-  
+
   infiles=[cfg.filename]
   coverfiles=[]
   if cfg.has('coverart'):
@@ -1090,7 +1090,7 @@ def build_result(cfg):
       elif args.artdir and exists(join(args.artdir,c)):
         coverfiles.append(join(args.artdir,c))
   infiles+=coverfiles
-  
+
   call=['mp4box', '-new', outfile]
   vts=0
   ats=0
@@ -1105,12 +1105,12 @@ def build_result(cfg):
       dur=cfg.get('duration')
       if abs(mdur-dur)>0.5 and abs(mdur-dur)*200>mdur:
         warning('Duration of "{}" ({:f}s) deviates from track {} duration({:f}s).'.format(base,mdur,of,dur))
-    
+
     call+=['-add',of]
     infiles.append(of)
     if cfg.has('name'): call[-1]+=':name='+cfg.get('name')
     if cfg.has('language'): call[-1]+=':lang='+cfg.get('language')
-    if cfg.has('frame_rate_ratio_out'): call[-1] += ':fps=' + str(float(cfg.get('frame_rate_ratio_out')))
+    if cfg.get('frame_rate_ratio_out'): call[-1] += ':fps=' + str(float(cfg.get('frame_rate_ratio_out')))
     if cfg.get('type')=='audio':
       ats += 1
       if not cfg.get('defaulttrack',ats==1): call[-1]+=':disable'
@@ -1121,31 +1121,31 @@ def build_result(cfg):
     if cfg.get('type')=='subtitle':
       sts += 1
 #      if not cfg.get('defaulttrack',sts==1): call[-1]+=':disable'
-  
+
   if not readytomake(outfile,*infiles): return False
-  
+
   if vts+ats+sts>18:
     warning('Result for "{}" has {:d} tracks.'.format(base,tracks))
-  
+
   do_call(call,outfile)
-  
+
   cfg.setsection('MAIN')
   call=['-tool', prog + ' ' + version + ' on ' + time.strftime('%A, %B %d, %Y, at %X')]
   if cfg.has('type'):
     call += [ '-type' , cfg.get('type') ]
   else:
     warning('"'+outfile+'" has no type')
-  
+
   if cfg.has('genre'):
     call += [ '-genre' , cfg.get('genre') ]
   else:
     warning('"'+outfile+'" has no genre')
-  
+
   if cfg.has('year'):
     call += [ '-year' , cfg.get('year') ]
   else:
     warning('"'+outfile+'" has no year')
-    
+
   if cfg.has('season'): call += [ '-season' , cfg.get('season') ]
   if cfg.has('episode'): call += [ '-episode' , cfg.get('episode') ]
   if cfg.has('episodeid'): call += [ '-episodeid' , cfg.get('episodeid') ]
@@ -1155,7 +1155,7 @@ def build_result(cfg):
   if cfg.has('macroblocks',section='TRACK01'): call += [ '-hdvideo' , '1' if cfg.get('macroblocks',section='TRACK01')>=3600 else '0']
   if cfg.has('title'): call += [ '-show' , str(cfg.get('title'))]
   elif cfg.has('show'): call += [ '-show' , str(cfg.get('show'))]
-  
+
   song=None
   if cfg.get('type')=='movie':
     if cfg.has('title') and cfg.has('song'): song = str(cfg.get('title')) + ": " + str(cfg.get('song'))
@@ -1163,7 +1163,7 @@ def build_result(cfg):
     elif cfg.has('song'): song = str(cfg.get('song'))
   elif cfg.has('song'): song = str(cfg.get('song'))
   if song: call+=['-song', song]
-  
+
   cfg.sync()
   if cfg.has('description'):
 #   TODO: Deal with quotes/special characters
@@ -1174,10 +1174,10 @@ def build_result(cfg):
       call += [ '-desc' , desc ]
   else:
     warning('"'+outfile+'" has no description')
-  
+
   if cfg.has('comment'): call += [ '-comment' , cfg.get('comment') ]
   if call: do_call(['mp4tags'] + call + [outfile],outfile)
-  
+
   debug('Adding chapters to "{}"'.format(outfile))
   chapterfile=splitext(outfile)[0]+'.chapters.txt'
   if exists(chapterfile) and getsize(chapterfile)!=0:
@@ -1197,20 +1197,20 @@ def build_result(cfg):
     do_call(['mp4chaps', '--import', outfile],outfile)
     os.remove(chapterfile)
   cfg.sync()
-  
+
   for i in coverfiles:
     debug('Adding coverart for "{}": "{}"'.format(outfile, i))
     do_call(['mp4art', '--add', i, outfile], outfile)
   if not(coverfiles):
       warning('"'+outfile+'" has no cover art')
-  
+
   #do_call(['mp4file', '--optimize', outfile])
   return True
 
 def main():
 #    if getmtime(sys.argv[0])>progmodtime:
 #      exec(compile(open(sys.argv[0]).read(), sys.argv[0], 'exec')) # execfile(sys.argv[0])
-  
+
   for d in sources:
     for f in sorted(os.listdir(d)):
       if not isfile(join(d,f)):
@@ -1225,14 +1225,14 @@ def main():
         prepare_mkv(join(d,f))
       else:
         warning('Source file type not recognized "' + join(d,f) + '"')
-  
+
   for f in regex.reglob(r'.*\.cfg'):
     cfg = AdvConfig(f)
     if not cfg: continue
     update_coverart(cfg)
     update_description(cfg)
     build_result(cfg)
-  
+
   for f in regex.reglob(r'.*\.cfg'):
     cfg = AdvConfig(f)
     if not cfg: continue
@@ -1241,7 +1241,7 @@ def main():
       if cfg.get('type')!='video': continue
       if cfg.get('disable',False): continue
       build_indices(cfg)
-  
+
   for f in regex.reglob(r'.*\.cfg'):
     cfg = AdvConfig(f)
     if not cfg: continue
@@ -1250,7 +1250,7 @@ def main():
       if cfg.get('type')!='subtitles': continue
       if cfg.get('disable',False): continue
       build_subtitle(cfg)
-  
+
   for f in regex.reglob(r'.*\.cfg'):
     cfg = AdvConfig(f)
     if not cfg: continue
@@ -1260,7 +1260,7 @@ def main():
       if cfg.get('disable',False): continue
       if cfg.has('language') and cfg.has('audio_languages',section='MAIN') and cfg.get('language') not in cfg.get('audio_languages',section='MAIN').split(";"): continue
       build_audio(cfg)
-  
+
   for f in regex.reglob(r'.*\.cfg'):
     cfg = AdvConfig(f)
     if not cfg: continue
@@ -1273,7 +1273,7 @@ def main():
 if __name__ == "__main__":
   if 'parser' not in globals():
     parser = argparse.ArgumentParser(description='Extract all tracks from .mkv, .mpg, .TiVo, or .vob files; convert video tracks to h264, audio tracks to aac; then recombine all tracks into properly tagged .mp4',fromfile_prefix_chars='@',prog=prog,epilog='Written by: '+author)
-    
+
     parser.add_argument('--version', action='version', version='%(prog)s '+version)
     parser.add_argument('-v','--verbose',dest='loglevel',action='store_const', const=logging.INFO)
     parser.add_argument('-d','--debug',dest='loglevel',action='store_const', const=logging.DEBUG)
@@ -1294,12 +1294,12 @@ if __name__ == "__main__":
     inifile='..\\' + prog + '.ini'
     if exists(inifile): sys.argv.insert(1,'@'+inifile)
     args = parser.parse_args()
-  
+
   startlogging(args.logfile,args.loglevel,'7D')
   info(prog + ' ' + version + ' starting up.')
   nice(args.niceness)
   progmodtime=getmtime(sys.argv[0])
-  
+
   sources=[]
   for d in args.sourcedirs:
     if not exists(d):
@@ -1310,7 +1310,7 @@ if __name__ == "__main__":
   #    warning('Source directory "'+d+'" is not readable')
     else:
       sources.append(d)
-  
+
   work_lock_delete()
   sleep_state = None
   while True:

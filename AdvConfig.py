@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # A subclass of ConfigParser with advanced features
 
-import cetools
+from cetools import *
 
 from configparser import ConfigParser
 from os.path import exists, isfile, getmtime, getsize, join, basename, splitext, abspath, dirname
