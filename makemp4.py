@@ -580,7 +580,7 @@ def update_description_movie(cfg,txt):
       alt = 'Alternate Title: ' + r[2]
       cmt = cfg.get('comment','')
       if alt not in cmt: cfg.set('comment',  (cmt+';' if cmt else '')+ alt)
-  if r(r'^([12]\d\d\d)\s*(G|PG|PG-13|R|NC-17|UR|NR|TV-14|TV-MA)?\s*(\d+)\s*(minutes|mins)$',tl[0]):
+  if r(r'^([12]\d\d\d)\s*(G|PG|PG-13|R|NC-17|UR|NR|TV-14|TV-MA)?\s*( Rated \2)?(\d+)\s*(minutes|mins)$',tl[0]):
     tl=tl[1:]
     cfg.set('year',r[0])
     rat = 'Rating: ' + r[1]
@@ -620,6 +620,8 @@ def update_description_movie(cfg,txt):
       cfg.set('writer',val)
     elif r(r'^(\w+|Our best guess for you|Average of \d+ ratings|This movie is):\s*(.+?)\s*$',t):
       description = description + '  ' + r[0] + ': ' + r[1] +'.'
+    elif r(r'^(rated )?\d+\.\d+( stars)?$'):
+      pass
     else:
       description = '  ' + t + description
 
@@ -891,19 +893,23 @@ def build_audio(cfg):
   if not readytomake(outfile,infile): return False
 
   r=regex.RegEx()
-  call = [ 'eac3to', infile, 'stdout.wav', '-no2ndpass', '-log=nul' ]
-  if cfg.get('delay',0.0)!=0.0: call.append('{:+f}ms'.format(cfg.get('delay')*1000.0))
-  if cfg.get('elongation',1.0)!=1.0: warning('Audio elongation not implemented')
-#    if cfg.get('channels')==7: call.append('-0,1,2,3,5,6,4')
-  if cfg.hasno('downmix'):
-    call.append('-down6')
-  elif cfg.get('downmix')==6:
-    call.append('-down6')
-  elif cfg.get('downmix')==2:
-    call.append('-downDpl')
+
+  if (inext in ['dts']):
+    call = [ 'dcadec', '-6', infile, '-']
   else:
-    warning('Invalid downmix "{:d}"'.format(cfg.get('downmix')))
-#    if cfg.get('normalize',False): call.append('-normalize')
+    call = [ 'eac3to', infile, 'stdout.wav', '-no2ndpass', '-log=nul' ]
+    if cfg.get('delay',0.0)!=0.0: call.append('{:+f}ms'.format(cfg.get('delay')*1000.0))
+    if cfg.get('elongation',1.0)!=1.0: warning('Audio elongation not implemented')
+  #    if cfg.get('channels')==7: call.append('-0,1,2,3,5,6,4')
+    if cfg.hasno('downmix'):
+      call.append('-down6')
+    elif cfg.get('downmix')==6:
+      call.append('-down6')
+    elif cfg.get('downmix')==2:
+      call.append('-downDpl')
+    else:
+      warning('Invalid downmix "{:d}"'.format(cfg.get('downmix')))
+  #    if cfg.get('normalize',False): call.append('-normalize')
 
   call += [ '|', 'qaac64', '--threading', '--ignorelength', '--no-optimize', '--tvbr', str(cfg.get('quality',60)), '--quality', '2', '-', '-o', outfile]
 

@@ -17,7 +17,7 @@ args = parser.parse_args()
 for fn in glob.glob(os.path.join(args.dir,'*.mpls')):
   with open(fn,'rb') as f:
     c=f.read()
-  ms=fn[:-5]+":"
+  ms=os.path.basename(fn)[:-5]+":"
   p=c.find(b'M2TS')
   while (p>=6):
     ms+=c[p-5:p].decode()+","
