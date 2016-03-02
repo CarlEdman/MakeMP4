@@ -133,7 +133,7 @@ def config_from_base(cfg,base):
 
 
 def config_from_idxfile(cfg,idxfile):
-  with open(idxfile, 'rt', encoding='utf-8', errors='replace') as fp: idx=fp.read()
+  with open(idxfile, 'rt', encoding='utf-8', errors='replace').read() as fp: idx=fp.read()
   timestamp=[]
   filepos=[]
   r=regex.RegEx()
@@ -277,14 +277,14 @@ def prepare_mkv(mkvfile):
         cfg.set('delay',0.0)
 #        cfg.set('elongation',1.0)
 #        cfg.set('normalize',False)
-      elif r[2] in ('A_TRUEHD'):
+      elif r[2] in ('TrueHD','A_TRUEHD'):
         cfg.set('extension','thd')
         cfg.set('file','{} T{:02d}.thd'.format(base,track))
         cfg.set('quality',60)
         cfg.set('delay',0.0)
 #        cfg.set('elongation',1.0)
 #        cfg.set('normalize',False)
-      elif r[2] in ('A_DTS','DTS','DTS-ES','DTS-HD Master Audio'):
+      elif r[2] in ('A_DTS','DTS','DTS-ES','DTS-HD Master Audio','DTS-HD High Resolution'):
         cfg.set('extension','dts')
         cfg.set('file','{} T{:02d}.dts'.format(base,track))
         cfg.set('quality',60)
@@ -513,14 +513,15 @@ def update_description_tvshow(cfg,txt):
     for w in ws:
       if w in l: return l.index(w)
     return -1
+
   tl=txt.splitlines()
-  h=tl[0].split('\t')
+  h=[a.strip() for a in tl[0].split('\t')]
   tl=tl[1:]
-  i=lfind(h,"\xe2\x84\x96",'?','No. in series','Total','Series number','Nº')
+  i=lfind(h,"\xe2\x84\x96",'?','Total','Series number','Nº','No. overall')
   if i>=0: h[i]='Series Episode'
   sei=lfind(h,'Series Episode')
 
-  epi=lfind(h,'#','No.','No. in season','No. in Season','Episode number','Ep','Ep.')
+  epi=lfind(h,'#','No.','No. in season','No. in Season','Episode number','Ep','Ep.','No. in series','No. in Series')
   if epi<0: return False # Fix
   tii=lfind(h,'Title','Episode title','Episode name','Episode Title','Episode Name')
   dei=lfind(h,'Description')
@@ -536,14 +537,14 @@ def update_description_tvshow(cfg,txt):
   # 'Directed by*','Director'
   wri=lfind(h,'Written by','Written by:','Writer')
   dai=lfind(h,'Original Airdate','Original air date','Original airdate','Airdate','Release date','Aired on','Recorded on')
-  pci=lfind(h,'Production code','Prod. code','prod. code','Prod.code','PC')
+  pci=lfind(h,'Production code','Prod. code','prod. code','Prod.code','PC','Production number')
 
   r=regex.RegEx()
   for t in tl:
     if not t: continue
     l=t.split('\t')
-    if cfg.has('episode') and not l[epi].strip(string.digits):
-      if int(l[epi])!=cfg.get('episode'): continue
+    if cfg.has('episode'):
+      if l[epi]!=str(cfg.get('episode')): continue
     else:
       if l[epi]!='*': continue
 #    if l[epi].lstrip(' 0')!=str(cfg.get('episode','*')): continue
@@ -643,7 +644,7 @@ def update_description(cfg):
     exit(1)
   n=join(args.descdir if args.descdir else '',str(n)+'.txt')
   if not exists(n): return
-  txt=open(n,'rt', encoding='utf-8', errors='replace').read()
+  with open(n,'rt', encoding='utf-8', errors='backslashreplace') as fp: txt=fp.read()
   txt=txt.strip()
   txt=re.sub(r'Add to Google Calendar','',txt)
   txt=re.sub(r' *\[(\d+|[a-z])\] *','',txt)
@@ -651,6 +652,7 @@ def update_description(cfg):
   txt=re.sub(r'%','percent',txt)
   if cfg.get('type')=='tvshow': update_description_tvshow(cfg,txt)
   elif cfg.get('type')=='movie': update_description_movie(cfg,txt)
+  cfg.sync()
 
 
 def config_from_dgifile(cfg,dgifile):
@@ -661,7 +663,7 @@ def config_from_dgifile(cfg,dgifile):
   while True:
     time.sleep(1)
     if not (exists (logfile)): continue
-    with open(logfile,'rt', encoding='utf-8', errors='replace') as f: log = f.read()
+    with open(logfile,'rt', encoding='utf-8', errors='replace') as fp: log = fp.read()
     for l in log.splitlines():
       if not r('^([^:]*):(.*)$',l):
         warning('Unrecognized DGIndex log line: "' + repr(l) + '"')
@@ -677,21 +679,24 @@ def config_from_dgifile(cfg,dgifile):
   with open(dgifile, 'rt', encoding='utf-8', errors='replace') as fp: dgi=fp.read()
   dgip=dgi.split('\n\n')
   if len(dgip)!=4:
-    critical('Malformed index file ' + dgifile)
-    exit(1)
+    error('Malformed index file ' + dgifile)
+    open(dgifile,'w').truncate(0)
+    return
   r=regex.RegEx()
-  if r(r'^(DGAVCIndexFileNV14|DGMPGIndexFileNV14|DGVC1IndexFileNV14)',dgip[0]):
+  if r(r'^DG(AVC|MPG|VC1)IndexFileNV(14|15)',dgip[0]):
     if not r(r'\bCLIP\ *(?P<left>\d+) *(?P<right>\d+) *(?P<top>\d+) *(?P<bottom>\d+)',dgip[2]):
-      critical('No CLIP in ' + dgifile)
-      exit(1)
+      error('No CLIP in ' + dgifile)
+      open(dgifile,'w').truncate(0)
+      return
     cl=int(r.left)
     cr=int(r.right)
     ct=int(r.top)
     cb=int(r.bottom)
     cl=cr=ct=cb=0
     if not r(r'\bSIZ *(?P<sizex>\d+) *x *(?P<sizey>\d+)',dgip[3]):
-      critical('No SIZ in ' + dgifile)
-      exit(1)
+      error('No SIZ in ' + dgifile)
+      open(dgifile,'w').truncate(0)
+      return
     psx=int(r.sizex)
     psy=int(r.sizey)
 
@@ -710,16 +715,19 @@ def config_from_dgifile(cfg,dgifile):
       sarf=Fraction(1,1)
 
     if not r(r'\bORDER *(?P<order>\d+)',dgip[3]):
-      critical('No ORDER in ' + dgifile)
-      exit(1)
+      error('No ORDER in ' + dgifile)
+      open(dgifile,'w').truncate(0)
+      return
     fio=int(r.order)
     if not r(r'\bFPS *(?P<num>\d+) */ *(?P<denom>\d+) *',dgip[3]):
-      critical('No FPS in ' + dgifile)
-      exit(1)
+      error('No FPS in ' + dgifile)
+      open(dgifile,'w').truncate(0)
+      return
     frf=Fraction(int(r.num),int(r.denom))
     if not r(r'\b(?P<ipercent>\d*\.\d*)% *FILM',dgip[3]):
-      critical('No FILM in ' + dgifile)
-      exit(1)
+      error('No FILM in ' + dgifile)
+      open(dgifile,'w').truncate(0)
+      return
     ilp = float(r.ipercent)/100.0
 
     if fio == 0:
@@ -730,8 +738,9 @@ def config_from_dgifile(cfg,dgifile):
       ilt = 'INTERLACE'
 
     if not r(r'\bPLAYBACK *(?P<playback>\d+)',dgip[3]): # ALSO 'CODED' FRAMES
-      critical('No PLAYBACK in ' + dgifile)
-      exit(1)
+      error('No PLAYBACK in ' + dgifile)
+      open(dgifile,'w').truncate(0)
+      return
     frames = int(r.playback)
   elif r(r'^DGIndexProjectFile16',dgip[0]):
     if not r(r'^FINISHED\s+([0-9.]+)%\s+(.*?)\s*$',dgip[3]): return False
@@ -755,8 +764,9 @@ def config_from_dgifile(cfg,dgifile):
       if r(r'^([0-9a-f]+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(?P<flags>([0-9a-f]+ +)*[0-9a-f]+)\s*$',l):
         frames += len(r[7].split())
   else:
-    critical('Unrecognize index file ' + dgifile)
-    exit(1)
+    error('Unrecognize index file ' + dgifile)
+    open(dgifile,'w').truncate(0)
+    return
 
   cfg.set('type', 'video')
 #  cfg.set('file', dgip[1].splitlines()[0])
@@ -894,22 +904,22 @@ def build_audio(cfg):
 
   r=regex.RegEx()
 
-  if (inext in ['dts']):
-    call = [ 'dcadec', '-6', infile, '-']
+  # if (inext in ['dts','thd']):
+  #   call = [ 'dcadec', '-6', infile, '-']
+  # else:
+  call = [ 'eac3to', infile, 'stdout.wav', '-no2ndpass', '-log=nul' ]
+  if cfg.get('delay',0.0)!=0.0: call.append('{:+f}ms'.format(cfg.get('delay')*1000.0))
+  if cfg.get('elongation',1.0)!=1.0: warning('Audio elongation not implemented')
+#    if cfg.get('channels')==7: call.append('-0,1,2,3,5,6,4')
+  if cfg.hasno('downmix'):
+    call.append('-down6')
+  elif cfg.get('downmix')==6:
+    call.append('-down6')
+  elif cfg.get('downmix')==2:
+    call.append('-downDpl')
   else:
-    call = [ 'eac3to', infile, 'stdout.wav', '-no2ndpass', '-log=nul' ]
-    if cfg.get('delay',0.0)!=0.0: call.append('{:+f}ms'.format(cfg.get('delay')*1000.0))
-    if cfg.get('elongation',1.0)!=1.0: warning('Audio elongation not implemented')
-  #    if cfg.get('channels')==7: call.append('-0,1,2,3,5,6,4')
-    if cfg.hasno('downmix'):
-      call.append('-down6')
-    elif cfg.get('downmix')==6:
-      call.append('-down6')
-    elif cfg.get('downmix')==2:
-      call.append('-downDpl')
-    else:
-      warning('Invalid downmix "{:d}"'.format(cfg.get('downmix')))
-  #    if cfg.get('normalize',False): call.append('-normalize')
+    warning('Invalid downmix "{:d}"'.format(cfg.get('downmix')))
+#    if cfg.get('normalize',False): call.append('-normalize')
 
   call += [ '|', 'qaac64', '--threading', '--ignorelength', '--no-optimize', '--tvbr', str(cfg.get('quality',60)), '--quality', '2', '-', '-o', outfile]
 
