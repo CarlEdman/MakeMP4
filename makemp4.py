@@ -812,7 +812,7 @@ def build_indices(cfg):
     dgifile=cfg.get('dgi_file', None)
     if not dgifile or exists(dgifile): continue
     if dgifile.endswith('.dgi'):
-      do_call(['DGIndexNV', '-i', cfg.get('file'), '-o', dgifile, '-h', '-e'],dgifile)
+      do_call(['DGIndexNV', '-i', cfg.get('file'), '-o', dgifile, '-e'],dgifile) # '-h',
     elif dgifile.endswith('.d2v'):
       do_call(['dgindex', '-i', cfg.get('file'), '-o', splitext(dgifile)[0], '-fo', '0', '-ia', '3', '-om', '2', '-hide', '-exit'],dgifile)
     else:
