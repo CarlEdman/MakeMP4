@@ -5,11 +5,13 @@ prog='MakeMP4'
 version='4.0'
 author='Carl Edman (CarlEdman@gmail.com)'
 
-import string, re, os, sys, argparse, logging, time, math, shutil, tempfile
+import string, re, os, sys, argparse, logging, time, math, shutil, tempfile, json
 from subprocess import call, check_call, check_output, CalledProcessError, Popen, PIPE, STDOUT, list2cmdline
 from os.path import exists, isfile, isdir, getmtime, getsize, join, basename, splitext, abspath, dirname
 from fractions import Fraction
-
+from urllib.request import urlopen
+from urllib.parse import urlparse, urlunparse, urlencode
+from urllib.error import HTTPError
 from AdvConfig import AdvConfig
 from cetools import *
 import regex
@@ -69,8 +71,9 @@ def do_call(args,outfile=None,infile=None):
   errstr=cookout(errstr)
   if outstr: debug('Output: '+repr(outstr))
   if errstr: debug('Error: '+repr(errstr))
-  if ps[-1].poll()!=0:
-    error('Error code for ' + repr(cstr))
+  errcode = ps[-1].poll()
+  if errcode!=0:
+    error('Error code for ' + repr(cstr) + ': ' + str(errcode))
     if outfile: open(outfile,'w').truncate(0)
   return outstr+errstr
 
@@ -151,7 +154,7 @@ def config_from_idxfile(cfg,idxfile):
     elif r(r'^\s*(\w+)\s*:\s*(.*?)\s*$',l):
       cfg.set(r[0],r[1])
     else:
-      warning('Ignorning in {} uninterpretable line: {}'.format(idxfile,l))
+      warning('{}: Ignorning in {} uninterpretable line: {}'.format(cfg.get('base','NOBASE','MAIN'),idxfile,l))
   cfg.set('timestamp',','.join(timestamp))
   cfg.set('filepos',','.join(filepos))
   cfg.sync()
@@ -269,7 +272,7 @@ def prepare_mkv(mkvfile):
         cfg.set('file','{} T{:02d}.wvc'.format(base,track))
 #        cfg.set('t2c_file','{} T{:02d}.t2c'.format(base,track))
         cfg.set('dgi_file','{} T{:02d}.dgi'.format(base,track))
-      elif r[2] in ('A_AC3','A_EAC3','AC3/EAC3'):
+      elif r[2] in ('A_AC3','A_EAC3','AC3/EAC3','AC-3/E-AC-3'):
         cfg.set('extension','ac3')
 #        cfg.set('extension','eac')
         cfg.set('file','{} T{:02d}.ac3'.format(base,track))
@@ -312,7 +315,7 @@ def prepare_mkv(mkvfile):
         cfg.set('disable',True)
         pass
       else:
-        warning('Unrecognized track type {} in {}'.format(r[2],mkvfile))
+        warning('{}: Unrecognized track type {} in {}'.format(cfg.get('base','NOBASE','MAIN'),r[2],mkvfile))
         cfg.set('disable',True)
 
       if r(r'\blanguage:(\w+)\b',dets):
@@ -491,22 +494,47 @@ def prepare_vob(vobfile):
 #    os.remove(vobfile)
 
 
+# TODO: episode images from both files and omdb
 def update_coverart(cfg):
   cfg.setsection('MAIN')
   if cfg.has('coverart'): return
 
-  show=cfg.get('show','')
-  season=cfg.get('season',-1)
-  base=cfg.get('base','')
+  base   = cfg.get('base')
+  show   = cfg.get('show')
+  season = cfg.get('season',-1)
+  episode= cfg.get('episode',-1)
 
-  if show and season>=0: n='{} S{:d}'.format(show,season)
-  elif base: n=base.partition(' ()')[0]
-  elif show: n=show
-  n=re.escape(n)+r'(\s+P[\d+])?\.(jpg|jpeg|png)'
+  artregex = ''.join([
+    re.escape(show),
+    ' S'+str(season) if season>0 else '',
+    r'(\s+P[\d+])?\.(jpg|jpeg|png)'])
 
-  cfg.set('coverart', ';'.join(regex.reglob(n,args.artdir if args.artdir else os.getcwd())))
+  artfiles = regex.reglob(artregex,args.artdir or None)
+  if artfiles:
+    cfg.set('coverart', ';'.join(artfiles))
+    cfg.sync()
+    return
+
+  artfile = join(args.artdir or '',''.join([show, ' S'+str(season) if season>0 else '', r'.jpg']))
+  if not args.omdbkey or cfg.has('omdb_poster_status') or cfg.hasno('imdb_id') or exists(artfile): return
+
+  q = { 'h':'2000', 'i':cfg.get('imdb_id'), 'apikey': args.omdbkey }
+  u = urlunparse(['http','img.omdbapi.com', '/', '', urlencode(q), ''])
+
+  try:
+    with urlopen(u) as f:
+      cfg.set('omdb_poster_status', f.getcode())
+      p = f.read()
+  except HTTPError as e:
+    cfg.set('omdb_poster_status', e.code)
+    p = None
+
   cfg.sync()
+  if not p: return
 
+  with open(artfile,'wb') as f: f.write(p)
+  cfg.set('coverart',artfile)
+  cfg.sync()
 
 def update_description_tvshow(cfg,txt):
   def lfind(l,*ws):
@@ -536,7 +564,7 @@ def update_description_tvshow(cfg,txt):
     i+=1
   # 'Directed by*','Director'
   wri=lfind(h,'Written by','Written by:','Writer')
-  dai=lfind(h,'Original Airdate','Original air date','Original airdate','Airdate','Release date','Aired on','Recorded on')
+  dai=lfind(h,'Original Airdate','Original air date','Original airdate','Airdate','Original release date','Release date','Aired on','Recorded on')
   pci=lfind(h,'Production code','Prod. code','prod. code','Prod.code','PC','Production number')
 
   r=regex.RegEx()
@@ -633,27 +661,228 @@ def update_description_movie(cfg,txt):
 
 def update_description(cfg):
   cfg.setsection('MAIN')
-  show=cfg.get('show','')
-  season=cfg.get('season',-1)
-  base=cfg.get('base','')
-  if show and season>=0: n='{} S{:d}'.format(show,season)
-  elif base: n=base.partition(' ()')[0]
-  elif show: n=show
-  else:
-    critical('Broken Config: '+repr(cfg))
-    exit(1)
-  n=join(args.descdir if args.descdir else '',str(n)+'.txt')
-  if not exists(n): return
-  with open(n,'rt', encoding='utf-8', errors='backslashreplace') as fp: txt=fp.read()
-  txt=txt.strip()
-  txt=re.sub(r'Add to Google Calendar','',txt)
-  txt=re.sub(r' *\[(\d+|[a-z])\] *','',txt)
-  txt=re.sub(r' -- ',r'--',txt)
-  txt=re.sub(r'%','percent',txt)
-  if cfg.get('type')=='tvshow': update_description_tvshow(cfg,txt)
-  elif cfg.get('type')=='movie': update_description_movie(cfg,txt)
-  cfg.sync()
+  base   = cfg.get('base')
+  show   = cfg.get('show')
+  season = cfg.get('season',-1)
+  episode= cfg.get('episode',-1)
 
+  descfile = ''.join([
+    join(args.descdir or '',show),
+    ' S'+str(season) if season>0 else '',
+    '.txt'])
+  if exists(descfile):
+    with open(descfile,'rt', encoding='utf-8', errors='backslashreplace') as fp: txt=fp.read()
+    txt=txt.strip()
+    txt=re.sub(r'Add to Google Calendar','',txt)
+    txt=re.sub(r' *\[(\d+|[a-z])\] *','',txt)
+    txt=re.sub(r'\s+-+\s+',r'—',txt)
+    txt=re.sub(r'\s*%',' percent',txt)
+    if cfg.get('type')=='tvshow': update_description_tvshow(cfg,txt)
+    elif cfg.get('type')=='movie': update_description_movie(cfg,txt)
+    cfg.sync()
+    return
+
+  if cfg.get('omdb_status')!=200:
+    q = { 'plot':'full', 'tomatoes':'true', 'r':'json' }
+    if cfg.has('year'): q['y']=str(cfg.get('year'))
+    if cfg.has('imdb_id'):
+      q['i'] = cfg.get('imdb_id')
+    elif cfg.get('type')=='movie':
+      q['t'] = str(show)
+      q['type'] = 'movie'
+    elif cfg.get('type')=='tvshow':
+      q['t'] = str(show)
+      if episode>0 and season>0:
+        q['type'] = 'episode'
+        q['Season'] = str(season)
+        q['Episode'] = str(episode)
+      else:
+        q['type'] = 'series'
+
+    u = urlunparse(['http','www.omdbapi.com', '/', '', urlencode(q), ''])
+    try:
+      with urlopen(u) as f:
+        cfg.set('omdb_status',f.getcode())
+        j = json.loads(f.read().decode('utf-8'))
+    except HTTPError as e:
+      cfg.set('omdb_status',e.code)
+      j = None
+
+    cfg.sync()
+    if not j: return
+
+    imdb_id = j.get('imdbID',None)
+    imdb_series_id = j.get('seriesID',None)
+    imdb_rating = j.get('imdbRating',None)
+    imdb_votes = j.get('imdbVotes',None)
+
+    if cfg.has('imdb_id') and cfg.get('imdb_id')!=imdb_id:
+      warning('{}: IMDB Id mismatch ("{}" != "{}")'.format(base,imdb_id,v))
+    elif imdb_id:
+      cfg.set('imdb_id',imdb_id)
+
+    if cfg.has('imdb_series_id') and cfg.get('imdb_series_id')!=imdb_series_id:
+      warning('{}: IMDB Series Id mismatch ("{}" != "{}")'.format(base,imdb_series_id,v))
+    elif imdb_series_id:
+      cfg.set('imdb_series_id',imdb_series_id)
+
+    if imdb_id or imdb_series_id or imdb_rating or imdb_votes:
+      comment = cfg.get('comment')
+      imdb = "IMDB({}{}): {}{}".format(
+        imdb_id or "",
+        "/"+imdb_series_id if imdb_series_id and imdb_series_id!=imdb_id else "",
+        imdb_rating or "--",
+        " from "+imdb_votes+ " votes." if imdb_votes else "")
+      if not comment or comment.find(imdb)<0:
+        cfg.set('comment', (comment+'  ' if comment else '') + imdb)
+
+    comment_trans = {
+      'Country': 'Country: ',
+      'DVD':'DVD Release: ',
+      'Awards':'Awards: ',
+      'BoxOffice':'Boxoffice: ',
+      'Language':'Language: ',
+      'Metascore':'Metascore: ',
+      'Rated':'Rating: ',
+      'Released':'Released on: ',
+      'Runtime':'Runtime: ',
+      'Website':'Web Site: '
+      }
+
+    genre_trans = [
+      # ('Game-Show','XXX'),
+      # ('News','XXX'),
+      # ('Reality-TV','XXX'),
+      # ('Sport','XXX'),
+      # ('Talk-Show','XXX'),
+      # ('Film-Noir','XXX'),
+      ('Animation','CGI'),
+      ('Musical','Musical'),
+      ('Documentary','Documentary'),
+      ('Romance','Romance'),
+      ('Horror','Horror'),
+      ('Sci-Fi','Science Fiction'),
+      ('Fantasy','Fantasy'),
+      ('Western','Western'),
+      ('Mystery','Mystery'),
+      ('Crime','Crime'),
+      ('Family','Children'),
+      ('Adventure','Adventure'),
+      ('Action','Action'),
+      ('Thriller','Thriller'),
+      ('War','History'),
+      ('History','History'),
+      ('Biography','History'),
+      ('Drama','Drama'),
+      ('Music','Opera'),
+      ('Sitcom','Comedy'),
+      ('Comedy','Comedy')
+      ]
+
+    for k,v in j.items():
+      description = cfg.get('description')
+      comment = cfg.get('comment')
+      if v=='N/A':
+        continue
+      elif k in ['imdbID','seriesID','imdbRating','imdbVotes','Episodes','Poster']:
+        continue
+      elif k.startswith('tomato'):
+# imdb_tomatoConsensus = Spectre nudges Daniel Craig's rebooted Bond closer to the glorious, action-driven spectacle of earlier entries, although it's admittedly reliant on established 007 formula.
+# imdb_tomatoFresh = 188
+# imdb_tomatoImage = fresh
+# imdb_tomatoMeter = 64
+# imdb_tomatoRating = 6.5
+# imdb_tomatoReviews = 293
+# imdb_tomatoRotten = 105
+# imdb_tomatoURL = http://www.rottentomatoes.com/m/spectre_2015/
+# imdb_tomatoUserMeter = 62
+# imdb_tomatoUserRating = 3.5
+# imdb_tomatoUserReviews = 103067"
+        continue
+      elif k=='Response':
+        if v!="True":
+          warning('{}: IMDB Response = "{}" in '.format(base,v))
+      elif k=='Year':
+        year = cfg.get('year')
+        if not year:
+          cfg.set('year',v)
+        elif str(year)!=v:
+          warning('{}: IMDB Year mismatch ("{}" != "{}")'.format(base,year,v))
+      elif k=='Type': # "movie" or "episode"
+        type = cfg.get('type')
+        itype = 'movie' if v=='movie' else 'tvshow'
+        if not type:
+          cfg.set('type', itype)
+        elif str(type)!=itype:
+          warning('{}: IMDB Type mismatch ("{}" != "{}")'.format(base,type,v))
+      elif k=='Episode':
+        episode = cfg.get('episode')
+        if not episode:
+          cfg.set('episode', int(v))
+        elif episode!=int(v):
+          warning('{}: IMDB Episode mismatch ("{}" != "{}")'.format(base,episode,v))
+      elif k=='Season':
+        season = cfg.get('season')
+        if not season:
+          cfg.set('season', int(v))
+        elif season!=int(v):
+          warning('{}: IMDB Season mismatch ("{}" != "{}")'.format(base,season,v))
+      elif k=='Title':
+        title = cfg.get('song')
+        if season>=0 and episode<0:
+          continue
+        elif season>=0 and episode>=0 and v=="Episode #{}.{}".format(season,episode):
+          continue
+        elif not title:
+          cfg.set('song', v)
+        elif title!=v:
+          warning('{}: IMDB Title mismatch ("{}" != "{}")'.format(base,title,v))
+      elif k=='Director':
+        director = cfg.get('director')
+        if not director:
+          cfg.set('director',v)
+        elif director!=v:
+          warning('{}: IMDB Director mismatch ("{}" != "{}")'.format(base,director,v))
+      elif k=='Writer':
+        writer = cfg.get('writer')
+        if not writer:
+          cfg.set('writer',v)
+        elif writer!=v:
+          warning('{}: IMDB Writer mismatch ("{}" != "{}")'.format(base,writer,v))
+      elif k=='Production':
+        network = cfg.get('network')
+        if not network:
+          cfg.set('network',v)
+        elif network!=v:
+          warning('{}: IMDB Network mismatch ("{}" != "{}")'.format(base,network,v))
+      elif k=='Plot':
+        plot = re.sub(r'\s+-+\s+',r'—',v)
+        if not description or description.find(plot)<0:
+          cfg.set('description', plot + ('  '+description if description else ''))
+      elif k=='Actors':
+        actors = 'Actors: ' + v + '.'
+        if not description or description.find(actors)<0:
+          cfg.set('description', (description+'  ' if description else '') + actors)
+      elif k=='Genre':
+        genre = cfg.get('genre')
+        igenre = None
+        for f,t in genre_trans:
+          if v.find(f)<0: continue
+          igenre = t
+          break
+        if not igenre:
+          continue
+        elif not genre:
+          cfg.set('genre',igenre)
+        elif genre!=igenre:
+          warning('{}: IMDB Genre mismatch ("{}" != "{}")'.format(base,genre,v))
+      elif k in comment_trans:
+        t = comment_trans[k] + v + '' if v[-1]=='.' else '.'
+        if not comment or comment.find(t)<0:
+          cfg.set('comment', (comment+'  ' if comment else '') + t)
+      else:
+        warning('{}: Unrecognized IMDB "{}" = "{}"'.format(base,k,v))
+  cfg.sync()
 
 def config_from_dgifile(cfg,dgifile):
   logfile = splitext(dgifile)[0]+'.log'
@@ -812,7 +1041,7 @@ def build_indices(cfg):
     dgifile=cfg.get('dgi_file', None)
     if not dgifile or exists(dgifile): continue
     if dgifile.endswith('.dgi'):
-      do_call(['DGIndexNV', '-i', cfg.get('file'), '-o', dgifile, '-e'],dgifile) # '-h',
+      do_call(['DGIndexNV', '-i', cfg.get('file'), '-o', dgifile, '-h', '-e'],dgifile)
     elif dgifile.endswith('.d2v'):
       do_call(['dgindex', '-i', cfg.get('file'), '-o', splitext(dgifile)[0], '-fo', '0', '-ia', '3', '-om', '2', '-hide', '-exit'],dgifile)
     else:
@@ -1167,6 +1396,7 @@ def build_result(cfg):
   if cfg.has('episodeid'): call += [ '-episodeid' , cfg.get('episodeid') ]
   if cfg.has('artist'): call += [ '-artist' , cfg.get('artist') ]
   if cfg.has('writer'): call += [ '-writer' , cfg.get('writer') ]
+  if cfg.has('network'): call += [ '-network' , cfg.get('network') ]
 #  if cfg.has('rating'): call += [ '-rating' , cfg.get('rating') ]
   if cfg.has('macroblocks',section='TRACK01'): call += [ '-hdvideo' , '1' if cfg.get('macroblocks',section='TRACK01')>=3600 else '0']
   if cfg.has('title'): call += [ '-show' , str(cfg.get('title'))]
@@ -1245,8 +1475,8 @@ def main():
   for f in regex.reglob(r'.*\.cfg'):
     cfg = AdvConfig(f)
     if not cfg: continue
-    update_coverart(cfg)
     update_description(cfg)
+    update_coverart(cfg)
     build_result(cfg)
 
   for f in regex.reglob(r'.*\.cfg'):
@@ -1301,6 +1531,7 @@ if __name__ == "__main__":
     parser.add_argument('--descdir',dest='descdir',action='store',help='directory for .txt files with descriptive data')
     parser.add_argument('--artdir',dest='artdir',action='store',help='directory for .jpg and .png cover art')
     parser.add_argument('--mak',dest='mak',action='store',help='your TiVo MAK key to decrypt .TiVo files to .mpg')
+    parser.add_argument('--omdbkey',dest='omdbkey',action='store',help='your OMDB key to automatically retrieve posters')
     parser.add_argument('--move-source',action='store_true', default=False, help='move source files to working directory before extraction')
     parser.add_argument('--delete-source',action='store_true', default=False, help='delete source file after successful extraction')
     inifile='{}.ini'.format(splitext(sys.argv[0])[0])
