@@ -1,3 +1,8 @@
+# Project
+MakeMP4.sublime-project
+MakeMP4.sublime-workspace
+makemp4.ini
+
 #################
 ## Eclipse
 #################
@@ -213,3 +218,4 @@ pip-log.txt
 
 #Mr Developer
 .mr.developer.cfg
+
