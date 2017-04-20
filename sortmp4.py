@@ -50,20 +50,23 @@ for f in reglob(r'.*\.(mp4|m4r|m4b)'):
   if not rser(r'^(?m)\s*Cover Art pieces:\s*(.*)$',ifo):
     warning('No Cover Art in {}, skipping.'.format(f))
     continue
-  
-  
+
+
   if type=='TV Show':
     if not rser(r'(?m)^\s*TV Show:\s*(.*)$',ifo):
       warning('No tv show "{}" in {}.'.format(f))
       continue
-    optAndMove(f,os.path.join(args.target,'TV',alphabetize(rget(0))))
+
+    showdir = rget(0).strip().translate(str.maketrans('','',r':"/\:*?<>|'))
+    showdir = alphabetize(showdir)
+    optAndMove(f,os.path.join(args.target,'TV',showdir))
   elif type=='Movie':
     if not os.path.isdir(os.path.join(args.target,'Movies',genre)):
       warning('Genre "{}" in {} not recognized, skipping.'.format(genre,f))
       continue
     if rser(r'^(.*\(\d+\))\s*(.*)(\.\w+)$',f):
-      main=rget(0)
-      sub=rget(1)
+      main=alphabetize(rget(0).strip().translate(str.maketrans('','',r':"/\:*?<>|')))
+      sub=rget(1).strip().translate(str.maketrans('','',r':"/\:*?<>|'))
       ext=rget(2)
       if sub=="" or sub.startswith('- pt'):
         nname=None

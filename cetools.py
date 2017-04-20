@@ -30,14 +30,14 @@ class TitleHandler(logging.Handler):
         """
         Initialize the handler.
         """
-        
+
         logging.Handler.__init__(self)
 
     def flush(self):
         """
         Flushes the stream.  (A noop for this handler)
         """
-        
+
         pass
 
     def emit(self, record):
@@ -47,7 +47,7 @@ class TitleHandler(logging.Handler):
         If a formatter is specified, it is used to format the record.
         The record is then written to the title bar of the current window.
         """
-        
+
         if os.name != 'nt': return
         import ctypes
         ctypes.windll.kernel32.SetConsoleTitleA(self.format(record).encode())
@@ -60,32 +60,32 @@ def startlogging(logfile,loglevel,loginterval=None):
     if isinstance(loginterval, str):
       w=loginterval.lstrip('0123456789')
       i=int(loginterval.rstrip('abcdefghijklmnopqrstuvxyzABCDEFGHIJKLMNOPQRSTUVXYZ'))
-      flogger=logging.handlers.TimedRotatingFileHandler(logfile,when=w,interval=i)
+      flogger=logging.handlers.TimedRotatingFileHandler(logfile,when=w,interval=i, encoding='utf-8')
     elif isinstance(loginterval, int):
-      flogger=logging.handlers.TimedRotatingFileHandler(logfile,when='d',interval=loginterval)
+      flogger=logging.handlers.TimedRotatingFileHandler(logfile,when='d',interval=loginterval, encoding='utf-8')
     else:
-      flogger=logging.handlers.WatchedFileHandler(logfile)
+      flogger=logging.handlers.WatchedFileHandler(logfile, 'a', 'utf-8')
     flogger.setLevel(logging.DEBUG)
     flogger.setFormatter(logformat)
     logger.addHandler(flogger)
-  
+
   tlogger=TitleHandler()
   tlogger.setLevel(logging.DEBUG)
   tlogger.setFormatter(logformat)
   logger.addHandler(tlogger)
-  
+
   slogger=logging.StreamHandler()
   slogger.setLevel(loglevel)
   slogger.setFormatter(logformat)
   logger.addHandler(slogger)
   #logging.basicConfig(level=args.loglevel,filename=args.logfile,format='%(asctime)s [%(levelname)s]: %(message)s')
-  
+
 def nice(niceness):
   '''Nice for Windows Processes.  Nice is a value between -3-2 where 0 is normal priority.'''
   if os.name != 'nt': return os.nice(niceness)
-  
+
   import win32api,win32process,win32con
-  
+
   priorityclasses = [win32process.IDLE_PRIORITY_CLASS,
       win32process.BELOW_NORMAL_PRIORITY_CLASS,
       win32process.NORMAL_PRIORITY_CLASS,
@@ -100,7 +100,7 @@ def nice(niceness):
 
 def secsToParts(s):
   '''Convert a number of seconds (given as float) into a tuple of (neg (string), hours (int), mins (int), secs (int), msecs (int)).'''
-  
+
   neg = "-" if s<0 else ""
   secs, msecs= divmod(int(abs(s)*1000),1000)
   mins, secs = divmod(secs,60)
@@ -109,13 +109,13 @@ def secsToParts(s):
 
 def partsToSecs(p):
   '''Convert a tuple of (neg (string), hours (int), mins (int), secs (int), msecs (int)) into a number of seconds (given as float).'''
-  
+
   neg,hours,mins,secs,msecs=p
   return (-1 if neg=='-' else 1)*(float(msecs)/1000+secs+(mins+hours*60)*60)
 
 def dict_inverse(d):
   '''Create an inverse dict from a dict.'''
-  
+
   return { v:k for k,v in d.items()}
 
 def alphabetize(s):
@@ -126,12 +126,12 @@ def alphabetize(s):
     s=s[2:]
   elif s.startswith("An "):
     s=s[3:]
-  
+
   if s.endswith("."):
     s=s[:-1]
-  
+
   return s
-  
+
 worklock='.working'
 def work_lock(file):
   if not file:
@@ -171,11 +171,11 @@ def work_lock_delete():
 
 def sleep_change_directories(dirs,state=None):
   '''Sleep until any of the files in any of the dirs has changed.'''
-  
+
   while True:
     nstate = { os.path.join(d,f): os.stat(os.path.join(d,f)) for d in dirs for f in os.listdir(d) }
     if nstate != state: return nstate
-    
+
     if os.name == 'nt':
       import win32file, win32event, win32con
       watches = win32con.FILE_NOTIFY_CHANGE_FILE_NAME | win32con.FILE_NOTIFY_CHANGE_ATTRIBUTES | win32con.FILE_NOTIFY_CHANGE_LAST_WRITE

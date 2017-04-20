@@ -2,7 +2,7 @@
 # A Python frontend to various audio/video tools to automatically convert to MP4/H264/AAC-LC and tag the results
 
 prog='MakeMP4'
-version='4.0'
+version='4.2'
 author='Carl Edman (CarlEdman@gmail.com)'
 
 import string, re, os, sys, argparse, logging, time, math, shutil, tempfile, json
@@ -132,7 +132,7 @@ def config_from_base(cfg,base):
     cfg.set('show',r.show)
     cfg.set('season',int(r.season))
     cfg.set('episode','')
-  cfg.sync(True)
+  cfg.sync()
 
 
 def config_from_idxfile(cfg,idxfile):
@@ -238,6 +238,8 @@ def prepare_mkv(mkvfile):
 
   track=0
 
+  skip_a_dts = False
+
   r=regex.RegEx()
   for l in check_output(['mkvmerge','--identify-verbose',mkvfile]).decode(errors='replace').splitlines():
     if r('^\s*$',l):
@@ -248,7 +250,6 @@ def prepare_mkv(mkvfile):
       dets=r[2]
       if r(r'\bduration:(\d+)\b',dets):
         cfg.set('duration',int(r[0])/1000000000.0,section='MAIN')
-
     elif r('^\s*Track ID (\d+): (\w+)\s*\((.*)\)\s*\[(.*)\]\s*$',l):
       track+=1
       cfg.setsection('TRACK{:02d}'.format(track))
@@ -280,18 +281,30 @@ def prepare_mkv(mkvfile):
         cfg.set('delay',0.0)
 #        cfg.set('elongation',1.0)
 #        cfg.set('normalize',False)
-      elif r[2] in ('TrueHD','A_TRUEHD'):
+      elif r[2] in ('TrueHD','A_TRUEHD','TrueHD Atmos'):
         cfg.set('extension','thd')
         cfg.set('file','{} T{:02d}.thd'.format(base,track))
         cfg.set('quality',60)
         cfg.set('delay',0.0)
 #        cfg.set('elongation',1.0)
 #        cfg.set('normalize',False)
-      elif r[2] in ('A_DTS','DTS','DTS-ES','DTS-HD Master Audio','DTS-HD High Resolution'):
+      elif r[2] in ('DTS-HD Master Audio'):
         cfg.set('extension','dts')
         cfg.set('file','{} T{:02d}.dts'.format(base,track))
         cfg.set('quality',60)
         cfg.set('delay',0.0)
+        skip_a_dts = True
+#        cfg.set('elongation',1.0)
+#        cfg.set('normalize',False)
+      elif r[2] in ('A_DTS', 'DTS', 'DTS-ES', 'DTS-HD High Resolution', 'DTS-HD High Resolution Audio'):
+        cfg.set('extension','dts')
+        cfg.set('file','{} T{:02d}.dts'.format(base,track))
+        cfg.set('quality',60)
+        cfg.set('delay',0.0)
+        if skip_a_dts:
+          cfg.set('disable', True)
+          skip_a_dts = False
+
 #        cfg.set('elongation',1.0)
 #        cfg.set('normalize',False)
       elif r[2] in ('A_PCM/INT/LIT'):
@@ -338,8 +351,11 @@ def prepare_mkv(mkvfile):
       if r(r'\bdefault_duration:(\d+)\b',dets):
         cfg.set('frameduration',int(r[0])/1000000000.0)
 
-      if r(r'\btrack_name:(.+?)\b',dets):
+      if r(r'\btrack_name:(\S+)\b',dets):
         cfg.set('trackname',r[0])
+
+#      if r(r'\bminimum_timestamp:(\d+)\b',dets):
+#        cfg.set('delay',int(r[0])/1000000000.0)
 
       if r(r'\baudio_sampling_frequency:(\d+)\b',dets):
         cfg.set('samplerate',int(r[0]))
@@ -395,6 +411,14 @@ def prepare_mkv(mkvfile):
     cfg.setsection(vt)
     file=cfg.get('file',None)
     mkvtrack=cfg.get('mkvtrack',-1)
+    if args.keep_video_in_mkv and cfg.get('type',None)=='video':
+      cfg.set('extension','mkv')
+      cfg.set('file',mkvfile)
+      continue
+    if args.keep_audio_in_mkv and cfg.get('type',None)=='audio':
+      cfg.set('extension','mkv')
+      cfg.set('file',mkvfile)
+      continue
     if file and not exists(file) and mkvtrack>=0:
       call.append('{:d}:{}'.format(mkvtrack,file))
   if call: do_call(['mkvextract', 'tracks', mkvfile] + call)
@@ -505,7 +529,7 @@ def update_coverart(cfg):
   episode= cfg.get('episode',-1)
 
   artregex = ''.join([
-    re.escape(show),
+    re.escape(show.strip().translate(str.maketrans('','',r':"/\:*?<>|'))),
     ' S'+str(season) if season>0 else '',
     r'(\s+P[\d+])?\.(jpg|jpeg|png)'])
 
@@ -670,6 +694,7 @@ def update_description(cfg):
     join(args.descdir or '',show),
     ' S'+str(season) if season>0 else '',
     '.txt'])
+
   if exists(descfile):
     with open(descfile,'rt', encoding='utf-8', errors='backslashreplace') as fp: txt=fp.read()
     txt=txt.strip()
@@ -722,7 +747,7 @@ def update_description(cfg):
       cfg.set('imdb_id',imdb_id)
 
     if cfg.has('imdb_series_id') and cfg.get('imdb_series_id')!=imdb_series_id:
-      warning('{}: IMDB Series Id mismatch ("{}" != "{}")'.format(base,imdb_series_id,v))
+      warning('{}: IMDB Series Id mismatch ("{}" != "{}")'.format(base,cfg.get('imdb_series_id'),imdb_series_id))
     elif imdb_series_id:
       cfg.set('imdb_series_id',imdb_series_id)
 
@@ -746,7 +771,8 @@ def update_description(cfg):
       'Rated':'Rating: ',
       'Released':'Released on: ',
       'Runtime':'Runtime: ',
-      'Website':'Web Site: '
+      'Website':'Web Site: ',
+      'totalSeasons': None
       }
 
     genre_trans = [
@@ -828,15 +854,19 @@ def update_description(cfg):
         elif season!=int(v):
           warning('{}: IMDB Season mismatch ("{}" != "{}")'.format(base,season,v))
       elif k=='Title':
-        title = cfg.get('song')
-        if season>=0 and episode<0:
-          continue
-        elif season>=0 and episode>=0 and v=="Episode #{}.{}".format(season,episode):
-          continue
-        elif not title:
-          cfg.set('song', v)
-        elif title!=v:
-          warning('{}: IMDB Title mismatch ("{}" != "{}")'.format(base,title,v))
+        if season>=0 and episode>=0:
+          if v=="Episode #{}.{}".format(season,episode):
+            continue
+          song = cfg.get('song')
+          if not song or v.endswith(song):
+            cfg.set('song',v)
+          elif song!=v:
+            warning('{}: IMDB Episode Title mismatch ("{}" != "{}")'.format(base,song,v))
+        elif season<0 and episode<0:
+          if not show or v.endswith(show):
+            cfg.set('show',v)
+          elif show!=v:
+            warning('{}: IMDB Show Title mismatch ("{}" != "{}")'.format(base,show,v))
       elif k=='Director':
         director = cfg.get('director')
         if not director:
@@ -877,15 +907,24 @@ def update_description(cfg):
         elif genre!=igenre:
           warning('{}: IMDB Genre mismatch ("{}" != "{}")'.format(base,genre,v))
       elif k in comment_trans:
+        if not comment_trans[k]: continue
         t = comment_trans[k] + v + '' if v[-1]=='.' else '.'
         if not comment or comment.find(t)<0:
           cfg.set('comment', (comment+'  ' if comment else '') + t)
+      elif k=='Ratings':
+        for r in v:
+          t = r['Source'] + ' Rating: ' + r['Value'] + '.'
+          if not comment or comment.find(t)<0:
+            cfg.set('comment', (comment+'  ' if comment else '') + t)
       else:
         warning('{}: Unrecognized IMDB "{}" = "{}"'.format(base,k,v))
   cfg.sync()
 
-def config_from_dgifile(cfg,dgifile):
-  logfile = splitext(dgifile)[0]+'.log'
+def config_from_dgifile(cfg):
+  file = cfg.get('file', None)
+  dgifile = cfg.get('dgi_file', None)
+  if not file or not dgifile: return
+  logfile = splitext(file)[0]+'.log'
   r=regex.RegEx()
 
   t = str.maketrans(string.ascii_uppercase,string.ascii_lowercase,string.whitespace)
@@ -912,7 +951,7 @@ def config_from_dgifile(cfg,dgifile):
     open(dgifile,'w').truncate(0)
     return
   r=regex.RegEx()
-  if r(r'^DG(AVC|MPG|VC1)IndexFileNV(14|15)',dgip[0]):
+  if r(r'^DG(AVC|MPG|VC1)IndexFileNV(14|15|16)',dgip[0]):
     if not r(r'\bCLIP\ *(?P<left>\d+) *(?P<right>\d+) *(?P<top>\d+) *(?P<bottom>\d+)',dgip[2]):
       error('No CLIP in ' + dgifile)
       open(dgifile,'w').truncate(0)
@@ -1047,7 +1086,7 @@ def build_indices(cfg):
     else:
       continue
 
-    config_from_dgifile(cfg,dgifile)
+    config_from_dgifile(cfg)
 
 def build_subtitle(cfg):
   infile = cfg.get('file')
@@ -1126,7 +1165,7 @@ def build_subtitle(cfg):
 def build_audio(cfg):
   infile = cfg.get('file')
   inext = cfg.get('extension')
-  outfile = cfg.get('out_file',splitext(basename(infile))[0]+'.m4a')
+  outfile = cfg.get('out_file','{} T{}.m4a'.format(cfg.get('base',section='MAIN'),cfg.getsection()[5:]))
   cfg.set('out_file',outfile)
   cfg.sync()
   if not readytomake(outfile,infile): return False
@@ -1136,18 +1175,26 @@ def build_audio(cfg):
   # if (inext in ['dts','thd']):
   #   call = [ 'dcadec', '-6', infile, '-']
   # else:
-  call = [ 'eac3to', infile, 'stdout.wav', '-no2ndpass', '-log=nul' ]
-  if cfg.get('delay',0.0)!=0.0: call.append('{:+f}ms'.format(cfg.get('delay')*1000.0))
+  call = [ 'eac3to', infile]
+
+  if args.keep_audio_in_mkv and inext=='mkv':
+    call.append("{}:".format(cfg.get('mkvtrack')+1))
+
+  call.append('stdout.wav')
+  # call.append('-no2ndpass')
+  call.append('-log=nul')
+  if cfg.get('delay',0.0)!=0.0: call.append('{:+.0f}ms'.format(cfg.get('delay')*1000.0))
   if cfg.get('elongation',1.0)!=1.0: warning('Audio elongation not implemented')
+
 #    if cfg.get('channels')==7: call.append('-0,1,2,3,5,6,4')
-  if cfg.hasno('downmix'):
-    call.append('-down6')
-  elif cfg.get('downmix')==6:
+
+  if cfg.get('downmix')==6:
     call.append('-down6')
   elif cfg.get('downmix')==2:
     call.append('-downDpl')
-  else:
+  elif cfg.has('downmix'):
     warning('Invalid downmix "{:d}"'.format(cfg.get('downmix')))
+
 #    if cfg.get('normalize',False): call.append('-normalize')
 
   call += [ '|', 'qaac64', '--threading', '--ignorelength', '--no-optimize', '--tvbr', str(cfg.get('quality',60)), '--quality', '2', '-', '-o', outfile]
@@ -1165,11 +1212,14 @@ def build_video(cfg):
   infile = cfg.get('file')
   inext = cfg.get('extension')
   dgifile = cfg.get('dgi_file', None)
-  outfile = cfg.get('out_file',splitext(basename(infile))[0] +'.out.264' ) # +'.mp4') # +'.m4v')
+  outfile = cfg.get('out_file','{} T{}.out.264'.format(cfg.get('base',section='MAIN'),cfg.getsection()[5:]))
+
+  #outfile = cfg.get('out_file',splitext(basename(infile))[0] +'.out.264' ) # +'.mp4') # +'.m4v')
   cfg.set('out_file',outfile)
   avsfile = cfg.get('avs_file',splitext(basename(infile))[0] +'.avs' )
   cfg.set('avs_file',avsfile)
   cfg.sync()
+
   if not readytomake(outfile,infile,dgifile): return False
 
   r=regex.RegEx()
@@ -1296,6 +1346,8 @@ def build_result(cfg):
     file=cfg.get('file')
     outfile=cfg.get('out_file',None)
     if not outfile: return False
+    if not exists(outfile): return False
+    if getsize(outfile)==0: return False
 
   cfg.setsection('MAIN')
   base=cfg.get('base')
@@ -1340,14 +1392,14 @@ def build_result(cfg):
   vts=0
   ats=0
   sts=0
+  mdur=cfg.get('duration',None,section='MAIN')
   for track in sorted([t for t in cfg.sections() if t.startswith('TRACK') and not cfg.get('disable',section=t)]):
     cfg.setsection(track)
     if cfg.get('type')=='audio' and cfg.has('language') and cfg.has('audio_languages',section='MAIN') and cfg.get('language') not in cfg.get('audio_languages',section='MAIN').split(";"): continue
     if cfg.hasno('out_file'): continue
-    of=cfg.get('out_file')
-    if cfg.has('duration',section='MAIN') and cfg.has('duration'):
-      mdur=cfg.get('duration',section='MAIN')
-      dur=cfg.get('duration')
+    of = cfg.get('out_file')
+    dur = cfg.get('duration')
+    if mdur and dur:
       if abs(mdur-dur)>0.5 and abs(mdur-dur)*200>mdur:
         warning('Duration of "{}" ({:f}s) deviates from track {} duration({:f}s).'.format(base,mdur,of,dur))
 
@@ -1356,6 +1408,7 @@ def build_result(cfg):
     if cfg.has('name'): call[-1]+=':name='+cfg.get('name')
     if cfg.has('language'): call[-1]+=':lang='+cfg.get('language')
     if cfg.get('frame_rate_ratio_out'): call[-1] += ':fps=' + str(float(cfg.get('frame_rate_ratio_out')))
+    if mdur: call[-1] += ':dur=' + str(float(mdur))
     if cfg.get('type')=='audio':
       ats += 1
       if not cfg.get('defaulttrack',ats==1): call[-1]+=':disable'
@@ -1534,6 +1587,8 @@ if __name__ == "__main__":
     parser.add_argument('--omdbkey',dest='omdbkey',action='store',help='your OMDB key to automatically retrieve posters')
     parser.add_argument('--move-source',action='store_true', default=False, help='move source files to working directory before extraction')
     parser.add_argument('--delete-source',action='store_true', default=False, help='delete source file after successful extraction')
+    parser.add_argument('--keep-video-in-mkv',action='store_true', default=False, help='do not attempt to extract video tracks from MKV source, but instead use MKV file directly')
+    parser.add_argument('--keep-audio-in-mkv',action='store_true', default=False, help='do not attempt to extract audio tracks from MKV source, but instead use MKV file directly')
     inifile='{}.ini'.format(splitext(sys.argv[0])[0])
     if exists(inifile): sys.argv.insert(1,'@'+inifile)
     inifile=prog + '.ini'
@@ -1564,4 +1619,3 @@ if __name__ == "__main__":
     sleep_state = sleep_change_directories(['.'] + sources, sleep_state)
     main()
     debug('Sleeping.')
-

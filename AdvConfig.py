@@ -3,22 +3,23 @@
 
 from cetools import *
 
-from configparser import ConfigParser
+from configparser import ConfigParser, RawConfigParser
 from os.path import exists, isfile, getmtime, getsize, join, basename, splitext, abspath, dirname
 from fractions import Fraction
-from weakref import WeakValueDictionary
+from weakref import WeakValueDictionary, finalize
 
-class AdvConfig(ConfigParser):
-  """A subclass of ConfigParser for with advanced features"""
-  _configs = dict()
+class AdvConfig(RawConfigParser):
+  """A subclass of RawConfigParser for with advanced features"""
+  _configs = WeakValueDictionary()
 
-  def __new__(cls,filename):
+  def __new__(cls, filename):
     if filename in AdvConfig._configs:
       n=AdvConfig._configs[filename]
       n.sync()
     else:
       n=super(AdvConfig,cls).__new__(cls)
       AdvConfig._configs[filename]=n
+      finalize(n, n.sync)
     return n
 
   def __init__(self,filename):
@@ -30,20 +31,15 @@ class AdvConfig(ConfigParser):
     self.mtime=-1
     self.sync()
 
-  def __del__(self):
-    self.sync()
-    if self.filename in AdvConfig._configs: del AdvConfig._configs[self.filename]
-    #return super().__del__()
-
-  def sync(self, dirty=False):
+  def sync(self):
     if not exists(self.filename):
-      with open(self.filename, 'w') as fp: self.write(fp)
-    elif dirty or self.modified:
+      with open(self.filename, 'wt', encoding='utf-8') as fp: self.write(fp)
+    elif self.modified:
       if self.mtime<getmtime(self.filename):
         warning('Overwriting external edits in "{}"'.format(self.filename))
-      with open(self.filename, 'w') as fp: self.write(fp)
+      with open(self.filename, 'wt', encoding='utf-8') as fp: self.write(fp)
     elif self.mtime<getmtime(self.filename):
-      with open(self.filename, 'r') as fp: self.read_file(fp)
+      with open(self.filename, 'rt', encoding='utf-8') as fp: self.read_file(fp)
     self.mtime=getmtime(self.filename)
     self.modified=False
 
@@ -52,6 +48,9 @@ class AdvConfig(ConfigParser):
       self.add_section(sect)
       self.modified=True
     self.currentsection=sect
+
+  def getsection(self):
+    return self.currentsection
 
   @staticmethod
   def valtostr(v):
@@ -80,30 +79,30 @@ class AdvConfig(ConfigParser):
       if not self.currentsection: raise configparser.NoSectionError('No Current Section Set')
       section=self.currentsection
 
-    oval=ConfigParser.get(self,section,option) if self.has_option(section,option) else None
+    oval=RawConfigParser.get(self,section,option) if self.has_option(section,option) else None
     nval=self.valtostr(value)
     if oval and oval==nval: return
-    ConfigParser.set(self,section,option,nval)
+    RawConfigParser.set(self,section,option,nval)
     self.modified=True
 
   def items(self,section=None):
     if not section:
       if not self.currentsection: raise configparser.NoSectionError('No Current Section Set')
       section=self.currentsection
-    return ConfigParser.items(self,section)
+    return RawConfigParser.items(self,section)
 
   def get(self,option,default=None,section=None):
     if not section:
       if not self.currentsection: raise configparser.NoSectionError('No Current Section Set')
       section=self.currentsection
-    if not self.has_option(section,option) or ConfigParser.get(self,section,option)=='': return default
-    return self.strtoval(ConfigParser.get(self,section,option))
+    if not self.has_option(section,option) or RawConfigParser.get(self,section,option)=='': return default
+    return self.strtoval(RawConfigParser.get(self,section,option))
 
   def has(self,option,section=None):
     if not section:
       if not self.currentsection: raise configparser.NoSectionError('No Current Section Set')
       section=self.currentsection
-    return self.has_option(section,option) and ConfigParser.get(self,section,option)
+    return self.has_option(section,option) and RawConfigParser.get(self,section,option)
 
   def hasno(self,option,section=None):
     return not self.has(option,section)
