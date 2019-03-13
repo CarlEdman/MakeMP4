@@ -2,7 +2,7 @@
 # A Python frontend to various audio/video tools to automatically convert to MP4/H264/AAC-LC and tag the results
 
 prog='MakeMP4'
-version='4.2'
+version='4.3'
 author='Carl Edman (CarlEdman@gmail.com)'
 
 import string, re, os, sys, argparse, logging, time, math, shutil, tempfile, json
@@ -14,11 +14,25 @@ from urllib.parse import urlparse, urlunparse, urlencode
 from urllib.error import HTTPError
 from AdvConfig import AdvConfig
 from cetools import *
+
 import regex
+import json
+import xml.etree.ElementTree as ET
 
-langNameToISO6392T = { 'English':'eng', 'Français': 'fra', 'Japanese':'jpn', 'Español':'esp' , 'German':'deu', 'Deutsch':'deu', 'Svenska':'swe', 'Latin':'lat', 'Dutch':'nld', 'Chinese':'zho' }
-iso6392BtoT = { 'alb':'sqi', 'arm':'hye', 'baq':'eus', 'bur':'mya', 'chi':'zho', 'cze':'ces', 'dut':'nld', 'fre':'fra', 'geo':'kat', 'ger':'deu', 'gre':'ell', 'ice':'isl', 'mac':'mkd', 'mao':'mri', 'may':'msa', 'per':'fas', 'rum':'ron', 'slo':'slk', 'tib':'bod', 'wel':'cym' }
+def iso6392BtoT(l):
+  d = { 'alb':'sqi', 'arm':'hye', 'baq':'eus', 'bur':'mya', 'chi':'zho', 'cze':'ces', 'dut':'nld', 'fre':'fra', 'geo':'kat', 'ger':'deu', 'gre':'ell', 'ice':'isl', 'mac':'mkd', 'mao':'mri', 'may':'msa', 'per':'fas', 'rum':'ron', 'slo':'slk', 'tib':'bod', 'wel':'cym' }
+  if l in d: return d[l]
 
+  e = { 'English':'eng', 'Français': 'fra', 'Japanese':'jpn', 'Español':'esp' , 'German':'deu', 'Deutsch':'deu', 'Svenska':'swe', 'Latin':'lat', 'Dutch':'nld', 'Chinese':'zho' }
+  if l in e: return e[l]
+  return l
+
+
+
+def parse_time(s):
+  r = regex.RegEx(regex=r'(?P<hrs>\d+):(?P<mins>\d+):(?P<secs>\d+(\.\d*)?)')
+  r(text=s)
+  return float(r.hrs)*3600.0+float(r.mins)*60.0+float(r.secs)
 
 def readytomake(file,*comps):
   for f in comps:
@@ -236,175 +250,146 @@ def prepare_mkv(mkvfile):
   config_from_base(cfg,base)
   work_lock(cfgfile)
 
-  track=0
+  cfg.setsection('MAIN')
 
-  skip_a_dts = False
-
-  r=regex.RegEx()
-  for l in check_output(['mkvmerge','--identify-verbose',mkvfile]).decode(errors='replace').splitlines():
-    if r('^\s*$',l):
-      continue
-    elif r(r'^\s*File\s*(.*):\s*container:\s*(\w*)\s*\[(.*)\]\s*$',l):
-      cfg.set('mkvfile',r[0],section='MAIN')
-      cfg.set('container',r[1],section='MAIN')
-      dets=r[2]
-      if r(r'\bduration:(\d+)\b',dets):
-        cfg.set('duration',int(r[0])/1000000000.0,section='MAIN')
-    elif r('^\s*Track ID (\d+): (\w+)\s*\((.*)\)\s*\[(.*)\]\s*$',l):
-      track+=1
-      cfg.setsection('TRACK{:02d}'.format(track))
-      cfg.set('mkvtrack',int(r[0]))
-      cfg.set('type',r[1])
-      cfg.set('format',r[2])
-      dets=r[3]
-      if r[2] in ('V_MPEG2','MPEG-1/2'):
-        cfg.set('extension','mpg')
-        cfg.set('file','{} T{:02d}.mpg'.format(base,track))
-#        cfg.set('t2c_file','{} T{:02d}.t2c'.format(base,track))
-        cfg.set('dgi_file','{} T{:02d}.dgi'.format(base,track))
-#        cfg.set('dgi_file','{} T{:02d}.d2v'.format(base,track))
-      elif r[2] in ('V_MPEG4/ISO/AVC','MPEG-4p10/AVC/h.264'):
-        cfg.set('extension','264')
-        cfg.set('file','{} T{:02d}.264'.format(base,track))
-#        cfg.set('t2c_file','{} T{:02d}.t2c'.format(base,track))
-        cfg.set('dgi_file','{} T{:02d}.dgi'.format(base,track))
-      elif r[2] in ('V_MS/VFW/FOURCC, WVC1','VC-1'):
-        cfg.set('extension','wvc')
-        cfg.set('file','{} T{:02d}.wvc'.format(base,track))
-#        cfg.set('t2c_file','{} T{:02d}.t2c'.format(base,track))
-        cfg.set('dgi_file','{} T{:02d}.dgi'.format(base,track))
-      elif r[2] in ('A_AC3','A_EAC3','AC3/EAC3','AC-3/E-AC-3'):
-        cfg.set('extension','ac3')
-#        cfg.set('extension','eac')
-        cfg.set('file','{} T{:02d}.ac3'.format(base,track))
-        cfg.set('quality',60)
-        cfg.set('delay',0.0)
-#        cfg.set('elongation',1.0)
-#        cfg.set('normalize',False)
-      elif r[2] in ('TrueHD','A_TRUEHD','TrueHD Atmos'):
-        cfg.set('extension','thd')
-        cfg.set('file','{} T{:02d}.thd'.format(base,track))
-        cfg.set('quality',60)
-        cfg.set('delay',0.0)
-#        cfg.set('elongation',1.0)
-#        cfg.set('normalize',False)
-      elif r[2] in ('DTS-HD Master Audio'):
-        cfg.set('extension','dts')
-        cfg.set('file','{} T{:02d}.dts'.format(base,track))
-        cfg.set('quality',60)
-        cfg.set('delay',0.0)
-        skip_a_dts = True
-#        cfg.set('elongation',1.0)
-#        cfg.set('normalize',False)
-      elif r[2] in ('A_DTS', 'DTS', 'DTS-ES', 'DTS-HD High Resolution', 'DTS-HD High Resolution Audio'):
-        cfg.set('extension','dts')
-        cfg.set('file','{} T{:02d}.dts'.format(base,track))
-        cfg.set('quality',60)
-        cfg.set('delay',0.0)
-        if skip_a_dts:
-          cfg.set('disable', True)
-          skip_a_dts = False
-
-#        cfg.set('elongation',1.0)
-#        cfg.set('normalize',False)
-      elif r[2] in ('A_PCM/INT/LIT'):
-        cfg.set('extension','pcm')
-        cfg.set('file','{} T{:02d}.pcm'.format(base,track))
-        cfg.set('quality',60)
-        cfg.set('delay',0.0)
-#        cfg.set('elongation',1.0)
-#        cfg.set('normalize',False)
-      elif r[2] in ('S_VOBSUB','VobSub'):
-        cfg.set('extension','idx')
-        cfg.set('file','{} T{:02d}.idx'.format(base,track))
-        cfg.set('delay',0.0)
-        cfg.set('elongation',1.0)
-      elif r[2] in ('S_HDMV/PGS','HDMV PGS','PGS'):
-        cfg.set('extension','sup')
-        cfg.set('file','{} T{:02d}.sup'.format(base,track))
-        cfg.set('delay',0.0)
-        cfg.set('elongation',1.0)
-      elif r[2] in ('A_MS/ACM'):
-        cfg.set('disable',True)
-        pass
-      else:
-        warning('{}: Unrecognized track type {} in {}'.format(cfg.get('base','NOBASE','MAIN'),r[2],mkvfile))
-        cfg.set('disable',True)
-
-      if r(r'\blanguage:(\w+)\b',dets):
-        cfg.set('language',iso6392BtoT[r[0]] if r[0] in iso6392BtoT else r[0])
-
-      if r(r'\bdisplay_dimensions:(\d+)x(\d+)\b',dets):
-        cfg.set('display_width',int(r[0]))
-        cfg.set('display_height',int(r[1]))
-
-      if r(r'\bpixel_dimensions:(\d+)x(\d+)\b',dets):
-        cfg.set('pixel_width',int(r[0]))
-        cfg.set('pixel_height',int(r[1]))
-
-#      if r(r'\bdefault_track:(\d+)\b',dets):
-#        cfg.set('defaulttrack',int(r[0])!=0)
-
-      if r(r'\bforced_track:(\d+)\b',dets):
-        cfg.set('forcedtrack',int(r[0])!=0)
-
-      if r(r'\bdefault_duration:(\d+)\b',dets):
-        cfg.set('frameduration',int(r[0])/1000000000.0)
-
-      if r(r'\btrack_name:(\S+)\b',dets):
-        cfg.set('trackname',r[0])
-
-#      if r(r'\bminimum_timestamp:(\d+)\b',dets):
-#        cfg.set('delay',int(r[0])/1000000000.0)
-
-      if r(r'\baudio_sampling_frequency:(\d+)\b',dets):
-        cfg.set('samplerate',int(r[0]))
-
-      if r(r'\baudio_channels:(\d+)\b',dets):
-        cfg.set('channels',int(r[0]))
-#        if int(r[0])>2: cfg.set('downmix',2)
-
-    elif r(r'^Chapters: (\d+) entries$',l):
-      cfg.set('chaptercount',int(r[0]),section='MAIN')
-    elif r(r'^Tags for track ID (\d+): (\d+) entries$',l):
-      pass
-    elif r(r'^Attachment ID (\d+): type \'([a-z/]+)\', size (\d+) bytes, file name \'(.*)\' \[uid:(\d+)\]$',l):
-      pass
-    else:
-      warning('Unrecognized mkvmerge identify line {}: {}'.format(mkvfile,l))
-  cfg.sync()
-
-  chap_uid=[]
-  chap_time=[]
-  chap_hidden=[]
-  chap_enabled=[]
-  chap_name=[]
-  chap_lang=[]
-  for l in check_output(['mkvextract','chapters',mkvfile]).decode(errors='replace').splitlines():
-    if r('^\s*<ChapterUID>(.*)</ChapterUID>\s*$',l):
-      chap_uid.append(r[0])
-    elif r('^\s*<ChapterTimeStart>(\d+):(\d+):(\d+\.?\d*)</ChapterTimeStart>\s*$',l):
-      chap_time.append(str(float(r[0])*3600.0+float(r[1])*60.0+float(r[2])))
-    elif r('^\s*<ChapterFlagHidden>(\d+)</ChapterFlagHidden>\s*$',l):
-      chap_hidden.append(r[0])
-    elif r('^\s*<ChapterFlagEnabled>(\d+)</ChapterFlagEnabled>\s*$',l):
-      chap_enabled.append(r[0])
-    elif r('^\s*<ChapterString>(.*)</ChapterString>\s*$',l):
-      chap_name.append(r[0])
-    elif r('^\s*<ChapterLanguage>(\w+)</ChapterLanguage>\s*',l):
-      chap_lang.append(iso6392BtoT[r[0]] if r[0] in iso6392BtoT else r[0])
-
-  if chap_uid or chap_time or chap_hidden or chap_enabled or chap_name or chap_lang:
-    cfg.setsection('MAIN')
+  try:
+    chaps = ET.fromstring(check_output(['mkvextract','chapters',mkvfile]).decode(errors='replace'))
+    chap_uid=[]
+    chap_time=[]
+    chap_hidden=[]
+    chap_enabled=[]
+    chap_name=[]
+    chap_lang=[]
+    for chap in chaps.iter('ChapterAtom'):
+      chap_uid.append(chap.find('ChapterUID').text)
+      chap_time.append(str(parse_time(chap.find('ChapterTimeStart').text)))
+      chap_hidden.append(chap.find('ChapterFlagHidden').text)
+      chap_enabled.append(chap.find('ChapterFlagEnabled').text)
+      chap_name.append(chap.find('ChapterDisplay').find('ChapterString').text)
+      chap_lang.append(iso6392BtoT(chap.find('ChapterDisplay').find('ChapterLanguage').text))
     cfg.set('chapter_delay',0.0)
     cfg.set('chapter_elongation',1.0)
     cfg.set('chapter_uid',';'.join(chap_uid))
-    cfg.set('chapter_time',';'.join(chap_time))
-    cfg.set('chapter_hidden',';'.join(chap_hidden))
-    cfg.set('chapter_enabled',';'.join(chap_enabled))
-    cfg.set('chapter_name',';'.join(chap_name))
-    cfg.set('chapter_language', ';'.join(chap_lang))
+    if chap_time: cfg.set('chapter_time',';'.join(chap_time))
+    if chap_hidden: cfg.set('chapter_hidden',';'.join(chap_hidden))
+    if chap_enabled: cfg.set('chapter_enabled',';'.join(chap_enabled))
+    if chap_name: cfg.set('chapter_name',';'.join(chap_name))
+    if chap_lang: cfg.set('chapter_language', ';'.join(chap_lang))
     cfg.sync()
+  except ET.ParseError:
+    warning("No valid XML chapters for " + mkvfile + ".")
+
+  j = json.loads(check_output(['mkvmerge','-J',mkvfile]).decode(errors='replace'))
+  cont = j['container']
+  cfg.set('container_type', cont['type'])
+
+  for k,v in cont['properties'].items():
+    if k=='duration':
+      cfg.set('duration',int(v)/1000000000.0)
+    else:
+      cfg.set('container_property_'+k, v)
+
+  skip_a_dts = False
+  for track in j['tracks']:
+    tid = track['id']+1
+    cfg.setsection('TRACK{:02d}'.format(tid))
+    cfg.set('mkvtrack',track['id'])
+    cfg.set('type',track['type'])
+
+    codec = track['codec']
+    cfg.set('format', codec)
+
+    if codec in ('V_MPEG2','MPEG-1/2',):
+      cfg.set('extension','mpg')
+      cfg.set('file','{} T{:02d}.mpg'.format(base,tid))
+      cfg.set('dgi_file','{} T{:02d}.dgi'.format(base,tid))
+    elif codec in ('V_MPEG4/ISO/AVC','MPEG-4p10/AVC/h.264',):
+      cfg.set('extension','264')
+      cfg.set('file','{} T{:02d}.264'.format(base,tid))
+#        cfg.set('t2c_file','{} T{:02d}.t2c'.format(base,tid))
+      cfg.set('dgi_file','{} T{:02d}.dgi'.format(base,tid))
+    elif codec in ('V_MS/VFW/FOURCC, WVC1','VC-1',):
+      cfg.set('extension','wvc')
+      cfg.set('file','{} T{:02d}.wvc'.format(base,tid))
+#        cfg.set('t2c_file','{} T{:02d}.t2c'.format(base,tid))
+      cfg.set('dgi_file','{} T{:02d}.dgi'.format(base,tid))
+    elif codec in ('A_AC3','A_EAC3','AC3/EAC3','AC-3/E-AC-3', 'AC-3'):
+      cfg.set('extension','ac3')
+      cfg.set('file','{} T{:02d}.ac3'.format(base,tid))
+      cfg.set('quality',60)
+      cfg.set('delay',0.0)
+    elif codec in ('TrueHD','A_TRUEHD','TrueHD Atmos',):
+      cfg.set('extension','thd')
+      cfg.set('file','{} T{:02d}.thd'.format(base,tid))
+      cfg.set('quality',60)
+      cfg.set('delay',0.0)
+      skip_a_dts = True
+    elif codec in ('DTS-HD Master Audio',):
+      cfg.set('extension','dts')
+      cfg.set('file','{} T{:02d}.dts'.format(base,tid))
+      cfg.set('quality',60)
+      cfg.set('delay',0.0)
+      skip_a_dts = True
+    elif codec in ('A_DTS', 'DTS', 'DTS-ES', 'DTS-HD High Resolution', 'DTS-HD High Resolution Audio',):
+      cfg.set('extension','dts')
+      cfg.set('file','{} T{:02d}.dts'.format(base,tid))
+      cfg.set('quality',60)
+      cfg.set('delay',0.0)
+      if skip_a_dts:
+        cfg.set('disable', True)
+        skip_a_dts = False
+    elif codec in ('A_PCM/INT/LIT','PCM',):
+      cfg.set('extension','pcm')
+      cfg.set('file','{} T{:02d}.pcm'.format(base,tid))
+      cfg.set('quality',60)
+      cfg.set('delay',0.0)
+    elif codec in ('S_VOBSUB','VobSub',):
+      cfg.set('extension','idx')
+      cfg.set('file','{} T{:02d}.idx'.format(base,tid))
+      cfg.set('delay',0.0)
+      cfg.set('elongation',1.0)
+    elif codec in ('S_HDMV/PGS','HDMV PGS','PGS',):
+      cfg.set('extension','sup')
+      cfg.set('file','{} T{:02d}.sup'.format(base,tid))
+      cfg.set('delay',0.0)
+      cfg.set('elongation',1.0)
+    elif codec in ('A_MS/ACM',):
+      cfg.set('disable',True)
+    else:
+      warning('{}: Unrecognized track type {} in {}'.format(cfg.get('base','NOBASE','MAIN'),codec,mkvfile))
+      cfg.set('disable',True)
+
+
+    for k,v in track['properties'].items():
+      if k == 'language':
+        cfg.set('language', iso6392BtoT(v))
+      elif k == 'display_dimensions':
+        s = v.split('x')
+        cfg.set('display_width',int(s[0]))
+        cfg.set('display_height',int(s[1]))
+      elif k == 'pixel_dimensions':
+        s = v.split('x')
+        cfg.set('pixel_width',int(s[0]))
+        cfg.set('pixel_height',int(s[1]))
+      # elif k == 'default_track':
+      #   cfg.set('defaulttrack', int(v)!=0)
+      elif k == 'forced_track':
+        cfg.set('forcedtrack', int(v)!=0)
+      elif k == 'default_duration':
+        cfg.set('frameduration',int(v)/1000000000.0)
+      elif k == 'track_name':
+        cfg.set('trackname',v)
+      # elif k == 'minimum_timestamp':
+      #   cfg.set('delay',int(v)/1000000000.0)
+      elif k == 'audio_sampling_frequency':
+        cfg.set('samplerate',int(v))
+      elif k == 'audio_channels':
+        cfg.set('channels',int(v))
+        # if int(v)>2: cfg.set('downmix',2)
+      else:
+        cfg.set('property_' + k, v)
+
+  cfg.sync()
 
   call=[]
   for vt in sorted([t for t in cfg.sections() if t.startswith('TRACK') and not cfg.get('disable',section=t)]):
@@ -427,7 +412,7 @@ def prepare_mkv(mkvfile):
   for vt in sorted([t for t in cfg.sections() if t.startswith('TRACK') and not cfg.get('disable',section=t) and cfg.get('type',section=t)=='video']):
     cfg.setsection(vt)
     file=cfg.get('file')
-    if make_srt(cfg,track+1,[file]): track+=1
+    if make_srt(cfg,tid+1,[file]): tid+=1
   cfg.sync()
 
   call=[]
@@ -540,9 +525,13 @@ def update_coverart(cfg):
     return
 
   artfile = join(args.artdir or '',''.join([show, ' S'+str(season) if season>0 else '', r'.jpg']))
-  if not args.omdbkey or cfg.has('omdb_poster_status') or cfg.hasno('imdb_id') or exists(artfile): return
+  if not args.omdbkey: return
+  if exists(artfile): return
+  if cfg.hasno('imdb_id'): return
+  ops = cfg.get('omdb_poster_status', 0)
+  if 200<=ops<300 or 400<=ops<500: return
 
-  q = { 'h':'2000', 'i':cfg.get('imdb_id'), 'apikey': args.omdbkey }
+  q = { 'h':'1000', 'i':cfg.get('imdb_id'), 'apikey': args.omdbkey }
   u = urlunparse(['http','img.omdbapi.com', '/', '', urlencode(q), ''])
 
   try:
@@ -622,8 +611,8 @@ def update_description_tvshow(cfg,txt):
 
 
 def update_description_movie(cfg,txt):
-  txt=re.sub(r'(This movie is|Cast|Director|Genres|Availability|Language|Format)(:|\n)\s*',r'\n\1: ',txt)
-  r=regex.RegEx(regex=r'^(Rate 5 starsRate 4 starsRate 3 starsRate 2 starsRate 1 starRate not interested(Clear Rating)?|Rate 5 starsRate 4 starsRate 3 starsRate 2 starsRate 1 stars|Not Interested(Clear)?|[0-5]\.[0-9]|Movie Details|\s*)$')
+  txt=re.sub(r'(This movie is|Cast|Director|Genres|Availability|Language|Format|Moods)(:|\n| )\s*',r'\n\1: ',txt)
+  r=regex.RegEx(regex=r'^\s*(Rate 5 stars|Rate 4 stars|Rate 3 stars|Rate 2 stars|Rate 1 stars|Rate not interested(Clear Rating)?|Not Interested(Clear)?|[0-5]\.[0-9]|Movie Details|Overview Details)\s*$')
   tl=[l for l in txt.splitlines() if l and not r(text=l)]
 
   if r(r'^(.*?)\s*(\((.*)\))?$',tl[0]):
@@ -633,7 +622,7 @@ def update_description_movie(cfg,txt):
       alt = 'Alternate Title: ' + r[2]
       cmt = cfg.get('comment','')
       if alt not in cmt: cfg.set('comment',  (cmt+';' if cmt else '')+ alt)
-  if r(r'^([12]\d\d\d)\s*(G|PG|PG-13|R|NC-17|UR|NR|TV-14|TV-MA)?\s*( Rated \2)?(\d+)\s*(minutes|mins)$',tl[0]):
+  if r(r'^([12]\d\d\d)\s*(G|PG-13|PG|R|NC-17|UR|NR|TV-14|TV-MA)?\s*( Rated \2)?\s*(\d+\s*(hours|hrs|hr|h)\s*)?((\d+)\s*(minutes|mins|min|m)\s*)?.*$',tl[0]):
     tl=tl[1:]
     cfg.set('year',r[0])
     rat = 'Rating: ' + r[1]
@@ -1597,7 +1586,7 @@ if __name__ == "__main__":
     if exists(inifile): sys.argv.insert(1,'@'+inifile)
     args = parser.parse_args()
 
-  startlogging(args.logfile,args.loglevel,'7D')
+  startlogging(args.logfile,args.loglevel,'90D')
   info(prog + ' ' + version + ' starting up.')
   nice(args.niceness)
   progmodtime=getmtime(sys.argv[0])
