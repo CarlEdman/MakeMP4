@@ -72,10 +72,10 @@ for f in reglob(r'.*\.(mp4|m4r|m4b)'):
         nname=None
       elif sub.find('Interview')>=0:
         nname=sub+"-interview"+ext
+      elif sub.find('Deleted Scene')>=0 or sub.find('Alternate Scene')>=0 or sub.find('Extended Scene')>=0:
+        nname=sub+"-deleted"+ext
       elif sub.find('Scene')>=0:
         nname=sub+"-scene"+ext
-      elif sub.find('Deleted')>=0:
-        nname=sub+"-deleted"+ext
       elif sub.startswith('Trailer'):
         nname=sub+"-trailer"+ext
       else:

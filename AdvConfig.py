@@ -75,9 +75,8 @@ class AdvConfig(RawConfigParser):
     return s
 
   def set(self,option,value=None,section=None):
-    if not section:
-      if not self.currentsection: raise configparser.NoSectionError('No Current Section Set')
-      section=self.currentsection
+    if not section: section=self.currentsection
+    if not section: raise configparser.NoSectionError('No Current Section Set')
 
     oval=RawConfigParser.get(self,section,option) if self.has_option(section,option) else None
     nval=self.valtostr(value)
@@ -86,23 +85,25 @@ class AdvConfig(RawConfigParser):
     self.modified=True
 
   def items(self,section=None):
-    if not section:
-      if not self.currentsection: raise configparser.NoSectionError('No Current Section Set')
-      section=self.currentsection
+    if not section: section=self.currentsection
+    if not section: raise configparser.NoSectionError('No Current Section Set')
     return RawConfigParser.items(self,section)
 
   def get(self,option,default=None,section=None):
-    if not section:
-      if not self.currentsection: raise configparser.NoSectionError('No Current Section Set')
-      section=self.currentsection
-    if not self.has_option(section,option) or RawConfigParser.get(self,section,option)=='': return default
+    if not section: section=self.currentsection
+    if not section: raise configparser.NoSectionError('No Current Section Set')
+    if self.hasno(option, section): return default
     return self.strtoval(RawConfigParser.get(self,section,option))
 
   def has(self,option,section=None):
-    if not section:
-      if not self.currentsection: raise configparser.NoSectionError('No Current Section Set')
-      section=self.currentsection
-    return self.has_option(section,option) and RawConfigParser.get(self,section,option)
+    if not section: section=self.currentsection
+    if not section: raise configparser.NoSectionError('No Current Section Set')
+    if not self.has_option(section,option): return False
+    i = RawConfigParser.get(self,section,option)
+    if i == None: return False
+    if i =='': return False
+    if i.startswith(r'$') or i.endswith(r'$'): return False
+    return True
 
   def hasno(self,option,section=None):
     return not self.has(option,section)
