@@ -598,7 +598,7 @@ def update_description_tvshow(cfg,txt):
       cfg.set('episodeid',l[pci].strip())
     if 0<=dai<len(l) and r(r'\b([12]\d\d\d)\b',l[dai]) and cfg.hasno('year'):
       cfg.set('year',int(r[0]))
-    if 0<=dei<len(l) and l[dei] and cfg.hasno('description'):
+    if 0<=dei<len(l) and l[dei] and re.fullmatch(r'_.*_',cfg.get('description', '__')):
       cfg.set('description',l[dei])
     for i in range(len(l)):
       if i in [epi,tii,wri,pci,dei]: continue
@@ -613,7 +613,8 @@ def update_description_tvshow(cfg,txt):
 
 def update_description_movie(cfg,txt):
   txt=re.sub(r'(This movie is|Cast|Director|Genres|Availability|Language|Format|Moods)(:|\n| )\s*',r'\n\1: ',txt)
-  r=regex.RegEx(regex=r'^\s*(Rate 5 stars|Rate 4 stars|Rate 3 stars|Rate 2 stars|Rate 1 stars|Rate not interested(Clear Rating)?|Not Interested(Clear)?|[0-5]\.[0-9]|Movie Details|Overview\s*Details|At Home|In Queue)\s*$')
+  r=regex.RegEx(regex=r'^\s*(Rate [12345] stars\s)+|Rate not interested(Clear Rating)?|Not Interested(Clear)?|[0-5]\.[0-9]|Movie Details|Overview\s*Details(\s*Series)?|At Home|In Queue\s*$')
+
   tl=[l for l in txt.splitlines() if l and not r(text=l)]
   if r(r'^(.*?)\s*(\((.*)\))?$',tl[0]):
     tl=tl[1:]
@@ -667,7 +668,7 @@ def update_description_movie(cfg,txt):
     else:
       description = '  ' + t + description
 
-  if cfg.hasno('description') and description:
+  if description and re.fullmatch(r'_.*_',cfg.get('description', '__')):
     cfg.set('description',description[2:])
   cfg.sync()
 
@@ -680,9 +681,9 @@ def update_description(cfg):
   episode= cfg.get('episode',-1)
 
   sshow = ''.join([c for c in show.strip().upper() if c.isalnum()])
-  if cfg.hasno('year'): cfg.set('year', r'${}YEAR$'.format(sshow))
-  if cfg.hasno('genre'): cfg.set('genre', r'${}GENRE$'.format(sshow))
-  if cfg.hasno('description'): cfg.set('description', r'${}DESC$'.format(sshow))
+  if cfg.hasno('year'): cfg.set('year', r'_{}YEAR_'.format(sshow))
+  if cfg.hasno('genre'): cfg.set('genre', r'_{}GENRE_'.format(sshow))
+  if cfg.hasno('description'): cfg.set('description', r'_{}DESC_'.format(sshow))
 
   descfile = ''.join([
     join(args.descdir or '',show),
