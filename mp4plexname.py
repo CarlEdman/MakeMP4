@@ -19,10 +19,9 @@ def plexRename(dir):
     return
 
   base = os.path.basename(dir)
-  pat = re.compile(r'^' + re.escape(base) + r' S(?P<season>\d+)(E(?P<episode>\d+))?(V(?P<volume>\d+))?(\s+(?P<name>.*))?\.(?P<ext>mkv|mp4|avi)$')
+  pat = re.compile(r'^' + re.escape(base) + r' S(?P<season>\d+)(E(?P<episode>\d+(-\d+)?))?(V(?P<volume>\d+))?(\s+(?P<name>.*))?\.(?P<ext>mkv|mp4|avi)$')
 
-  nr = []
-  rb = 0
+  nr = {}
   for fn in os.listdir(dir):
     if fn in ["Thumbs.db"]:
       continue
@@ -35,26 +34,28 @@ def plexRename(dir):
       warnings.warn('{} does not match pattern, skipping.'.format(fn))
       continue
     d = mat.groupdict()
-    if d['episode'] == None and d['volume'] == None:
-      nr.append((fn, d['season'], d['name'], d['ext']))
-    elif int(d['season']) == 0:
-      rb = max(rb, int(d['episode'])+1)
+    if int(d['season']) == 0:
+      nfn = base + ' S0E{:02d} ' + d['name'] + '.' + d['ext']
+      nr[nfn] = fn
+    elif d['episode'] == None and d['volume'] == None:
+      name = d['name']
+      pre = 'Season '+str(oseason)+' '
+      if not name.startswith(pre): name = pre + name
+      nfn = base + ' S0E{:02d} ' + name + '.' + d['ext']
+      nr[nfn] = fn
     else:
       pass
 
-  for ((ofn,oseason,oname,oext),ep) in zip(nr,range(rb, rb+len(nr))):
-    pre = 'Season '+str(oseason)+' '
-    if not oname.startswith(pre): oname = pre + oname
-    nfn = '{} S0E{:02d} {}.{}'.format(base, ep, oname, oext)
-    ofile = os.path.join(dir, ofn)
-    nfile = os.path.join(dir, nfn)
+  for (nfn, ep) in zip(sorted(nr.keys()),range(1,len(nr)+1)):
+    ofile = os.path.join(dir, nr[nfn])
+    nfile = os.path.join(dir, nfn.format(ep))
+    if ofile==nfile: continue
     if os.path.exists(nfile):
       warnings.warn('{} already exists, skipping.'.format(nfile))
     if args.dryrun:
       print('mv "{}" "{}"'.format(ofile, nfile))
     else:
       os.rename(ofile, nfile)
-
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser(description='Rename TV show extras Plex perferred format.')
