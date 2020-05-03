@@ -10,41 +10,30 @@ author='Carl Edman (CarlEdman@gmail.com)'
 import os, re, os.path, argparse, warnings, logging, glob
 
 def plexRename(dir):
-  if not(os.path.exists(dir)):
-    warnings.warn('{} does not exist, skipping.'.format(dir))
-    return
-
-  if not(os.path.isdir(dir)):
-    warnings.warn('{} is not a directory, skipping.'.format(dir))
-    return
-
   base = os.path.basename(dir)
-  pat = re.compile(r'^' + re.escape(base) + r' S(?P<season>\d+)(E(?P<episode>\d+(-\d+)?))?(V(?P<volume>\d+))?(\s+(?P<name>.*))?\.(?P<ext>mkv|mp4|avi)$')
+  pat = re.compile(r'^' + re.escape(base) + r'\s+S(?P<season>\d+)(E(?P<episode>\d+(-\d+)?))?(V(?P<volume>\d+))?\s*(?P<name>.*\.(mkv|mp4|avi))$')
 
   nr = {}
+  nrany = False
   for fn in os.listdir(dir):
-    if fn in ["Thumbs.db"]:
-      continue
     file = os.path.join(dir, fn)
-    if not(os.path.isfile(file)):
-      warnings.warn('{} is not a file, skipping.'.format(fn))
-      continue
     mat = pat.fullmatch(fn)
-    if mat == None:
-      warnings.warn('{} does not match pattern, skipping.'.format(fn))
-      continue
+    if not(os.path.isfile(file)) or mat is None: continue
+    nrany = True
     d = mat.groupdict()
-    if int(d['season']) == 0:
-      nfn = base + ' S0E{:02d} ' + d['name'] + '.' + d['ext']
-      nr[nfn] = fn
-    elif d['episode'] == None and d['volume'] == None:
-      name = d['name']
-      pre = 'Season '+str(oseason)+' '
+    season = int(d['season'])
+    episode = d['episode']
+    volume = d['volume']
+    name = d['name']
+    if season>0 and (episode or volume): continue
+    if season>0:
+      pre = 'Season {:d} '.format(season)
       if not name.startswith(pre): name = pre + name
-      nfn = base + ' S0E{:02d} ' + name + '.' + d['ext']
-      nr[nfn] = fn
-    else:
-      pass
+    nr[base + ' S0E{:02d} ' + name] = fn
+
+  if not nrany:
+     warnings.warn('No appropriate files in {}, skipping.'.format(dir))
+     return
 
   for (nfn, ep) in zip(sorted(nr.keys()),range(1,len(nr)+1)):
     ofile = os.path.join(dir, nr[nfn])
@@ -70,5 +59,8 @@ if __name__ == '__main__':
   logging.basicConfig(level=args.loglevel,filename=args.logfile,format='%(asctime)s [%(levelname)s]: %(message)s')
 
   for gd in args.dirs:
-    for d in glob.iglob(gd):
-      plexRename(d)
+    ig = [d for d in glob.iglob(gd) if os.path.isdir(d)]
+    if len(ig)==0:
+      warnings.warn('No directories matching {}, skipping.'.format(gd))
+      continue
+    for d in ig: plexRename(d)
