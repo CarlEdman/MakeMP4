@@ -1426,7 +1426,10 @@ def build_result(cfg):
 
     call+=['-add',of]
     infiles.append(of)
-    if cfg.has('name'): call[-1]+=':name='+cfg.get('name')
+
+    name = cfg.get('name', cfg.get('trackname'))
+    if name: call[-1]+=':name='+name
+
     if cfg.has('language'): call[-1]+=':lang='+cfg.get('language')
     if cfg.get('frame_rate_ratio_out'): call[-1] += ':fps=' + str(float(cfg.get('frame_rate_ratio_out')))
     if mdur: call[-1] += ':dur=' + str(float(mdur))
