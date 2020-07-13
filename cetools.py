@@ -5,6 +5,12 @@ import os, os.path, time, re, logging, logging.handlers
 
 loggername = 'DEFAULT'
 
+def export(func):
+  if '__all__' not in func.__globals__:
+    func.__globals__['__all__'] = []
+  func.__globals__['__all__'].append(func.__name__)
+  return func
+
 def debug(*args):
   logging.getLogger(loggername).debug(*args)
 

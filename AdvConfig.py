@@ -59,51 +59,76 @@ class AdvConfig(RawConfigParser):
     if isinstance(v,int): return str(v)
     if isinstance(v,float): return str(v)
     if isinstance(v,Fraction): return str(v.numerator)+'/'+str(v.denominator)
-    if isinstance(v,str): return v.strip()
+    if isinstance(v,str):
+      if v.strip('-0123456789./: ')=='':
+        return f'"{v}"'
+      else:
+        return v.strip()
     return repr(v)
 
   @staticmethod
   def strtoval(s):
-    if s.lower() in ['yes', 'true', 'on']: return True
-    if s.lower() in ['no', 'false', 'off']: return False
-    if s[0]=='"' and s[-1]=='"': return s.strip('"')
+    if len(s)>1 and s[0]==s[-1]=='_': return None
+    if len(s)>1 and s[0]==s[-1]=='"': s = s[1:-1]
 #    if s.find(';')>=0: return [self.strtoval(i) for i in s.split(';')]
     if s.lstrip('-').strip('0123456789')=='': return int(s)
     if s.lstrip('-').strip('0123456789')=='.': return float(s)
     if s.lstrip('-').strip('0123456789')=='/': return Fraction(s)
     if s.lstrip('-').strip('0123456789')==':': return Fraction(int(s[:s.index(':')]),int(s[s.index(':')+1:]))
+    if s.lower() in { 'yes', 'true', 'on'}: return True
+    if s.lower() in { 'no', 'false', 'off'}: return False
     return s
 
-  def set(self,option,value=None,section=None):
+  def set(self,opt,nval=None,section=None):
     if not section: section=self.currentsection
     if not section: raise configparser.NoSectionError('No Current Section Set')
+    if RawConfigParser.has_option(self, section, opt):
+      sval = RawConfigParser.get(self,section,opt)
+      if nval == sval: return
+      oval = self.strtoval(sval)
+    else:
+      oval = None
+    if oval == nval: return
+    if not nval and oval is None: return
 
-    oval=RawConfigParser.get(self,section,option) if self.has_option(section,option) else None
-    nval=self.valtostr(value)
-    if oval and oval==nval: return
-    RawConfigParser.set(self,section,option,nval)
     self.modified=True
+    if nval:
+      RawConfigParser.set(self,section,opt,self.valtostr(nval))
+    else:
+      RawConfigParser.remove_option(self,section,opt)
+    debug(f'{section} {opt}: {oval}({type(oval)}) => {nval}({type(nval)})')
 
   def items(self,section=None):
     if not section: section=self.currentsection
     if not section: raise configparser.NoSectionError('No Current Section Set')
-    return RawConfigParser.items(self,section)
+    return dict(RawConfigParser.items(self,section))
 
-  def get(self,option,default=None,section=None):
+  def item_defs(self, defs, section=None):
     if not section: section=self.currentsection
     if not section: raise configparser.NoSectionError('No Current Section Set')
-    if self.hasno(option, section): return default
-    return self.strtoval(RawConfigParser.get(self,section,option))
+    for opt, nval in defs.items():
+      oval = self.get(opt, section = section)
+      if oval == nval: continue
+      if not nval and oval is None: continue
+      if oval: continue
+      debug(f'{section} {opt}: => {nval}{type(nval)}')
+      self.set(opt, nval, section=section)
 
-  def has(self,option,section=None):
+  def get(self,opt,default=None,section=None):
     if not section: section=self.currentsection
     if not section: raise configparser.NoSectionError('No Current Section Set')
-    if not self.has_option(section,option): return False
-    i = RawConfigParser.get(self,section,option)
+    if self.hasno(opt, section): return default
+    return self.strtoval(RawConfigParser.get(self,section,opt))
+
+  def has(self,opt,section=None):
+    if not section: section=self.currentsection
+    if not section: raise configparser.NoSectionError('No Current Section Set')
+    if not self.has_option(section,opt): return False
+    i = RawConfigParser.get(self,section,opt)
     if i == None: return False
     if i =='': return False
-    if i.startswith(r'$') or i.endswith(r'$'): return False
+    if i.startswith(r'_') and i.endswith(r'_'): return False
     return True
 
-  def hasno(self,option,section=None):
-    return not self.has(option,section)
+  def hasno(self,opt,section=None):
+    return not self.has(opt,section)

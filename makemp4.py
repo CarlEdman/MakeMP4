@@ -2,21 +2,30 @@
 # A Python frontend to various audio/video tools to automatically convert to MP4/H264/H265/AAC-LC and tag the results
 
 prog='MakeMP4'
-version='5.0'
+version='6.0'
 author='Carl Edman (CarlEdman@gmail.com)'
 
-import string, re, os, sys, argparse, logging, time, math, shutil, tempfile, json
+import re
+import os
+import sys
+import argparse
+import logging
+import time
+import math
+import shutil
+import tempfile
+import json
+import string
+
 from subprocess import call, check_call, check_output, CalledProcessError, Popen, PIPE, STDOUT, list2cmdline
 from os.path import exists, isfile, isdir, getmtime, getsize, join, basename, splitext, abspath, dirname
 from fractions import Fraction
-from urllib.request import urlopen
-from urllib.parse import urlparse, urlunparse, urlencode
-from urllib.error import HTTPError
+import regex, glob
+
 from AdvConfig import AdvConfig
 from cetools import *
+from updatemp4 import *
 
-import regex
-import json
 import xml.etree.ElementTree as ET
 
 def iso6392BtoT(l):
@@ -31,6 +40,26 @@ def parse_time(s):
   r = regex.RegEx(regex=r'(?P<hrs>\d+):(?P<mins>\d+):(?P<secs>\d+(\.\d*)?)')
   r(text=s)
   return float(r.hrs)*3600.0+float(r.mins)*60.0+float(r.secs)
+
+def semicolon_join(s, t):
+  if not s: return t
+  if not t: return s
+  return ';'.join(sorted(set(s.split(';')) | set(t.split(';'))))
+
+def reglob(pat):
+  '''A replacement for glob.glob which uses regular expressions and sorts numbers up to 10 digits correctly.'''
+  def sortkey(s):
+    s=s.tolower()
+    if s.startswith("the "): s=s[4:]
+    elif s.startswith("a "): s=s[2:]
+    elif s.startswith("an "): s=s[3:]
+    s=re.sub(r'\d+',lambda m: m.group(0).zfill(10),s)
+    return s
+
+  (dir, filepat) = os.path.split(pat)
+  if os.name == 'nt': filepat = r'(?i)' + filepat
+  files = (os.path.join(dir,f) for f in os.listdir(dir) if re.fullmatch(filepat, f))
+  return sorted(files, key=sortkey)
 
 def readytomake(file,*comps):
   for f in comps:
@@ -104,9 +133,6 @@ def make_srt(cfg,track,files):
   cfg.set('language','eng')
   cfg.sync()
   return True
-
-
-
 
 def config_from_base(cfg,base):
   cfg.setsection('MAIN')
@@ -182,7 +208,7 @@ def prepare_tivo(tivofile):
 
 
 def prepare_mpg(mpgfile):
-  base, ext=splitext(basename(mpgfile))
+  base = splitext(basename(mpgfile))[0]
   cfgfile=base+'.cfg'
   if not readytomake(cfgfile,mpgfile): return False
   cfg=AdvConfig(cfgfile)
@@ -201,10 +227,11 @@ def prepare_mpg(mpgfile):
   config_from_dgifile(cfg,dgifile)
 
   r=regex.RegEx()
-  for file in regex.reglob(re.escape(base) +r'\s+T[0-9a-fA-F][0-9a-fA-F]\s+(.*)\.(ac3|dts|mpa|mp2|wav|pcm)'):
-    if not r('^'+re.escape(base)+r'\s+T[0-9a-fA-F][0-9a-fA-F]\s+(.*)\.(ac3|dts|mpa|mp2|wav|pcm)$',file): continue
-    feat=r[0]
-    ext=r[1]
+  for file in glob.iglob(f'{base} *'):
+    m = re.fullmatch(re.escape(base)+r'\s+T[0-9a-fA-F][0-9a-fA-F]\s+(.*)\.(ac3|dts|mpa|mp2|wav|pcm)',file)
+    if not m: continue
+    feat=m.group(1)
+    ext=m.group(2)
     track+=1
     cfg.setsection('TRACK{:02d}'.format(track))
     nf='{} T{:02d}.{}'.format(base,track,ext)
@@ -503,417 +530,9 @@ def prepare_vob(vobfile):
 #  if args.delete_source:
 #    os.remove(vobfile)
 
-
-# TODO: episode images from both files and omdb
-def update_coverart(cfg):
-  cfg.setsection('MAIN')
-  if cfg.has('coverart'): return
-
-  base   = cfg.get('base')
-  show   = cfg.get('show')
-  season = cfg.get('season',-1)
-  episode= cfg.get('episode',-1)
-
-  artregex = ''.join([
-    re.escape(show.strip().translate(str.maketrans('','',r':"/\:*?<>|'))),
-    ' S'+str(season) if season>0 else '',
-    r'(\s+P[\d+])?\.(jpg|jpeg|png)'])
-
-  artfiles = regex.reglob(artregex,args.artdir or None)
-  if artfiles:
-    cfg.set('coverart', ';'.join(artfiles))
-    cfg.sync()
-    return
-
-  artfile = join(args.artdir or '',''.join([show, ' S'+str(season) if season>0 else '', r'.jpg']))
-  if not args.omdbkey: return
-  if exists(artfile): return
-  if cfg.hasno('imdb_id'): return
-  ops = cfg.get('omdb_poster_status', 0)
-  if 200<=ops<300 or 400<=ops<500: return
-
-  q = { 'h':'1000', 'i':cfg.get('imdb_id'), 'apikey': args.omdbkey }
-  u = urlunparse(['http','img.omdbapi.com', '/', '', urlencode(q), ''])
-
-  try:
-    with urlopen(u) as f:
-      cfg.set('omdb_poster_status', f.getcode())
-      p = f.read()
-  except HTTPError as e:
-    cfg.set('omdb_poster_status', e.code)
-    p = None
-
-  cfg.sync()
-  if not p: return
-
-  with open(artfile,'wb') as f: f.write(p)
-  cfg.set('coverart',artfile)
-  cfg.sync()
-
-def update_description_tvshow(cfg,txt):
-  def lfind(l,*ws):
-    for w in ws:
-      if w in l: return l.index(w)
-    return -1
-
-  tl=txt.splitlines()
-  h=[a.strip() for a in tl[0].split('\t')]
-  tl=tl[1:]
-  i=lfind(h,"\xe2\x84\x96",'?','Total','Series number','Nº','No. overall')
-  if i>=0: h[i]='Series Episode'
-  sei=lfind(h,'Series Episode')
-
-  epi=lfind(h,'#','No.','No. in season','No. in Season','Episode number','Ep','Ep.','No. in series','No. in Series')
-  if epi<0: return False # Fix
-  tii=lfind(h,'Title','Episode title','Episode name','Episode Title','Episode Name')
-  dei=lfind(h,'Description')
-  if dei<0:
-    dei=len(h)
-    h.append('Description')
-  i=1
-  while i<len(tl):
-    if '\t' not in tl[i]:
-      tl[i-1]=tl[i-1]+'\t'+tl[i]
-      tl[i]=''
-    i+=1
-  # 'Directed by*','Director'
-  wri=lfind(h,'Written by','Written by:','Writer')
-  dai=lfind(h,'Original Airdate','Original air date','Original airdate','Airdate','Original release date','Release date','Aired on','Recorded on')
-  pci=lfind(h,'Production code','Prod. code','prod. code','Prod.code','PC','Production number')
-
-  r=regex.RegEx()
-  for t in tl:
-    if not t: continue
-    l=t.split('\t')
-    if cfg.has('episode'):
-      if l[epi]!=str(cfg.get('episode')): continue
-    else:
-      if l[epi]!='*': continue
-#    if l[epi].lstrip(' 0')!=str(cfg.get('episode','*')): continue
-    if 0<=tii<len(l) and l[tii] and cfg.hasno('song'):
-      cfg.set('song',l[tii].strip('" '))
-    if 0<=wri<len(l) and l[wri] and cfg.hasno('writer'):
-      cfg.set('writer',re.sub(r'\s*&\s*','; ',l[wri]))
-    if 0<=pci<len(l) and l[pci] and cfg.hasno('episodeid'):
-      cfg.set('episodeid',l[pci].strip())
-    if 0<=dai<len(l) and r(r'\b([12]\d\d\d)\b',l[dai]) and cfg.hasno('year'):
-      cfg.set('year',int(r[0]))
-    if 0<=dei<len(l) and l[dei] and re.fullmatch(r'_.*_',cfg.get('description', '__')):
-      cfg.set('description',l[dei])
-    for i in range(len(l)):
-      if i in [epi,tii,wri,pci,dei]: continue
-      s=l[i].strip()
-      if not s: continue
-      s=(h[i].strip().rstrip(':') if i<len(h) else '')+': '+s
-      cmt = cfg.get('comment','')
-      if s not in cmt: cfg.set('comment',  (cmt+';' if cmt else '')+ s)
-
-  cfg.sync()
-
-
-def update_description_movie(cfg,txt):
-  txt=re.sub(r'(This movie is|Cast|Director|Genres|Availability|Language|Format|Moods)(:|\n| )\s*',r'\n\1: ',txt)
-  r=regex.RegEx(regex=r'^\s*(Rate [12345] stars\s)+|Rate not interested(Clear Rating)?|Not Interested(Clear)?|[0-5]\.[0-9]|Movie Details|Overview\s*Details(\s*Series)?|At Home|In Queue\s*$')
-
-  tl=[l for l in txt.splitlines() if l and not r(text=l)]
-  if r(r'^(.*?)\s*(\((.*)\))?$',tl[0]):
-    tl=tl[1:]
-    if cfg.hasno('title'): cfg.set('title',r[0])
-    if r[2]:
-      alt = 'Alternate Title: ' + r[2]
-      cmt = cfg.get('comment','')
-      if alt not in cmt: cfg.set('comment',  (cmt+';' if cmt else '')+ alt)
-  if r(r'^\s*([12]\d\d\d)\s*(G|PG-13|PG|R|NC-17|UR|NR|TV-14|TV-MA)?\s*( Rated \2)?\s*(\d+\s*(hours|hrs|hr|h)\s*)?((\d+)\s*(minutes|mins|min|m)\s*)?.*$',tl[0]):
-    tl=tl[1:]
-    cfg.set('year',r[0])
-    rat = 'Rating: ' + r[1]
-    cmt = cfg.get('comment','')
-    if rat not in cmt: cfg.set('comment',  (cmt+';' if cmt else '')+ rat)
-#    if not cfg.has('duration'): cfg.add('duration',int(r[2])*60)
-  description = ''
-  for t in tl:
-    if r(r'^Genres?:\s*(.+?)\s*$',t):
-      if cfg.has('genre'): continue
-      description = (description+'  ' if description else '') + 'Genres: ' + r[0] +'.'
-      g=r[0]
-      if r(r'\bMusicals?\b',g): cfg.set('genre','Musical')
-      elif r(r'\bAnimes?\b',g): cfg.set('genre','Anime')
-      elif r(r'\bOperas?\b',g): cfg.set('genre','Opera')
-      elif r(r'\bSci-Fi\b',g): cfg.set('genre','Science Fiction')
-      elif r(r'\bFantasy\b',g): cfg.set('genre','Fantasy')
-      elif r(r'\bHorror\b',g): cfg.set('genre','Horror')
-      elif r(r'\bDocumentar(y|ies)\b',g): cfg.set('genre','Documentary')
-      elif r(r'\bSuperhero\b',g): cfg.set('genre','Superhero')
-      elif r(r'\bWesterns?\b',g): cfg.set('genre','Western')
-      elif r(r'\bClassics?\b',g): cfg.set('genre','Classics')
-      elif r(r'\bComed(y|ies)\b',g): cfg.set('genre','Comedy')
-      elif r(r'\bCrime\b',g): cfg.set('genre','Crime')
-      elif r(r'\bThrillers?\b',g): cfg.set('genre','Thriller')
-      elif r(r'\bRomantic\b',g): cfg.set('genre','Romance')
-      elif r(r'\bAnimation\b',g): cfg.set('genre','Animation')
-      elif r(r'\bCartoons?\b',g): cfg.set('genre','Animation')
-      elif r(r'\bPeriod Pieces?\b',g): cfg.set('genre','History')
-      elif r(r'\bAction\b',g): cfg.set('genre','Action')
-      elif r(r'\bAdventure\b',g): cfg.set('genre','Adventure')
-      elif r(r'\bDramas?\b',g): cfg.set('genre','Drama')
-      else: cfg.set('genre',g)
-    elif r(r'^(Writers?):\s*(.+?)\s*$',t):
-      description = description + '  ' + r[0] + ': ' + r[1] +'.'
-      if cfg.has('writer'): continue
-      cfg.set('writer',val)
-    elif r(r'^(\w+|Our best guess for you|Average of \d+ ratings|This movie is):\s*(.+?)\s*$',t):
-      description = description + '  ' + r[0] + ': ' + r[1] +'.'
-    elif r(r'^(rated )?\d+\.\d+( stars)?$'):
-      pass
-    else:
-      description = '  ' + t + description
-
-  if description and re.fullmatch(r'_.*_',cfg.get('description', '__')):
-    cfg.set('description',description[2:])
-  cfg.sync()
-
-
-def update_description(cfg):
-  cfg.setsection('MAIN')
-  base   = cfg.get('base')
-  show   = cfg.get('show')
-  season = cfg.get('season',-1)
-  episode= cfg.get('episode',-1)
-
-  sshow = ''.join([c for c in show.strip().upper() if c.isalnum()])
-  if cfg.hasno('year'): cfg.set('year', r'_{}YEAR_'.format(sshow))
-  if cfg.hasno('genre'): cfg.set('genre', r'_{}GENRE_'.format(sshow))
-  if cfg.hasno('description'): cfg.set('description', r'_{}DESC_'.format(sshow))
-
-  descfile = ''.join([
-    join(args.descdir or '',show),
-    ' S'+str(season) if season>0 else '',
-    '.txt'])
-
-  if exists(descfile):
-    with open(descfile,'rt', encoding='utf-8-sig', errors='backslashreplace') as fp: txt=fp.read()
-    txt=txt.strip()
-    txt=re.sub(r'Add to Google Calendar','',txt)
-    txt=re.sub(r' *\[(\d+|[a-z])\] *','',txt)
-    txt=re.sub(r'\s+-+\s+',r'—',txt)
-    txt=re.sub(r'\s*%',' percent',txt)
-    if cfg.get('type')=='tvshow': update_description_tvshow(cfg,txt)
-    elif cfg.get('type')=='movie': update_description_movie(cfg,txt)
-    cfg.sync()
-    return
-
-  if cfg.get('omdb_status')!=200:
-    q = { 'plot':'full', 'tomatoes':'true', 'r':'json' }
-    if cfg.has('year'): q['y']=str(cfg.get('year'))
-    if cfg.has('imdb_id'):
-      q['i'] = cfg.get('imdb_id')
-    elif cfg.get('type')=='movie':
-      q['t'] = str(show)
-      q['type'] = 'movie'
-    elif cfg.get('type')=='tvshow':
-      q['t'] = str(show)
-      if episode>0 and season>0:
-        q['type'] = 'episode'
-        q['Season'] = str(season)
-        q['Episode'] = str(episode)
-      else:
-        q['type'] = 'series'
-
-    u = urlunparse(['http','www.omdbapi.com', '/', '', urlencode(q), ''])
-    try:
-      with urlopen(u) as f:
-        cfg.set('omdb_status',f.getcode())
-        j = json.loads(f.read().decode('utf-8'))
-    except HTTPError as e:
-      cfg.set('omdb_status',e.code)
-      j = None
-
-    cfg.sync()
-    if not j: return
-
-    imdb_id = j.get('imdbID',None)
-    imdb_series_id = j.get('seriesID',None)
-    imdb_rating = j.get('imdbRating',None)
-    imdb_votes = j.get('imdbVotes',None)
-
-    if cfg.has('imdb_id') and cfg.get('imdb_id')!=imdb_id:
-      warning('{}: IMDB Id mismatch ("{}" != "{}")'.format(base,imdb_id,v))
-    elif imdb_id:
-      cfg.set('imdb_id',imdb_id)
-
-    if cfg.has('imdb_series_id') and cfg.get('imdb_series_id')!=imdb_series_id:
-      warning('{}: IMDB Series Id mismatch ("{}" != "{}")'.format(base,cfg.get('imdb_series_id'),imdb_series_id))
-    elif imdb_series_id:
-      cfg.set('imdb_series_id',imdb_series_id)
-
-    if imdb_id or imdb_series_id or imdb_rating or imdb_votes:
-      comment = cfg.get('comment')
-      imdb = "IMDB({}{}): {}{}".format(
-        imdb_id or "",
-        "/"+imdb_series_id if imdb_series_id and imdb_series_id!=imdb_id else "",
-        imdb_rating or "--",
-        " from "+imdb_votes+ " votes." if imdb_votes else "")
-      if not comment or comment.find(imdb)<0:
-        cfg.set('comment', (comment+'  ' if comment else '') + imdb)
-
-    comment_trans = {
-      'Country': 'Country: ',
-      'DVD':'DVD Release: ',
-      'Awards':'Awards: ',
-      'BoxOffice':'Boxoffice: ',
-      'Language':'Language: ',
-      'Metascore':'Metascore: ',
-      'Rated':'Rating: ',
-      'Released':'Released on: ',
-      'Runtime':'Runtime: ',
-      'Website':'Web Site: ',
-      'totalSeasons': None
-      }
-
-    genre_trans = [
-      # ('Game-Show','XXX'),
-      # ('News','XXX'),
-      # ('Reality-TV','XXX'),
-      # ('Sport','XXX'),
-      # ('Talk-Show','XXX'),
-      # ('Film-Noir','XXX'),
-      ('Animation','CGI'),
-      ('Musical','Musical'),
-      ('Documentary','Documentary'),
-      ('Romance','Romance'),
-      ('Horror','Horror'),
-      ('Sci-Fi','Science Fiction'),
-      ('Fantasy','Fantasy'),
-      ('Western','Western'),
-      ('Mystery','Mystery'),
-      ('Crime','Crime'),
-      ('Family','Children'),
-      ('Adventure','Adventure'),
-      ('Action','Action'),
-      ('Thriller','Thriller'),
-      ('War','History'),
-      ('History','History'),
-      ('Biography','History'),
-      ('Drama','Drama'),
-      ('Music','Opera'),
-      ('Sitcom','Comedy'),
-      ('Comedy','Comedy')
-      ]
-
-    for k,v in j.items():
-      description = cfg.get('description')
-      comment = cfg.get('comment')
-      if v=='N/A':
-        continue
-      elif k in ['imdbID','seriesID','imdbRating','imdbVotes','Episodes','Poster']:
-        continue
-      elif k.startswith('tomato'):
-# imdb_tomatoConsensus = Spectre nudges Daniel Craig's rebooted Bond closer to the glorious, action-driven spectacle of earlier entries, although it's admittedly reliant on established 007 formula.
-# imdb_tomatoFresh = 188
-# imdb_tomatoImage = fresh
-# imdb_tomatoMeter = 64
-# imdb_tomatoRating = 6.5
-# imdb_tomatoReviews = 293
-# imdb_tomatoRotten = 105
-# imdb_tomatoURL = http://www.rottentomatoes.com/m/spectre_2015/
-# imdb_tomatoUserMeter = 62
-# imdb_tomatoUserRating = 3.5
-# imdb_tomatoUserReviews = 103067"
-        continue
-      elif k=='Response':
-        if v!="True":
-          warning('{}: IMDB Response = "{}" in '.format(base,v))
-      elif k=='Year':
-        year = cfg.get('year')
-        if not year:
-          cfg.set('year',v)
-        elif str(year)!=v:
-          warning('{}: IMDB Year mismatch ("{}" != "{}")'.format(base,year,v))
-      elif k=='Type': # "movie" or "episode"
-        type = cfg.get('type')
-        itype = 'movie' if v=='movie' else 'tvshow'
-        if not type:
-          cfg.set('type', itype)
-        elif str(type)!=itype:
-          warning('{}: IMDB Type mismatch ("{}" != "{}")'.format(base,type,v))
-      elif k=='Episode':
-        episode = cfg.get('episode')
-        if not episode:
-          cfg.set('episode', int(v))
-        elif episode!=int(v):
-          warning('{}: IMDB Episode mismatch ("{}" != "{}")'.format(base,episode,v))
-      elif k=='Season':
-        season = cfg.get('season')
-        if not season:
-          cfg.set('season', int(v))
-        elif season!=int(v):
-          warning('{}: IMDB Season mismatch ("{}" != "{}")'.format(base,season,v))
-      elif k=='Title':
-        if season>=0 and episode>=0:
-          if v=="Episode #{}.{}".format(season,episode):
-            continue
-          song = cfg.get('song')
-          if not song or v.endswith(song):
-            cfg.set('song',v)
-          elif song!=v:
-            warning('{}: IMDB Episode Title mismatch ("{}" != "{}")'.format(base,song,v))
-        elif season<0 and episode<0:
-          if not show or v.endswith(show):
-            cfg.set('show',v)
-          elif show!=v:
-            warning('{}: IMDB Show Title mismatch ("{}" != "{}")'.format(base,show,v))
-      elif k=='Director':
-        director = cfg.get('director')
-        if not director:
-          cfg.set('director',v)
-        elif director!=v:
-          warning('{}: IMDB Director mismatch ("{}" != "{}")'.format(base,director,v))
-      elif k=='Writer':
-        writer = cfg.get('writer')
-        if not writer:
-          cfg.set('writer',v)
-        elif writer!=v:
-          warning('{}: IMDB Writer mismatch ("{}" != "{}")'.format(base,writer,v))
-      elif k=='Production':
-        network = cfg.get('network')
-        if not network:
-          cfg.set('network',v)
-        elif network!=v:
-          warning('{}: IMDB Network mismatch ("{}" != "{}")'.format(base,network,v))
-      elif k=='Plot':
-        plot = re.sub(r'\s+-+\s+',r'—',v)
-        if not description or description.find(plot)<0:
-          cfg.set('description', plot + ('  '+description if description else ''))
-      elif k=='Actors':
-        actors = 'Actors: ' + v + '.'
-        if not description or description.find(actors)<0:
-          cfg.set('description', (description+'  ' if description else '') + actors)
-      elif k=='Genre':
-        genre = cfg.get('genre')
-        igenre = None
-        for f,t in genre_trans:
-          if v.find(f)<0: continue
-          igenre = t
-          break
-        if not igenre:
-          continue
-        elif not genre:
-          cfg.set('genre',igenre)
-        elif genre!=igenre:
-          warning('{}: IMDB Genre mismatch ("{}" != "{}")'.format(base,genre,v))
-      elif k in comment_trans:
-        if not comment_trans[k]: continue
-        t = comment_trans[k] + v + '' if v[-1]=='.' else '.'
-        if not comment or comment.find(t)<0:
-          cfg.set('comment', (comment+'  ' if comment else '') + t)
-      elif k=='Ratings':
-        for r in v:
-          t = r['Source'] + ' Rating: ' + r['Value'] + '.'
-          if not comment or comment.find(t)<0:
-            cfg.set('comment', (comment+'  ' if comment else '') + t)
-      else:
-        warning('{}: Unrecognized IMDB "{}" = "{}"'.format(base,k,v))
-  cfg.sync()
+def make_filename(s):
+  trans = str.maketrans('','',r':"/\:*?<>|'+r"'")
+  return s.translate(trans)
 
 def config_from_dgifile(cfg):
   file = cfg.get('file', None)
@@ -922,7 +541,7 @@ def config_from_dgifile(cfg):
   logfile = splitext(file)[0]+'.log'
   r=regex.RegEx()
 
-  t = str.maketrans(string.ascii_uppercase,string.ascii_lowercase,string.whitespace)
+  trans = str.maketrans(string.ascii_uppercase,string.ascii_lowercase,string.whitespace)
   while True:
     time.sleep(1)
     if not (exists (logfile)): continue
@@ -931,10 +550,10 @@ def config_from_dgifile(cfg):
       if not r('^([^:]*):(.*)$',l):
         warning('Unrecognized DGIndex log line: "' + repr(l) + '"')
         continue
-      k='dg'+r[0].translate(t)
+      k='dg'+r[0].translate(trans)
       v=r[1].strip()
       if not v: continue
-      cfg.set(k, cfg.get(k) + "; " + v if cfg.has(k) else v)
+      cfg.set(k, cfg.get(k) + ";" + v if cfg.has(k) else v)
     if cfg.get('dginfo')=='Finished!': break
   os.remove(logfile)
   cfg.sync()
@@ -1221,7 +840,7 @@ def build_video(cfg):
     elif cfg.get('out_format') == 'h265':
       outext = '265'
     else:
-      error('{}: Unrecognized output format:'.format(file, cfg.get('out_format', 'UNSPECIFIED')))
+      error('{}: Unrecognized output format:'.format(infile, cfg.get('out_format', 'UNSPECIFIED')))
       return False
     outfile = baseout + '.' + outext
     cfg.set('out_file',outfile)
@@ -1364,6 +983,9 @@ def build_result(cfg):
   for track in sorted([t for t in cfg.sections() if t.startswith('TRACK') and not cfg.get('disable',section=t)]):
     cfg.setsection(track)
     if cfg.get('type')=='audio' and cfg.has('language') and cfg.has('audio_languages',section='MAIN') and cfg.get('language') not in cfg.get('audio_languages',section='MAIN').split(";"): continue
+    if cfg.get('type')=='video' and cfg.has('macroblocks'):
+      cfg.set('hdvideo', cfg.has('macroblocks') >= 3600, section='MAIN')
+
     file=cfg.get('file')
     outfile=cfg.get('out_file',None)
     if not outfile: return False
@@ -1373,40 +995,47 @@ def build_result(cfg):
   cfg.setsection('MAIN')
   base=cfg.get('base')
 
-  outfile=''
   if cfg.get('type')=='movie':
-    if cfg.has('show') and not cfg.get('suppress_show',False):
-      outfile=str(alphabetize(cfg.get('show'))) + ' '
-    if cfg.has('episode'): outfile+= '- pt{:d} '.format(cfg.get('episode'))
-    if cfg.has('year'): outfile+='({:04d}) '.format(cfg.get('year'))
-    if cfg.has('song'): outfile+='{} '.format(str(cfg.get('song')))
+    show = cfg.get('show','__')
+    show = alphabetize(show) if isinstance(show, str) else None
+    episode = cfg.get('episode','__')
+    episode = f'- pt{episode:d}' if isinstance(episode, int) else None
+    year = cfg.get('year','__')
+    year = f'({year:04d})' if isinstance(year, int) else None
+    song = cfg.get('song')
+    song = alphabetize(song) if isinstance(song, str) else None
+    outfile=make_filename(' '.join(i for i in [show, episode, year, song] if i))+".mp4"
   elif cfg.get('type')=='tvshow':
-    if cfg.has('show') and not cfg.get('suppress_show',False):
-      outfile=str(cfg.get('show')) + ' '
-      if outfile.startswith('The '): outfile = outfile[4:]
-      elif outfile.startswith('A '): outfile = outfile[2:]
-      elif outfile.startswith('An '): outfile = outfile[3:]
-    if cfg.has('season') and cfg.has('episode'):
-      outfile+='S{:d}E{:02d} '.format(cfg.get('season'),cfg.get('episode'))
-    elif cfg.has('season'):
-      outfile+='S{:d} '.format(cfg.get('season'))
-    elif cfg.has('episode'):
-      outfile+='S1E{:02d} '.format(cfg.get('episode'))
-    if cfg.has('song'): outfile+="{} ".format(str(cfg.get('song')))
+    show = cfg.get('show','__')
+    show = alphabetize(show) if isinstance(show, str) else None
+    season = cfg.get('season','__')
+    episode = cfg.get('episode','__')
+    if isinstance(season, int) and isinstance(episode, int):
+      seaepi = 'S{:d}E{:02d}'.format(season,episode)
+    elif isinstance(season, int):
+      seaepi = 'S{:d}'.format(season)
+    elif isinstance(episode, int):
+      seaepi = 'S1E{:02d}'.format(episode)
+    else:
+      seapi = None
+    song = cfg.get('song','__')
+    song = alphabetize(song) if isinstance(song, str) else None
+    outfile = make_filename(' '.join(i for i in [show, seaepi, song] if i))+".mp4"
   else:
     warning('Unrecognized type for "{}"'.format(base))
-    outfile=cfg.get('base')
-  outfile=outfile.strip().translate(str.maketrans('','',r':"/\:*?<>|'+r"'"))+'.mp4'
-  if args.outdir: outfile=join(args.outdir,outfile)
+    outfile=make_filename(cfg.get('base'))+".mp4"
+
+  if args.outdir: outfile=os.path.join(args.outdir,outfile)
 
   infiles=[cfg.filename]
   coverfiles=[]
   if cfg.has('coverart'):
     for c in cfg.get('coverart','').split(';'):
+      if os.path.dirname(c)==None and args.artdir:
+        c = os.path.join(args.artdir,c)
       if exists(c):
         coverfiles.append(c)
-      elif args.artdir and exists(join(args.artdir,c)):
-        coverfiles.append(join(args.artdir,c))
+      cfg.set('coverart',';'.join(coverfiles))
   infiles+=coverfiles
 
   call=['mp4box', '-new', outfile]
@@ -1449,85 +1078,15 @@ def build_result(cfg):
   if vts+ats+sts>18:
     warning('Result for "{}" has {:d} tracks.'.format(base,tracks))
 
+  cfg.setsection('MAIN')
+  cfg.set('tool', prog + ' ' + version + ' on ' + time.strftime('%A, %B %d, %Y, at %X'))
+  cfg.sync()
   do_call(call,outfile)
 
-  cfg.setsection('MAIN')
-  call=['-tool', prog + ' ' + version + ' on ' + time.strftime('%A, %B %d, %Y, at %X')]
-  if cfg.has('type'):
-    call += [ '-type' , cfg.get('type') ]
-  else:
-    warning('"'+outfile+'" has no type')
-
-  if cfg.has('genre'):
-    call += [ '-genre' , cfg.get('genre') ]
-  else:
-    warning('"'+outfile+'" has no genre')
-
-  if cfg.has('year'):
-    call += [ '-year' , cfg.get('year') ]
-  else:
-    warning('"'+outfile+'" has no year')
-
-  if cfg.has('season'): call += [ '-season' , cfg.get('season') ]
-  if cfg.has('episode'): call += [ '-episode' , cfg.get('episode') ]
-  if cfg.has('episodeid'): call += [ '-episodeid' , cfg.get('episodeid') ]
-  if cfg.has('artist'): call += [ '-artist' , cfg.get('artist') ]
-  if cfg.has('writer'): call += [ '-writer' , cfg.get('writer') ]
-  if cfg.has('network'): call += [ '-network' , cfg.get('network') ]
-#  if cfg.has('rating'): call += [ '-rating' , cfg.get('rating') ]
-  if cfg.has('macroblocks',section='TRACK01'): call += [ '-hdvideo' , '1' if cfg.get('macroblocks',section='TRACK01')>=3600 else '0']
-  if cfg.has('title'): call += [ '-show' , str(cfg.get('title'))]
-  elif cfg.has('show'): call += [ '-show' , str(cfg.get('show'))]
-
-  song=None
-  if cfg.get('type')=='movie':
-    if cfg.has('title') and cfg.has('song'): song = str(cfg.get('title')) + ": " + str(cfg.get('song'))
-    elif cfg.has('title'): song = str(cfg.get('title'))
-    elif cfg.has('song'): song = str(cfg.get('song'))
-  elif cfg.has('song'): song = str(cfg.get('song'))
-  if song: call+=['-song', song]
-
+  its = { k:cfg.get(k) for k in cfg.items() }
+  set_meta_mutagen(outfile, its)
+  set_chapters_cmd(outfile, its)
   cfg.sync()
-  if cfg.has('description'):
-#   TODO: Deal with quotes/special characters
-    desc=cfg.get('description')
-    if len(desc)>255:
-      call += [ '-desc', desc[:255], '-longdesc', desc ]
-    elif len(desc)>0:
-      call += [ '-desc' , desc ]
-  else:
-    warning('"'+outfile+'" has no description')
-
-  if cfg.has('comment'): call += [ '-comment' , cfg.get('comment') ]
-  if call: do_call(['mp4tags'] + call + [outfile],outfile)
-
-  debug('Adding chapters to "{}"'.format(outfile))
-  chapterfile=splitext(outfile)[0]+'.chapters.txt'
-  if exists(chapterfile) and getsize(chapterfile)!=0:
-    warning('Adding chapters from existing config file "' + chapterfile + '"')
-    do_call(['mp4chaps', '--import', outfile],outfile)
-  elif cfg.has('chapter_time') and cfg.has('chapter_name'):
-    delay=cfg.get('chapter_delay',0.0)
-    elong=cfg.get('chapter_elongation',1.0)
-    c=cfg.get('chapter_time')
-    cts=[float(i) for i in c.split(';')] if isinstance(c,str) else [c]
-    c=cfg.get('chapter_name')
-    cns=[i.strip() for i in c.split(';')] if isinstance(c,str) else [c]
-    with open(chapterfile,'wt', encoding='utf-8', errors='replace') as f:
-      for (ct,cn) in zip(cts,cns):
-        (neg,hours,mins,secs,msecs)=secsToParts(ct*elong+delay)
-        f.write('{}{:02d}:{:02d}:{:02d}.{:03d} {} ({:d}m {:d}s)\n'.format(neg,hours,mins,secs,msecs,cn,(-1 if neg else 1)*hours*60+mins,secs))
-    do_call(['mp4chaps', '--import', outfile],outfile)
-    os.remove(chapterfile)
-  cfg.sync()
-
-  for i in coverfiles:
-    debug('Adding coverart for "{}": "{}"'.format(outfile, i))
-    do_call(['mp4art', '--add', i, outfile], outfile)
-  if not(coverfiles):
-      warning('"'+outfile+'" has no cover art')
-
-  #do_call(['mp4file', '--optimize', outfile])
   return True
 
 def main():
@@ -1549,14 +1108,46 @@ def main():
       else:
         warning('Source file type not recognized "' + join(d,f) + '"')
 
-  for f in regex.reglob(r'.*\.cfg'):
+  for f in glob.iglob('*.cfg'):
     cfg = AdvConfig(f)
     if not cfg: continue
-    update_description(cfg)
-    update_coverart(cfg)
+    cfg.setsection("MAIN")
+
+
+    if not (title := cfg.get('title',cfg.get('show', None))): title = cfg.get('base')
+    if not isinstance(season := cfg.get('season'), int): season = None
+    if not isinstance(episode := cfg.get('episode'), int): episode = None
+
+    fn = f'{cfg.get("show", "")}{" S"+str(season) if season else ""}'
+
+    descpath = os.path.join(args.descdir, f'{fn}.txt')
+    its = get_meta_local(title, season, episode, descpath)
+    if 'comment' in its:
+      cfg.set('comment',semicolon_join(cfg.get('comment',None), its['comment']))
+      del its['comment']
+    cfg.item_defs(its)
+
+    artpath = os.path.join(args.artdir, f'{fn}.jpg')
+    its = get_meta_omdb(title, season, episode,artpath,
+      cfg.get('omdb_id'), cfg.get('omdb_status'), args.omdbkey)
+    if 'comment' in its:
+      cfg.set('comment',semicolon_join(cfg.get('comment',None), its['comment']))
+      del its['comment']
+    cfg.item_defs(its)
+
+    artpath = os.path.join(args.artdir, f'{fn}*')
+    ubase = ''.join([c for c in fn.strip().upper() if c.isalnum()])
+    coverfiles = (i for i in glob.iglob(artpath) if splitext(i)[1].lower() in { '.jpg', '.jpeg', '.png'} )
+    its = { 'year': f'_{ubase}YEAR_'
+          , 'genre': f'_{ubase}GENRE_'
+          , 'description': f'_{ubase}DESC_'
+          , 'coverart': ';'.join(coverfiles) }
+    cfg.item_defs(its)
+
+    cfg.sync()
     build_result(cfg)
 
-  for f in regex.reglob(r'.*\.cfg'):
+  for f in glob.iglob('*.cfg'):
     cfg = AdvConfig(f)
     if not cfg: continue
     for track in sorted([t for t in cfg.sections() if t.startswith('TRACK')]):
@@ -1565,7 +1156,7 @@ def main():
       if cfg.get('disable',False): continue
       build_indices(cfg)
 
-  for f in regex.reglob(r'.*\.cfg'):
+  for f in glob.iglob('*.cfg'):
     cfg = AdvConfig(f)
     if not cfg: continue
     for track in sorted([t for t in cfg.sections() if t.startswith('TRACK')]):
@@ -1574,7 +1165,7 @@ def main():
       if cfg.get('disable',False): continue
       build_subtitle(cfg)
 
-  for f in regex.reglob(r'.*\.cfg'):
+  for f in glob.iglob('*.cfg'):
     cfg = AdvConfig(f)
     if not cfg: continue
     for track in sorted([t for t in cfg.sections() if t.startswith('TRACK')]):
@@ -1584,7 +1175,7 @@ def main():
       if cfg.has('language') and cfg.has('audio_languages',section='MAIN') and cfg.get('language') not in cfg.get('audio_languages',section='MAIN').split(";"): continue
       build_audio(cfg)
 
-  for f in regex.reglob(r'.*\.cfg'):
+  for f in glob.iglob('*.cfg'):
     cfg = AdvConfig(f)
     if not cfg: continue
     for track in sorted([t for t in cfg.sections() if t.startswith('TRACK')]):
