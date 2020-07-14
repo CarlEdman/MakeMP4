@@ -1,6 +1,5 @@
 #!/usr/bin/python
-# -*- coding: latin-1 -*-
-# Version: 0.1
+# Version: 0.2
 # Author: Carl Edman (email full name as one word at gmail.com)
 
 prog='UpdateMP4'
@@ -386,7 +385,7 @@ def get_meta_omdb(title, season, episode, artpath,
 def set_meta_mutagen(outfile, its):
   try:
     mutmp4 = MP4(outfile)
-  except MutagenError:
+  except mutagen.MutagenError:
     error(f'Opening "{outfile}" metadata with mutagen failed.')
 
   if mutmp4.tags is None: mutmp4.add_tags()
@@ -457,7 +456,7 @@ def set_meta_mutagen(outfile, its):
 
   try:
     mutmp4.save()
-  except MutagenError:
+  except mutagen.MutagenError:
     error(f'Saving "{outfile}" metadata with mutagen failed.')
 
 @export

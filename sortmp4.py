@@ -1,90 +1,143 @@
 #!/usr/bin/python
-# -*- coding: latin-1 -*-
 
 prog='SortMP4'
-version='0.3'
+version='0.5'
 author='Carl Edman (CarlEdman@gmail.com)'
 
-import shutil, os, os.path, argparse, logging, subprocess
+import shutil, os, os.path, argparse, logging, subprocess, glob, re
 from cetools import *
-from regex import *
+
+import mutagen
+from mutagen.mp4    import MP4, MP4Cover, MP4Tags, MP4Chapters
+
+def optAndMove(oname,dir,nname=None):
+  if nname==None: nname=oname
+  npath = os.path.join(dir,nname)
+
+  info(f'Optimizing and moving {oname} to {npath}')
+  if args.dryrun: return
+
+  if not os.path.exists(dir): os.mkdir(dir)
+  if os.path.exists(npath):
+    warning(f'{nname} already in {dir}, skipping.')
+    return
+
+  try:
+    cp = subprocess.run(['mp4file', '--optimize', f], check=True, capture_output=True)
+  except subprocess.CalledProcessError as cpe:
+    error(f'Error code for {cpe.cmd}: {cpe.returncode} : {cpe.stdout} : {cpe.stderr}')
+
+  info(f"Moving {oname} to {npath}")
+  try:
+    shutil.move(f,npath)
+  except:
+    os.remove(npath)
+    raise
 
 parser = argparse.ArgumentParser(description='Sort mp4s from current directory to target subdirectories',fromfile_prefix_chars='@',prog=prog,epilog='Written by: '+author)
 parser.add_argument('-v','--verbose',dest='loglevel',action='store_const', const=logging.INFO)
 parser.add_argument('-d','--debug',dest='loglevel',action='store_const', const=logging.DEBUG)
+
 parser.set_defaults(loglevel=logging.WARN)
+parser.add_argument('--dryrun', action='store_true', default=False, help='only print moves, but do not execute them.')
 parser.add_argument('--version', action='version', version='%(prog)s '+version)
 parser.add_argument('--target', action='store', default= 'Y:\\')
+parser.add_argument('files', nargs='*', metavar='FILES', help='files to sort')
 args = parser.parse_args()
+
+if not args.files: args.files = ['*.mp4', '*.m4r', '*.m4b']
+infiles = []
+for f in args.files: infiles.extend(glob.glob(f))
+if not infiles: error(f'No input files.')
+
+if args.dryrun and args.loglevel < logging.INFO: args.loglevel = logging.INFO
+
 logging.basicConfig(level=args.loglevel,format='%(asctime)s [%(levelname)s]: %(message)s')
 
-def optAndMove(oname,dir,nname=None):
-  if nname==None:
-    nname=oname
-  if not os.path.exists(dir):
-    os.mkdir(dir)
-  if os.path.exists(os.path.join(dir,nname)):
-    warning('{} already in {}, skipping.'.format(nname,dir))
-    return
-  subprocess.check_call(['mp4file', '--optimize', f])
-  info("Moving {} to {}".format(oname,os.path.join(dir,nname)))
+for f in infiles:
   try:
-    shutil.move(f,os.path.join(dir,nname))
-  except:
-    os.remove(os.path.join(dir,nname))
-    raise
-
-for f in reglob(r'.*\.(mp4|m4r|m4b)'):
-  ifo=subprocess.check_output(['mp4info',f]).decode(errors='replace')
-  if not rser(r'^(?m)\s*Media Type:\s*(.*)$',ifo):
-    warning('No Media Type in {}, skipping.'.format(f))
-    continue
-  type=rget(0).strip()
-  if not rser(r'^(?m)\s*Genre:\s*(.*)$',ifo):
-    warning('No Genre in {}, skipping.'.format(f))
-    continue
-  genre=rget(0).strip()
-  if not rser(r'^(?m)\s*(Short|Long) Description:\s*(.*)$',ifo):
-    warning('No Description in {}, skipping.'.format(f))
-    continue
-  if not rser(r'^(?m)\s*Cover Art pieces:\s*(.*)$',ifo):
-    warning('No Cover Art in {}, skipping.'.format(f))
+    mutmp4 = MP4(f)
+  except mutagen.MutagenError:
+    warning(f'Opening "{f}" metadata with mutagen failed, skipping.')
     continue
 
+  tags = mutmp4.tags
 
-  if type=='TV Show':
-    if not rser(r'(?m)^\s*TV Show:\s*(.*)$',ifo):
-      warning('No tv show "{}" in {}.'.format(f))
-      continue
+  if tags is None:
+    warning(f'Metadata of "{f}" is empty, skipping.')
+    continue
 
-    showdir = rget(0).strip().translate(str.maketrans('','',r':"/\:*?<>|'))
-    showdir = alphabetize(showdir)
-    optAndMove(f,os.path.join(args.target,'TV',showdir))
-  elif type=='Movie':
-    if not os.path.isdir(os.path.join(args.target,'Movies',genre)):
-      warning('Genre "{}" in {} not recognized, skipping.'.format(genre,f))
-      continue
-    if rser(r'^(.*\(\d+\))\s*(.*)(\.\w+)$',f):
-      main=alphabetize(rget(0).strip().translate(str.maketrans('','',r':"/\:*?<>|')))
-      sub=rget(1).strip().translate(str.maketrans('','',r':"/\:*?<>|'))
-      ext=rget(2)
-      if sub=="" or sub.startswith('- pt'):
-        nname=None
-      elif sub.find('Interview')>=0:
-        nname=sub+"-interview"+ext
-      elif sub.find('Deleted Scene')>=0 or sub.find('Alternate Scene')>=0 or sub.find('Extended Scene')>=0:
-        nname=sub+"-deleted"+ext
-      elif sub.find('Scene')>=0:
-        nname=sub+"-scene"+ext
-      elif sub.startswith('Trailer'):
-        nname=sub+"-trailer"+ext
-      else:
-        nname=sub+"-behindthescenes"+ext
-    optAndMove(f,os.path.join(args.target,'Movies',genre,main),nname)
-  elif type=='Audio Book':
-    optAndMove(f,os.path.join(args.target,'Books'))
-  elif type=='Ringtone':
-    optAndMove(f,os.path.join(args.target,'Music','Ringtones'))
+  if 'stik' in tags and tags['stik']:
+    stik = tags['stik'][0]
   else:
-    warning('Media Type "{}" in {} not recognized, skipping.'.format(type,f))
+    warning(f'No Media Type in {f}, skipping.')
+    continue
+
+  if '©gen' in tags and tags['©gen']:
+    genre = tags['©gen'][0]
+  else:
+    warning(f'No Genre in {f}, skipping.')
+    continue
+
+  if '©day' in tags and tags['©day']:
+    year = tags['©day'][0]
+  else:
+    warning(f'No Year in {f}, skipping.')
+    continue
+
+  if 'desc' in tags and tags['desc']:
+    pass
+  else:
+    warning(f'No Description in {f}, skipping.')
+    continue
+
+  if '©nam' in tags and tags['©nam']:
+    name = tags['©nam'][0]
+  else:
+    warning(f'No Name in {f}, skipping.')
+    continue
+
+  if 'covr' in tags and tags['covr']:
+    pass
+  else:
+    warning(f'No Cover Art in {f}, skipping.')
+    continue
+
+  if stik in { 6, 10 }:
+    if 'tvsh' in tags and tags['tvsh']:
+      tvsh = tags['tvsh'][0].strip()
+    else:
+      warning(f'No tv show title in {f}.')
+      continue
+
+    optAndMove(f,os.path.join(args.target,'TV',sanitize_filename(alphabetize(tvsh))))
+  elif stik in { 0, 9 }:
+    if not os.path.isdir(os.path.join(args.target,'Movies',genre)):
+      warning(f'Genre "{genre}" in {f} not recognized, skipping.')
+      continue
+
+    if ':' in name:
+      (main, sub) = name.rsplit(':', 2)
+      sub = sub.strip()
+      if 'interview' in sub.casefold():
+        suffix = '-interview'
+      elif 'scene' in sub.casefold():
+        suffix = '-deleted'
+      elif 'trailer' in sub.casefold():
+        suffix = '-trailer'
+      else:
+        suffix = '-behindthescenes'
+      ndir  = sanitize_filename(alphabetize(f'{main} ({year})'))
+      nname = sanitize_filename(alphabetize(f'{sub}{suffix}.mp4'))
+      optAndMove(f, os.path.join(args.target, 'Movies', genre, ndir), nname)
+    else:
+      ndir  = sanitize_filename(alphabetize(f'{name} ({year})'))
+      nname = ndir + ".mp4"
+      optAndMove(f, os.path.join(args.target, 'Movies', genre, ndir), nname)
+  elif stik in { 2 }:
+    optAndMove(f, os.path.join(args.target,'Audiobooks'))
+  elif stik in { 14 }:
+    optAndMove(f, os.path.join(args.target,'Music','Ringtones'))
+  else:
+    warning(f'Media Type "{stik}" in {f} not recognized, skipping.')
     continue

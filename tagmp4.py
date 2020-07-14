@@ -1,5 +1,4 @@
 #!/usr/bin/python
-# -*- coding: latin-1 -*-
 
 prog='TagMP4'
 version='0.1'
@@ -23,7 +22,7 @@ def update_description_tvshow(cfg,txt):
   i=lfind(h,"\xe2\x84\x96")
   if i<0: i=lfind('?')
   if i>=0: h[i]='Series Episode'
-  
+
   epi=lfind(h,'#')
   if epi<0: return False # Fix
   sei=lfind(h,'Series Episode')
@@ -40,7 +39,7 @@ def update_description_tvshow(cfg,txt):
   wri=lfind(h,'Written by','Writer')
   dai=lfind(h,'Original Airdate','Original air date','Original airdate','Airdate')
   pci=lfind(h,'Production code','Prod. code')
-  
+
   for t in tl:
     if not t: continue
     l=t.split('\t')

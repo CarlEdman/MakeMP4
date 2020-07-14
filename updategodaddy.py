@@ -1,5 +1,4 @@
 #!/usr/bin/python
-# -*- coding: latin-1 -*-
 
 prog='UpdateGoDaddy'
 version='0.1'

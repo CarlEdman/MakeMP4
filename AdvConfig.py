@@ -69,7 +69,7 @@ class AdvConfig(RawConfigParser):
   @staticmethod
   def strtoval(s):
     if len(s)>1 and s[0]==s[-1]=='_': return None
-    if len(s)>1 and s[0]==s[-1]=='"': s = s[1:-1]
+    if len(s)>1 and s[0]==s[-1]=='"': return s[1:-1]
 #    if s.find(';')>=0: return [self.strtoval(i) for i in s.split(';')]
     if s.lstrip('-').strip('0123456789')=='': return int(s)
     if s.lstrip('-').strip('0123456789')=='.': return float(s)
@@ -114,11 +114,11 @@ class AdvConfig(RawConfigParser):
       debug(f'{section} {opt}: => {nval}{type(nval)}')
       self.set(opt, nval, section=section)
 
-  def get(self,opt,default=None,section=None):
+  def get(self, opt, default=None, section=None):
     if not section: section=self.currentsection
     if not section: raise configparser.NoSectionError('No Current Section Set')
     if self.hasno(opt, section): return default
-    return self.strtoval(RawConfigParser.get(self,section,opt))
+    return self.strtoval(RawConfigParser.get(self, section, opt))
 
   def has(self,opt,section=None):
     if not section: section=self.currentsection

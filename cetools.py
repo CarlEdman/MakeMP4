@@ -11,6 +11,10 @@ def export(func):
   func.__globals__['__all__'].append(func.__name__)
   return func
 
+def sanitize_filename(s):
+  trans = str.maketrans('','',r':"/\:*?<>|'+r"'")
+  return s.translate(trans)
+
 def debug(*args):
   logging.getLogger(loggername).debug(*args)
 
@@ -56,7 +60,7 @@ class TitleHandler(logging.Handler):
 
         if os.name != 'nt': return
         import ctypes
-        ctypes.windll.kernel32.SetConsoleTitleA(self.format(record).encode())
+        ctypes.windll.kernel32.SetConsoleTitleA(self.format(record).encode(encoding='cp1252', errors='ignore'))
 
 def startlogging(logfile,loglevel,loginterval=None):
   logger = logging.getLogger(loggername)

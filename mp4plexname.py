@@ -1,5 +1,4 @@
 #!/usr/bin/python
-# -*- coding: latin-1 -*-
 # Version: 0.1
 # Author: Carl Edman (email full name as one word at gmail.com)
 

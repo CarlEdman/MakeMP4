@@ -1,5 +1,4 @@
 #!/usr/bin/python
-# -*- coding: latin-1 -*-
 # Version: 2.0
 
 import logging, re, shlex, os, os.path, argparse, sys, subprocess

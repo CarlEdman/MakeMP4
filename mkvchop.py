@@ -1,5 +1,4 @@
 #!/usr/bin/python
-# -*- coding: latin-1 -*-
 # Author: Carl Edman (email full name as one word at gmail.com)
 
 prog='MakeM4B'
@@ -67,7 +66,7 @@ for tf,ff in zip(reglob(r'Temp-\d{6}\.mkv'),(args.outfiles.format(i) for i in ra
 		elif rser('^CHAPTER(\d+)NAME=(.*)$',l):
 			chapnames.append(rget(1))
 	chapchange=False
-	
+
 	if len(chaptimes)>=2 and chaptimes[1]-chaptimes[0]<1.0:
 		chaptimes[1]=chaptimes[0]
 		chaptimes=chaptimes[1:]
@@ -85,7 +84,7 @@ for tf,ff in zip(reglob(r'Temp-\d{6}\.mkv'),(args.outfiles.format(i) for i in ra
 			for no,cn,ct in zip(range(1000),chapnames,chaptimes):
 				cf.write('CHAPTER{:02d}={:02d}:{:02d}:{:02d}.{:03d}\n'.format(no,int(ct/3600),int(ct/60)%60,int(ct)%60,int(ct*1000)%1000))
 				cf.write('CHAPTER{:02d}NAME={}\n'.format(no,cn))
-		
+
 		debug(subprocess.check_output(['mkvmerge','--output', ff, '--chapters', chapfile, '--no-chapters', tf]))
 		os.remove(tf+'.chap.txt')
 		os.remove(tf)
