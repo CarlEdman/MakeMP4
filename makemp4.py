@@ -21,6 +21,7 @@ import glob
 import subprocess
 from fractions import Fraction
 
+import regex
 from AdvConfig import AdvConfig
 
 from cetools import *

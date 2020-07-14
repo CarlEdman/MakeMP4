@@ -174,7 +174,7 @@ def unparse_time(t):
 
 def semicolon_join(s, t):
   if not isinstance(s, str): return t
-  if not isinstance(t, str):: return s
+  if not isinstance(t, str): return s
   return ';'.join(sorted(set(s.split(';')) | set(t.split(';'))))
 
 worklock='.working'
