@@ -1,7 +1,12 @@
 #!/usr/bin/python
 # Various utility functions
 
-import os, os.path, time, re, logging, logging.handlers
+import os
+import os.path
+import time
+import re
+import logging
+import logging.handlers
 
 loggername = 'DEFAULT'
 
@@ -10,10 +15,6 @@ def export(func):
     func.__globals__['__all__'] = []
   func.__globals__['__all__'].append(func.__name__)
   return func
-
-def sanitize_filename(s):
-  trans = str.maketrans('','',r':"/\:*?<>|'+r"'")
-  return s.translate(trans)
 
 def debug(*args):
   logging.getLogger(loggername).debug(*args)
@@ -139,8 +140,42 @@ def alphabetize(s):
 
   if s.endswith("."):
     s=s[:-1]
-
   return s
+
+def sortkey(s):
+  '''A sorting key for strings that alphabetizes and orders numbers correctly.'''
+  s = alphabetize(s)
+  # TODO: Sort Roman Numerals Correctly?
+  # TODO: Sort Spelled-out numerals correctly?
+  s=re.sub(r'\d+',lambda m: m[0].zfill(10),s)
+  return s.casefold()
+
+def reglob(pat):
+  '''A replacement for glob.glob which uses regular expressions and sorts numbers up to 10 digits correctly.'''
+  (dir, filepat) = os.path.split(pat)
+  if os.name == 'nt': filepat = r'(?i)' + filepat
+  files = (os.path.join(dir,f) for f in os.listdir(dir) if re.fullmatch(filepat, f))
+  return sorted(files, key=sortkey)
+
+def sanitize_filename(s):
+  trans = str.maketrans('','',r':"/\:*?<>|'+r"'")
+  return s.translate(trans)
+
+def parse_time(s):
+  m = re.fullmatch(r'(?=(?P<hrs>\d+):)?(?=(?P<mins>\d+):)?(?P<secs>\d+(\.\d*)?)', s)
+  if not m: return m
+  t =         float(m['secs'])
+  t +=   60.0*float(m['mins']) if 'mins' in m else 0
+  t += 3600.0*float(m['hrs']) if 'hrs' in m else 0
+  return t
+
+def unparse_time(t):
+  return f'{int(t/3600.0):02d}:{int(t/60.0)%60:02d}:{int(t)%60:02d}:{int(t*1000.0)%1000:03d}'
+
+def semicolon_join(s, t):
+  if not isinstance(s, str): return t
+  if not isinstance(t, str):: return s
+  return ';'.join(sorted(set(s.split(';')) | set(t.split(';'))))
 
 worklock='.working'
 def work_lock(file):

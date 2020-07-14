@@ -52,7 +52,7 @@ class RegEx:
     if not self.match:
       raise KeyError('No valid match')
     if isinstance(key,int):
-      return self.match.group(key+1)
+      return self.match[key+1]
     elif isinstance(key,str):
       return self.match.groupdict()[key]
     else:
@@ -63,21 +63,3 @@ class RegEx:
 #
 #  def __delitem__(self, key):
 #    raise TypeError('Cannot delete groups')
-
-rmat=None
-def rser(p,s):
-  global rmat
-  m = re.search(p,s)
-  if m:
-    rmat=m.groups()
-    return True
-  else:
-    rmat=None
-    return False
-def rget(n=None):
-  global rmat
-  return rmat if n==None else rmat[n]
-
-def reglob(pat,dir=None):
-  '''A replacement for glob.glob which uses regular expressions and sorts numbers up to 10 digits correctly.'''
-  return sorted([os.path.join(dir,f) if dir else f for f in os.listdir(dir if dir else os.getcwd()) if re.search(r'^' + pat + r'$',f,flags=re.IGNORECASE if os.name == 'nt' else 0)],key=(lambda s:re.sub(r'\d+',lambda m: m.group(0).zfill(10),s)))

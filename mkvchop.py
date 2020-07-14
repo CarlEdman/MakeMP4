@@ -5,10 +5,16 @@ prog='MakeM4B'
 version='2.3'
 author='Carl Edman (CarlEdman@gmail.com)'
 
-import logging, re, os, argparse, subprocess, math, sys
-from os.path import exists, isfile, getmtime, getsize, join, basename, splitext, abspath, dirname
+import logging
+import re
+import os
+import argparse
+import subprocess
+import math
+import sys
+import os.path
+
 from cetools import *
-from regex import *
 
 parser = argparse.ArgumentParser(description='Chop an mkv file into subfiles at timecodes or chapters.')
 parser.add_argument('--version', action='version', version='%(prog)s '+version)
@@ -21,72 +27,66 @@ args = parser.parse_args()
 
 chaps=dict()
 for l in subprocess.check_output(['mkvextract', 'chapters', '--simple', args.infile], universal_newlines = True).splitlines():
-	if rser('^CHAPTER(\d+)=(\d+):(\d+):(\d+\.?\d*)$',l):
-		chaps[int(rget(0))]=3600*float(rget(1))+60*float(rget(2))+float(rget(3))
+  if m := re.fullmatch(r'CHAPTER(\d+)=(.*)',l) and t := parse_time(m[2]):
+     chaps[int(m[1])]=t
 
 splits=[]
 chap=None
 for s in args.split:
-	if rser('^(\d+)$',s):
-		chap=int(rget(0))
-		if chap not in chaps:
-			print('Chapter {:d} not in "{:}"'.format(chap,args.infile))
-			sys.exit(-1)
-		splits.append(chaps[chap])
-	elif rser('^\+(\d+)$',s):
-		i=int(rget(0))
-		if not chap:
-			print('No previous chapter for increment +{:d} not in "{:}"'.format(i,args.infile))
-		chap+=i
-		while chap in chaps:
-			splits.append(chaps[chap])
-			chap+=i
-	elif rser('^(\d+\.\d*)$',s):
-		splits.append(float(rget(0)))
-	elif rser('^(\d):(\d+\.?\d*$',s):
-		splits.append(60*float(rget(0))+float(rget(1)))
-	elif rser('^(\d):(\d):(\d+\.?\d*$',s):
-		splits.append(3600*float(rget(0))+60*float(rget(1))+float(rget(2)))
-	elif rser('^(\d):(\d+\.\d*)$',s):
-		splits.append(float(rget(0))*60+float(rget(1)))
+  if m := re.fullmatch(r'\d+',s):
+    chap=int(m[0])
+    if chap not in chaps:
+      print('Chapter {:d} not in "{:}"'.format(chap, args.infile))
+      sys.exit(-1)
+    splits.append(chaps[chap])
+  elif m := re.fullmatch(r'\+(\d+)',s):
+    i=int(m[1])
+    if not chap:
+      print(r'No previous chapter for increment +{i:d} not in "{args.infile}"')
+    chap+=i
+    while chap in chaps:
+      splits.append(chaps[chap])
+      chap+=i
+  elif t := parse_time(s):
+    splits.append(t)
 
-timecodes=",".join(['{:02d}:{:02d}:{:02d}:{:03d}'.format(int(s/3600),int(s/60)%60,int(s)%60,int(s*1000)%1000) for s in splits])
+timecodes=",".join(unparse_time(s) for s in splits)
 
 debug(subprocess.check_output(['mkvmerge','--split','timecodes:'+timecodes,'-o','Temp-%06d.mkv',args.infile]))
 
 if splits[0] != 0.0:
-	os.remove('Temp-000001.mkv')
+  os.remove('Temp-000001.mkv')
 
 for tf,ff in zip(reglob(r'Temp-\d{6}\.mkv'),(args.outfiles.format(i) for i in range(args.start,sys.maxsize))):
-	chaptimes=[]
-	chapnames=[]
-	for l in subprocess.check_output(['mkvextract', 'chapters', '--simple', tf], universal_newlines = True).splitlines():
-		if rser('^CHAPTER(\d+)=(\d+):(\d+):(\d+\.?\d*)$',l):
-			chaptimes.append(3600*float(rget(1))+60*float(rget(2))+float(rget(3)))
-		elif rser('^CHAPTER(\d+)NAME=(.*)$',l):
-			chapnames.append(rget(1))
-	chapchange=False
+  chaptimes=[]
+  chapnames=[]
+  for l in subprocess.check_output(['mkvextract', 'chapters', '--simple', tf], universal_newlines = True).splitlines():
+    if m := re.fullmatch(r'CHAPTER(\d+)=(.*)',l) and t := parse_time(m[2]):
+      chaptimes.append(t)
+    elif m := re.fullmatch(r'^CHAPTER(\d+)NAME=(.*)$',l):
+      chapnames.append(m[1])
+  chapchange=False
 
-	if len(chaptimes)>=2 and chaptimes[1]-chaptimes[0]<1.0:
-		chaptimes[1]=chaptimes[0]
-		chaptimes=chaptimes[1:]
-		chapnames=chapnames[1:]
-		chapchange=True
+  if len(chaptimes)>=2 and chaptimes[1]-chaptimes[0]<1.0:
+    chaptimes[1]=chaptimes[0]
+    chaptimes=chaptimes[1:]
+    chapnames=chapnames[1:]
+    chapchange=True
 
-	if len(chaptimes)>=3 and chaptimes[-1]-chaptimes[-2]<1.0:
-		chaptimes=chaptimes[:-1]
-		chapnames=chapnames[:-1]
-		chapchange=True
+  if len(chaptimes)>=3 and chaptimes[-1]-chaptimes[-2]<1.0:
+    chaptimes=chaptimes[:-1]
+    chapnames=chapnames[:-1]
+    chapchange=True
 
-	if chapchange:
-		chapfile=tf+'.chap.txt'
-		with open(chapfile,'w') as cf:
-			for no,cn,ct in zip(range(1000),chapnames,chaptimes):
-				cf.write('CHAPTER{:02d}={:02d}:{:02d}:{:02d}.{:03d}\n'.format(no,int(ct/3600),int(ct/60)%60,int(ct)%60,int(ct*1000)%1000))
-				cf.write('CHAPTER{:02d}NAME={}\n'.format(no,cn))
+  if chapchange:
+    chapfile=tf+'.chap.txt'
+    with open(chapfile,'w') as cf:
+      for no,cn,ct in zip(range(1000),chapnames,chaptimes):
+        cf.write(f'CHAPTER{no:02d}={unparse_time(ct)}\n')
+        cf.write(f'CHAPTER{no:02d}NAME={cn}\n')
 
-		debug(subprocess.check_output(['mkvmerge','--output', ff, '--chapters', chapfile, '--no-chapters', tf]))
-		os.remove(tf+'.chap.txt')
-		os.remove(tf)
-	else:
-		os.rename(tf,ff)
+    debug(subprocess.check_output(['mkvmerge','--output', ff, '--chapters', chapfile, '--no-chapters', tf]))
+    os.remove(tf+'.chap.txt')
+    os.remove(tf)
+  else:
+    os.rename(tf,ff)

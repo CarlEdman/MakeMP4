@@ -4,9 +4,17 @@ prog='mp4infos'
 version='2.1'
 author='Carl Edman (CarlEdman@gmail.com)'
 
-import logging, re, shlex, os, os.path, argparse, sys, subprocess, codecs
+import logging
+import re
+import shlex
+import os
+import os.path
+import argparse
+import sys
+import subprocess
+import codecs
+
 from cetools import *
-from regex import *
 
 sys.stdout = codecs.getwriter("utf-8")(sys.stdout.detach())
 
@@ -34,16 +42,16 @@ for root, dirs, files in os.walk(args.directory):
     except subprocess.CalledProcessError:
       continue
     for l in mi.decode(errors='ignore').splitlines():
-      if rser(r'^\s+(.+?)\s*:\s*(.+?)\s*$',l):
-        if rget(0) not in cats: cats.append(rget(0))
-        vals[-1][rget(0)]=rget(1)
-      if rser(r'^(\d+)\s+(\w+)\s*(.*)$',l):
-        type='TrackType'+rget(0)
+      if m := re.fullmatch(r'\s+(.+?)\s*:\s*(.+?)\s*',l):
+        if m[1] not in cats: cats.append(m[1])
+        vals[-1][m[1]]=m[2]
+      if m := re.fullmatch(r'(\d+)\s+(\w+)\s*(.*)',l):
+        type='TrackType'+m[1]
         if type not in tcats: tcats.append(type)
-        vals[-1][type]=rget(1)
-        info='TrackInfo'+rget(0)
+        vals[-1][type]=m[2]
+        info='TrackInfo'+m[1]
         if info not in tcats: tcats.append(info)
-        vals[-1][info]=rget(2)
+        vals[-1][info]=m[3]
 
 print('\t'.join(cats + tcats))
 for v in vals:

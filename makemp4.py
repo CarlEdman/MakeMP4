@@ -7,6 +7,7 @@ author='Carl Edman (CarlEdman@gmail.com)'
 
 import re
 import os
+import os.path
 import sys
 import argparse
 import logging
@@ -16,15 +17,14 @@ import shutil
 import tempfile
 import json
 import string
-
-from subprocess import call, check_call, check_output, CalledProcessError, Popen, PIPE, STDOUT, list2cmdline
-from os.path import exists, isfile, isdir, getmtime, getsize, join, basename, splitext, abspath, dirname
+import glob
+import subprocess
 from fractions import Fraction
-import regex, glob
 
 from AdvConfig import AdvConfig
+
 from cetools import *
-from updatemp4 import *
+from tagmp4 import *
 
 import xml.etree.ElementTree as ET
 
@@ -36,46 +36,21 @@ def iso6392BtoT(l):
   if l in e: return e[l]
   return l
 
-def parse_time(s):
-  r = regex.RegEx(regex=r'(?P<hrs>\d+):(?P<mins>\d+):(?P<secs>\d+(\.\d*)?)')
-  r(text=s)
-  return float(r.hrs)*3600.0+float(r.mins)*60.0+float(r.secs)
-
-def semicolon_join(s, t):
-  if not s: return t
-  if not t: return s
-  return ';'.join(sorted(set(s.split(';')) | set(t.split(';'))))
-
-def reglob(pat):
-  '''A replacement for glob.glob which uses regular expressions and sorts numbers up to 10 digits correctly.'''
-  def sortkey(s):
-    s=s.tolower()
-    if s.startswith("the "): s=s[4:]
-    elif s.startswith("a "): s=s[2:]
-    elif s.startswith("an "): s=s[3:]
-    s=re.sub(r'\d+',lambda m: m.group(0).zfill(10),s)
-    return s
-
-  (dir, filepat) = os.path.split(pat)
-  if os.name == 'nt': filepat = r'(?i)' + filepat
-  files = (os.path.join(dir,f) for f in os.listdir(dir) if re.fullmatch(filepat, f))
-  return sorted(files, key=sortkey)
-
 def readytomake(file,*comps):
   for f in comps:
-    if not exists(f) or not isfile(f) or getsize(f)==0 or work_locked(f): return False
+    if not os.path.exists(f) or not os.path.isfile(f) or os.path.getsize(f)==0 or work_locked(f): return False
     fd=os.open(f,os.O_RDONLY|os.O_EXCL)
     if fd<0:
       return False
     os.close(fd)
-  if not exists(file): return True
-  if getsize(file)==0:
+  if not os.path.exists(file): return True
+  if os.path.getsize(file)==0:
     return False
 #  fd=os.open(file,os.O_WRONLY|os.O_EXCL)
 #  if fd<0: return False
 #  os.close(fd)
   for f in comps:
-    if f and getmtime(f)>getmtime(file):
+    if f and os.path.getmtime(f)>os.path.getmtime(file):
       os.remove(file)
       return True
   return False
@@ -94,12 +69,12 @@ def do_call(args,outfile=None,infile=None):
       cs.append([])
     else:
       cs[-1].append(str(a))
-  cstr = ' | '.join([list2cmdline(c) for c in cs])
+  cstr = ' | '.join([subprocess.list2cmdline(c) for c in cs])
   debug('Executing: '+ cstr)
   work_lock(outfile)
   ps=[]
   for c in cs:
-    ps.append(Popen(c, stdin=ps[-1].stdout if ps else infile, stdout=PIPE, stderr=PIPE))
+    ps.append(subprocess.Popen(c, stdin=ps[-1].stdout if ps else infile, stdout=subprocess.PIPE, stderr=subprocess.PIPE))
   outstr, errstr = ps[-1].communicate()
 
   work_unlock(outfile)
@@ -121,9 +96,9 @@ def make_srt(cfg,track,files):
   return True
   base=cfg.get('base',section='MAIN')
   srtfile=f'{base} T{track:02d}.srt'
-  if not exists(srtfile): do_call(['ccextractorwin'] + files + ['-o', srtfile],srtfile)
-  if exists(srtfile) and getsize(srtfile)==0: os.remove(srtfile)
-  if not exists(srtfile): return False
+  if not os.path.exists(srtfile): do_call(['ccextractorwin'] + files + ['-o', srtfile],srtfile)
+  if os.path.exists(srtfile) and os.path.getsize(srtfile)==0: os.remove(srtfile)
+  if not os.path.exists(srtfile): return False
   cfg.setsection(f'TRACK{track:02d}')
   cfg.set('file',srtfile)
   cfg.set('type','subtitles')
@@ -197,18 +172,18 @@ def config_from_idxfile(cfg,idxfile):
 
 
 def prepare_tivo(tivofile):
-  if exists(tivofile+'.header'): return False
-  if exists(tivofile+'.error'): return False
+  if os.path.exists(tivofile+'.header'): return False
+  if os.path.exists(tivofile+'.error'): return False
   mpgfile = tivofile[:-5]+'.mpg'
   if not readytomake(mpgfile,tivofile): return False
 
   if args.mak:
     do_call(['tivodecode','--mak',args.mak,'--out',mpgfile,tivofile],mpgfile)
-    if exists(mpgfile) and getsize(mpgfile)>0: os.remove(tivofile)
+    if os.path.exists(mpgfile) and os.path.getsize(mpgfile)>0: os.remove(tivofile)
 
 
 def prepare_mpg(mpgfile):
-  base = splitext(basename(mpgfile))[0]
+  base = os.path.splitext(os.path.basename(mpgfile))[0]
   cfgfile=base+'.cfg'
   if not readytomake(cfgfile,mpgfile): return False
   cfg=AdvConfig(cfgfile)
@@ -217,10 +192,10 @@ def prepare_mpg(mpgfile):
 
   track=1
   dgifile=f'{base} T{track:02d}.d2v'
-  if not exists(dgifile):
-    do_call(['dgindex', '-i', mpgfile, '-o', splitext(base)[0], '-fo', '0', '-ia', '3', '-om', '2', '-hide', '-exit'],base+'.d2v')
+  if not os.path.exists(dgifile):
+    do_call(['dgindex', '-i', mpgfile, '-o', os.path.splitext(base)[0], '-fo', '0', '-ia', '3', '-om', '2', '-hide', '-exit'],base+'.d2v')
 #    do_call(['DGIndexNV', '-i', mpgfile, '-a', '-o', dgifile, '-h', '-e'],dgifile)
-  if not exists(dgifile): return
+  if not os.path.exists(dgifile): return
   cfg.setsection(f'TRACK{track:02d}')
   cfg.set('file',mpgfile)
   cfg.sync()
@@ -230,8 +205,8 @@ def prepare_mpg(mpgfile):
   for file in glob.iglob(f'{base} *'):
     m = re.fullmatch(re.escape(base)+r'\s+T[0-9a-fA-F][0-9a-fA-F]\s+(.*)\.(ac3|dts|mpa|mp2|wav|pcm)',file)
     if not m: continue
-    feat=m.group(1)
-    ext=m.group(2)
+    feat=m[1]
+    ext=m[2]
     track+=1
     cfg.setsection(f'TRACK{track:02d}')
     nf=f'{base} T{track:02d}.{ext}'
@@ -266,7 +241,7 @@ def prepare_mpg(mpgfile):
   work_unlock(cfgfile)
 
 def prepare_mkv(mkvfile):
-  base=splitext(basename(mkvfile))[0]
+  base=os.path.splitext(os.path.basename(mkvfile))[0]
   cfgfile=base+'.cfg'
   if not readytomake(cfgfile,mkvfile): return False
   cfg=AdvConfig(cfgfile)
@@ -276,7 +251,7 @@ def prepare_mkv(mkvfile):
   cfg.setsection('MAIN')
 
   try:
-    chaps = ET.fromstring(check_output(['mkvextract','chapters',mkvfile]).decode(errors='replace'))
+    chaps = ET.fromstring(subprocess.check_output(['mkvextract','chapters',mkvfile]).decode(errors='replace'))
     chap_uid=[]
     chap_time=[]
     chap_hidden=[]
@@ -302,7 +277,7 @@ def prepare_mkv(mkvfile):
   except ET.ParseError:
     warning(f'No valid XML chapters for {mkvfile}.')
 
-  j = json.loads(check_output(['mkvmerge','-J',mkvfile]).decode(errors='replace'))
+  j = json.loads(subprocess.check_output(['mkvmerge','-J',mkvfile]).decode(errors='replace'))
   cont = j['container']
   cfg.set('container_type', cont['type'])
 
@@ -432,7 +407,7 @@ def prepare_mkv(mkvfile):
       cfg.set('extension','mkv')
       cfg.set('file',mkvfile)
       continue
-    if file and not exists(file) and mkvtrack>=0:
+    if file and not os.path.exists(file) and mkvtrack>=0:
       call.append(f'{mkvtrack:d}:{file}')
   if call: do_call(['mkvextract', 'tracks', mkvfile] + call)
   cfg.sync()
@@ -448,7 +423,7 @@ def prepare_mkv(mkvfile):
     cfg.setsection(vt)
     t2cfile=cfg.get('t2c_file',None)
     mkvtrack=cfg.get('mkvtrack',-1)
-    if t2cfile and not exists(t2cfile) and mkvtrack>=0: call.append(f'{mkvtrack:d}:{t2cfile}')
+    if t2cfile and not os.path.exists(t2cfile) and mkvtrack>=0: call.append(f'{mkvtrack:d}:{t2cfile}')
   if call: do_call(['mkvextract', 'timecodes_v2', mkvfile] + call)
   cfg.sync()
 
@@ -478,14 +453,14 @@ def prepare_mkv(mkvfile):
     file=cfg.get('file')
     ext=cfg.get('extension')
     if ext=='.sub':
-      config_from_idxfile(cfg,splitext(file)[0]+'.idx')
+      config_from_idxfile(cfg,os.path.splitext(file)[0]+'.idx')
       # remove idx file
 
   if args.delete_source:
     os.remove(mkvfile)
 
 def prepare_vob(vobfile):
-  base=splitext(basename(vobfile))[0]
+  base=os.path.splitext(os.path.basename(vobfile))[0]
   r=regex.RegEx()
   if r(r'^(.*)_(\d+)$',base):
     if int(r[1])!=1: return
@@ -503,12 +478,12 @@ def prepare_vob(vobfile):
 #  basefile=myjoin(root, file[:-6])
 #  idxfile=basefile+".idx"
 #  avsfile=basefile+".video.avs"
-#  if exists(idxfile): continue
+#  if os.path.exists(idxfile): continue
 #  ifofile=basefile+"_0.ifo"
-#  if exists(ifofile) and getsize(ifofile)>0:
+#  if os.path.exists(ifofile) and os.path.getsize(ifofile)>0:
 #    pgc=1
 #    trueifofile=ifofile
-#  elif ifofile[-13:-8] == "_PGC_" and exists(ifofile[:-13]+"_0.ifo"):
+#  elif ifofile[-13:-8] == "_PGC_" and os.path.exists(ifofile[:-13]+"_0.ifo"):
 #    pgc=int(ifofile[-8:-6])
 #    trueifofile=ifofile[:-13]+"_0.ifo"
 #  else:
@@ -520,7 +495,7 @@ def prepare_vob(vobfile):
 #  if trueifofile!=ifofile: copyfile(trueifofile,ifofile)
 #  do_call([r'C:\Windows\SysWOW64\rundll32.exe','vobsub.dll,Configure',vobsubfile],vobsubfile)
 #  if trueifofile!=ifofile: os.remove(ifofile)
-##  if not exists(idxfile): open(idxfile,'wt').truncate(0)
+##  if not os.path.exists(idxfile): open(idxfile,'wt').truncate(0)
 
 #  if make_srt(cfg,track+1,vobfiles): track+=1
 
@@ -534,7 +509,7 @@ def config_from_dgifile(cfg):
   file = cfg.get('file', None)
   dgifile = cfg.get('dgi_file', None)
   if not file or not dgifile: return
-  logfile = splitext(file)[0]+'.log'
+  logfile = os.path.splitext(file)[0]+'.log'
   r=regex.RegEx()
 
   trans = str.maketrans(string.ascii_uppercase,string.ascii_lowercase,string.whitespace)
@@ -700,11 +675,11 @@ def build_indices(cfg):
     cfg.setsection(vt)
     file=cfg.get('file')
     dgifile=cfg.get('dgi_file', None)
-    if not dgifile or exists(dgifile): continue
+    if not dgifile or os.path.exists(dgifile): continue
     if dgifile.endswith('.dgi'):
       do_call(['DGIndexNV', '-i', cfg.get('file'), '-o', dgifile, '-h', '-e'],dgifile)
     elif dgifile.endswith('.d2v'):
-      do_call(['dgindex', '-i', cfg.get('file'), '-o', splitext(dgifile)[0], '-fo', '0', '-ia', '3', '-om', '2', '-hide', '-exit'],dgifile)
+      do_call(['dgindex', '-i', cfg.get('file'), '-o', os.path.splitext(dgifile)[0], '-fo', '0', '-ia', '3', '-om', '2', '-hide', '-exit'],dgifile)
     else:
       continue
 
@@ -717,12 +692,12 @@ def build_subtitle(cfg):
   e=cfg.get('elongation',1.0)
 
   r=regex.RegEx()
-  if getsize(infile)==0:
+  if os.path.getsize(infile)==0:
     pass
   elif inext=='srt':
-    outfile = splitext(infile)[0]+'.ttxt'
+    outfile = os.path.splitext(infile)[0]+'.ttxt'
     cfg.set('out_file', outfile)
-    if exists(outfile): return # Should be not readytomake(outfile,)
+    if os.path.exists(outfile): return # Should be not readytomake(outfile,)
     with open(infile, 'rt', encoding='utf-8-sig', errors='replace') as i, open('temp.srt', 'wt', encoding='utf-8', errors='replace') as o:
       inp=i.read()
       for l in inp.split('\n\n'):
@@ -736,14 +711,14 @@ def build_subtitle(cfg):
         if neg1 or neg2: continue
         o.write('{r.beg}{hours1:02d}:{mins1:02d}:{secs1:02d},{msecs1:03d}{r.mid}{hours2:02d}:{mins2:02d}:{secs2:02d},{msecs2:03d}{r.end}\n\n')
     do_call(['mp4box','-ttxt','temp.srt'],outfile)
-    if exists('temp.ttxt'): os.rename('temp.ttxt',outfile)
-    if exists('temp.srt'): os.remove('temp.srt')
-  elif inext=='sup' and getsize(infile)<1024:
-    outfile = splitext(infile)[0]+'.idx'
+    if os.path.exists('temp.ttxt'): os.rename('temp.ttxt',outfile)
+    if os.path.exists('temp.srt'): os.remove('temp.srt')
+  elif inext=='sup' and os.path.getsize(infile)<1024:
+    outfile = os.path.splitext(infile)[0]+'.idx'
   elif inext=='sup':
-    outfile = splitext(infile)[0]+'.idx'
+    outfile = os.path.splitext(infile)[0]+'.idx'
     cfg.set('out_file', outfile)
-    if exists(outfile): return  # Should be not readytomake(outfile,)
+    if os.path.exists(outfile): return  # Should be not readytomake(outfile,)
     call = ['bdsup2sub++']
     call += ['--resolution','keep']
     if d!=0: call += ['--delay',str(d*1000.0)]
@@ -757,11 +732,11 @@ def build_subtitle(cfg):
     call += ['--output',outfile,infile]
     do_call(call,outfile) # '--fix-invisible',
   elif (d!=0.0 or e!=1.0) and inext=='idx':
-    outfile = splitext(infile)[0]+'.adj'+splitext(infile)[1]
+    outfile = os.path.splitext(infile)[0]+'.adj'+os.path.splitext(infile)[1]
     cfg.set('out_file', outfile)
-    if not exists(splitext(infile)[0]+'.adj.sub'):
-      shutil.copy(splitext(infile)[0]+'.sub',splitext(infile)[0]+'.adj.sub')
-    if exists(outfile): return  # Should be not readytomake(outfile,)
+    if not os.path.exists(os.path.splitext(infile)[0]+'.adj.sub'):
+      shutil.copy(os.path.splitext(infile)[0]+'.sub',os.path.splitext(infile)[0]+'.adj.sub')
+    if os.path.exists(outfile): return  # Should be not readytomake(outfile,)
     with open(infile, 'rt', encoding='utf-8-sig', errors='replace') as i, open(outfile, 'wt', encoding='utf-8', errors='replace') as o:
       for l in i:
         if not r(r'^(?s)(?P<beg>\s*timestamp:\s*)(?P<neg>-?)(?P<hours>\d+):(?P<mins>\d+):(?P<secs>\d+):(?P<msecs>\d+)\b(?P<end>.*)$',l):
@@ -779,7 +754,7 @@ def build_subtitle(cfg):
     outfile = infile
     cfg.set('out_file', outfile)
 
-  if getsize(infile)==0 or not exists(outfile):
+  if os.path.getsize(infile)==0 or not os.path.exists(outfile):
     cfg.set('disable',True)
   cfg.sync()
 
@@ -840,7 +815,7 @@ def build_video(cfg):
       return False
     outfile = baseout + '.' + outext
     cfg.set('out_file',outfile)
-  avsfile = cfg.get('avs_file',splitext(basename(infile))[0] +'.avs' )
+  avsfile = cfg.get('avs_file',os.path.splitext(os.path.basename(infile))[0] +'.avs' )
   cfg.set('avs_file',avsfile)
   cfg.sync()
 
@@ -856,10 +831,10 @@ def build_video(cfg):
   if procs!=1: avs += f'SetMTMode(5,{procs:d})\n'
   avs += 'SetMemoryMax(1024)\n'
   if dgifile.endswith('.d2v'):
-    avs+=f'DGDecode_mpeg2source("{abspath(dgifile)}", info=3, idct=4, cpu=3)\n'
+    avs+=f'DGDecode_mpeg2source("{os.path.abspath(dgifile)}", info=3, idct=4, cpu=3)\n'
   elif dgifile.endswith('.dgi'):
     deint = 1 if ilt in ['VIDEO', 'INTERLACE'] else 0
-    avs+=f'DGSource("{abspath(dgifile)}", deinterlace={deint:d})\n'
+    avs+=f'DGSource("{os.path.abspath(dgifile)}", deinterlace={deint:d})\n'
   else:
     warning(f'No valid video index file from "{infile}"')
     return False
@@ -878,7 +853,7 @@ def build_video(cfg):
     fro=fri*Fraction(4,5)
 #    cfg.set('frames',math.ceil(cfg.get('frames')*5.0/4.0))
     avs+='tfm().tdecimate(hybrid=1)\n'
-#    avs+=f'tfm().tdecimate(hybrid=1,d2v="{abspath(dgifile)}")\n'
+#    avs+=f'tfm().tdecimate(hybrid=1,d2v="{os.path.abspath(dgifile)}")\n'
 #    avs+=f'Telecide(post={0 if lp>0.99 else 2:d},guide=0,blend=True)'
 #    avs+=f'Decimate(mode={0 if lp>0.99 else 3:d},cycle=5)'
 #  elif ilt in ['VIDEO', 'INTERLACE']:
@@ -924,7 +899,7 @@ def build_video(cfg):
 #    avs+=f'MFlowFps(super, bv1, fv1, num={fro.numerator:d}, den={fro.denominator:d}, ml=100)\n'
   if procs!=1: avs+='Distributor()\n'
 
-  if not exists(avsfile) or getmtime(cfg.filename)>getmtime(avsfile):
+  if not os.path.exists(avsfile) or os.path.getmtime(cfg.filename)>os.path.getmtime(avsfile):
     with open(avsfile, 'wt', encoding='utf-8', errors='replace') as fp: fp.write(avs)
     debug(f'Created AVS file: {repr(avs)}')
 
@@ -987,8 +962,8 @@ def build_result(cfg):
     file=cfg.get('file')
     outfile=cfg.get('out_file',None)
     if not outfile: return False
-    if not exists(outfile): return False
-    if getsize(outfile)==0: return False
+    if not os.path.exists(outfile): return False
+    if os.path.getsize(outfile)==0: return False
 
   cfg.setsection('MAIN')
   base=cfg.get('base')
@@ -1029,7 +1004,7 @@ def build_result(cfg):
     for c in cfg.get('coverart','').split(';'):
       if os.path.dirname(c)==None and args.artdir:
         c = os.path.join(args.artdir,c)
-      if exists(c):
+      if os.path.exists(c):
         coverfiles.append(c)
       cfg.set('coverart',';'.join(coverfiles))
   infiles+=coverfiles
@@ -1086,23 +1061,23 @@ def build_result(cfg):
   return True
 
 def main():
-#    if getmtime(sys.argv[0])>progmodtime:
+#    if os.path.getmtime(sys.argv[0])>progmodtime:
 #      exec(compile(open(sys.argv[0]).read(), sys.argv[0], 'exec')) # execfile(sys.argv[0])
 
   for d in sources:
     for f in sorted(os.listdir(d)):
-      if not isfile(join(d,f)):
+      if not os.path.isfile(os.path.join(d,f)):
         continue
       elif f.endswith(('.TIVO','.tivo','.TiVo')):
-        prepare_tivo(join(d,f))
+        prepare_tivo(os.path.join(d,f))
       elif f.endswith(('.MPG','.MPEG','.mpg','.mpeg')):
-        prepare_mpg(join(d,f))
+        prepare_mpg(os.path.join(d,f))
       elif f.endswith(('.VOB','.vob')):
-        prepare_vob(join(d,f))
+        prepare_vob(os.path.join(d,f))
       elif f.endswith(('.MKV','.mkv')):
-        prepare_mkv(join(d,f))
+        prepare_mkv(os.path.join(d,f))
       else:
-        warning(f'Source file type not recognized "{join(d,f)}"')
+        warning(f'Source file type not recognized "{os.path.join(d,f)}"')
 
   for f in glob.iglob('*.cfg'):
     cfg = AdvConfig(f)
@@ -1131,7 +1106,7 @@ def main():
       del its['comment']
     cfg.item_defs(its)
 
-    coverfiles = (i for i in glob.iglob(os.path.join(args.artdir, f'{fn}*')) if splitext(i)[1].casefold() in { '.jpg', '.jpeg', '.png'} )
+    coverfiles = (i for i in glob.iglob(os.path.join(args.artdir, f'{fn}*')) if os.path.splitext(i)[1].casefold() in { '.jpg', '.jpeg', '.png'} )
     ufn = ''.join([c for c in fn.strip().upper() if c.isalnum()])
     its = { 'year': f'_{ufn}YEAR_'
           , 'genre': f'_{ufn}GENRE_'
@@ -1200,20 +1175,20 @@ if __name__ == "__main__":
     parser.add_argument('--keep-video-in-mkv',action='store_true', default=False, help='do not attempt to extract video tracks from MKV source, but instead use MKV file directly')
     parser.add_argument('--keep-audio-in-mkv',action='store_true', default=False, help='do not attempt to extract audio tracks from MKV source, but instead use MKV file directly')
 
-    for inifile in [ f'{splitext(sys.argv[0])[0]}.ini', prog + '.ini', '..\\' + prog + '.ini' ]:
-      if exists(inifile): sys.argv.insert(1,'@'+inifile)
+    for inifile in [ f'{os.path.splitext(sys.argv[0])[0]}.ini', prog + '.ini', '..\\' + prog + '.ini' ]:
+      if os.path.exists(inifile): sys.argv.insert(1,'@'+inifile)
     args = parser.parse_args()
 
   startlogging(args.logfile,args.loglevel,'90D')
   info(prog + ' ' + version + ' starting up.')
   nice(args.niceness)
-  progmodtime=getmtime(sys.argv[0])
+  progmodtime=os.path.getmtime(sys.argv[0])
 
   sources=[]
   for d in args.sourcedirs:
-    if not exists(d):
+    if not os.path.exists(d):
       warning(f'Source directory "{d}" does not exists')
-    elif not isdir(d):
+    elif not os.path.isdir(d):
       warning(f'Source directory "{d}" is not a directory')
   #  elif not isreadable(d):
   #    warning(f'Source directory "{d}" is not readable')

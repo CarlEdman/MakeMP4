@@ -4,17 +4,26 @@ prog='SortMP4'
 version='0.5'
 author='Carl Edman (CarlEdman@gmail.com)'
 
-import shutil, os, os.path, argparse, logging, subprocess, glob, re
-from cetools import *
+import shutil
+import os
+import os.path
+import argparse
+import logging
+import subprocess
+import glob
+import re
 
 import mutagen
 from mutagen.mp4    import MP4, MP4Cover, MP4Tags, MP4Chapters
 
-def optAndMove(oname,dir,nname=None):
+from cetools import *
+
+def optAndMove(opath,dir,nname=None):
+  (odir, oname) = os.path.split(opath)
   if nname==None: nname=oname
   npath = os.path.join(dir,nname)
 
-  info(f'Optimizing and moving {oname} to {npath}')
+  info(f'Optimizing and moving {opath} to {npath}')
   if args.dryrun: return
 
   if not os.path.exists(dir): os.mkdir(dir)
@@ -22,14 +31,15 @@ def optAndMove(oname,dir,nname=None):
     warning(f'{nname} already in {dir}, skipping.')
     return
 
+  t = os.path.join(odir, f'temp{os.path.splitext(oname)[1]}')
   try:
-    cp = subprocess.run(['mp4file', '--optimize', f], check=True, capture_output=True)
+    os.rename(opath, t)
+    cp = subprocess.run(['mp4file', '--optimize', t], check=True, capture_output=True)
   except subprocess.CalledProcessError as cpe:
     error(f'Error code for {cpe.cmd}: {cpe.returncode} : {cpe.stdout} : {cpe.stderr}')
 
-  info(f"Moving {oname} to {npath}")
   try:
-    shutil.move(f,npath)
+    shutil.move(t, npath)
   except:
     os.remove(npath)
     raise
@@ -50,7 +60,7 @@ infiles = []
 for f in args.files: infiles.extend(glob.glob(f))
 if not infiles: error(f'No input files.')
 
-if args.dryrun and args.loglevel < logging.INFO: args.loglevel = logging.INFO
+if args.dryrun and args.loglevel > logging.INFO: args.loglevel = logging.INFO
 
 logging.basicConfig(level=args.loglevel,format='%(asctime)s [%(levelname)s]: %(message)s')
 
