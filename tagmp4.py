@@ -1,12 +1,19 @@
 #!/usr/bin/python
-# Version: 0.2
-# Author: Carl Edman (email full name as one word at gmail.com)
 
-prog='UpdateMP4'
-version='0.2'
+prog='TagMP4'
+version='0.4'
 author='Carl Edman (CarlEdman@gmail.com)'
+desc='Update Metadata in MP4 files based on filenames and external sources'
 
-import argparse, shutil, os, os.path, subprocess, sys, json
+import argparse
+import shutil
+import os
+import os.path
+import subprocess
+import sys
+import json
+import logging
+import collections
 
 from urllib.request import urlopen
 from urllib.parse   import urlparse, urlunparse, urlencode
@@ -15,6 +22,10 @@ from urllib.error   import HTTPError
 import mutagen
 from mutagen.mp4    import MP4, MP4Cover, MP4Tags, MP4Chapters
 from cetools        import *
+
+parser = None
+args = None
+log = logging.getLogger()
 
 def test_str(s):
   if not isinstance(s, str): return False
@@ -67,7 +78,7 @@ def get_meta_local_tv(episode, ls):
   header = [ header_norm[h] if h in header_norm else h for h in header ]
 
   if 'Episode' not in header:
-    warning(f'TV series file contains no Episode header.')
+    log.warning(f'TV series file contains no Episode header.')
     return its
 
   cur = None
@@ -80,7 +91,7 @@ def get_meta_local_tv(episode, ls):
         ld[int(cur['Episode'])] = cur
         del cur['Episode']
     elif cur == None:
-      warning(f'TV series file does not start with a valid data line.')
+      log.warning(f'TV series file does not start with a valid data line.')
       return its
     elif 'Description' in cur:
       cur['Description'] += f'  {l}'
@@ -88,7 +99,7 @@ def get_meta_local_tv(episode, ls):
       cur['Description'] = l
 
   if episode not in ld:
-    warning(f'TV series file does not contain episode {episode}.')
+    log.warning(f'TV series file does not contain episode {episode}.')
     return its
 
   for k, v in ld[episode].items():
@@ -317,7 +328,7 @@ def get_meta_omdb(title, season, episode, artpath,
     if v=='N/A':
       continue
     elif k=='Error':
-      warning(f'{title}: IMDB Error "{v}"')
+      log.warning(f'{title}: IMDB Error "{v}"')
     elif k=='Type': # "movie" or "episode"
       its['type']= 'movie' if v=='movie' else 'tvshow'
     elif k=='Title':
@@ -331,7 +342,7 @@ def get_meta_omdb(title, season, episode, artpath,
       if genres:
         its['genre']=genres[0]
       else:
-        warning(f'{title}: No genres recognized in IMDB "{v}"')
+        log.warning(f'{title}: No genres recognized in IMDB "{v}"')
     elif k in skip_trans:
       pass
     elif k in int_trans:
@@ -357,7 +368,7 @@ def get_meta_omdb(title, season, episode, artpath,
     elif k=='Poster':
       imdb_poster = v
     else:
-      warning(f'{title}: Unrecognized IMDB "{k}" = "{v}"')
+      log.warning(f'{title}: Unrecognized IMDB "{k}" = "{v}"')
 
   its['comment']=';'.join(comment)
   its['description']=';'.join(description)
@@ -418,7 +429,7 @@ def set_meta_mutagen(outfile, its):
     elif len(p)>0:
       t['desc'] = [ p ]
   else:
-    warning(f'"{outfile}" has no description')
+    log.warning(f'"{outfile}" has no description')
 
   if test_int(p := its.get('season', '__')): t['tvsn'] = [ p ]
   if test_int(p := its.get('episode', '__')): t['tves'] = [ p ]
@@ -447,12 +458,12 @@ def set_meta_mutagen(outfile, its):
     cvrs = []
     for fn in its.get('coverart',"").split(";"):
       if (ext := os.path.splitext(fn)[1].casefold()) not in ext2format:
-        warning(f'Cover "{fn}" for {outfile}" has invalid extension')
+        log.warning(f'Cover "{fn}" for {outfile}" has invalid extension')
         continue
       with open(fn, 'rb') as f: cvrs.append(MP4Cover(f.read(), ext2format[ext]))
     t['covr'] = cvrs
   else:
-    warning(f'"{outfile}" has no cover art')
+    log.warning(f'"{outfile}" has no cover art')
 
   try:
     mutmp4.save()
@@ -472,16 +483,16 @@ def set_chapters_mutagen(outfile, its):
       breakpoint()
       cts = [float(i)*elong+delay for i in cts.split(';')]
     else:
-      error(f'Chapter times "{cts}" for "{outfile}" are invalid')
+      log.error(f'Chapter times "{cts}" for "{outfile}" are invalid')
 
     cns = its['chapter_name']
     if test_str(cns):
       cns = cns.split(';')
     else:
-      error(f'Chapter names "{cns}" for "{outfile}" are invalid')
+      log.error(f'Chapter names "{cns}" for "{outfile}" are invalid')
 
     #MP4Chapters(Chapter(start, title) for (start,title) in zip (cts, cns))
-    warning(f'Chapter import for "{outfile}" not yet supported.')
+    log.warning(f'Chapter import for "{outfile}" not yet supported.')
 
 @export
 def set_meta_cmd(outfile, its):
@@ -544,18 +555,18 @@ def set_meta_cmd(outfile, its):
       with open(outfile, 'w') as f: f.truncate(0)
     error(f'Error code for {cpe.cmd}: {cpe.returncode} : {cpe.stdout} : {cpe.stderr}')
   else:
-    warning(f'"{outfile}" has no cover art')
+    log.warning(f'"{outfile}" has no cover art')
 
 @export
 def set_chapters_cmd(outfile, its):
   chapterfile = os.path.splitext(outfile)[0]+'.chapters.txt'
   if os.path.exists(chapterfile) and getsize(chapterfile)!=0:
-    warning(f'Adding chapters from existing config file "{chapterfile}"')
+    log.warning(f'Adding chapters from existing config file "{chapterfile}"')
     try:
       cp = subprocess.run(['mp4chaps', '--import', outfile], check=True, capture_output=True)
     except subprocess.CalledProcessError as cpe:
       with open(outfile, 'w') as f: f.truncate(0)
-      error(f'Error code for {cpe.cmd}: {cpe.returncode} : {cpe.stdout} : {cpe.stderr}')
+      log.error(f'Error code for {cpe.cmd}: {cpe.returncode} : {cpe.stdout} : {cpe.stderr}')
     finally:
       return
 
@@ -569,40 +580,121 @@ def set_chapters_cmd(outfile, its):
 
     with open(chapterfile,'wt', encoding='utf-8') as f:
       for (ct,cn) in zip(cts,cns):
-        (neg,hours,mins,secs,msecs)=secsToParts(ct)
-        if neg: continue
-        f.write(f'{hours:02d}:{mins:02d}:{secs:02d}.{msecs:03d} ')
-        f.write(f'{cn} ({hours*60+mins:d}m {secs:d}s)\n')
-
+        if ct<0: continue
+        f.write(f'{unparse_time(ct)} {cn} ({int (ct/60.0):d}m {int (ct)%60:d}s)\n')
     try:
       os.rename(outfile, tempfile)
       cp = subprocess.run(['mp4chaps', '--import', tempfile], check=True, capture_output=True)
     except subprocess.CalledProcessError as cpe:
       with open(tempfile, 'w') as f: f.truncate(0)
-      error(f'Error code for {cpe.cmd}: {cpe.returncode}')
+      log.error(f'Error code for {cpe.cmd}: {cpe.returncode}')
     finally:
       os.rename(tempfile, outfile)
       os.remove(chapterfile)
       return
 
-if __name__ == "__main__":
-  if 'parser' not in globals():
-    parser = argparse.ArgumentParser(description='Update Metadata in MP4 files based on filenames and external sources',fromfile_prefix_chars='@',prog=prog,epilog='Written by: '+author)
+@export
+def make_filename(its):
+  print(its.keys())
+  title = its.get('title', None) or its.get('show', None)
+  title = alphabetize(title) if isinstance(title, str) else None
+  if its['type']=='movie':
+    episode = f'- pt{i:d}' if isinstance(i := its['episode'], int) else ""
+    year = f' ({i:04d})' if isinstance(i := its['year'], int) else ""
+    song = " " + alphabetize(i) if isinstance(i := its['song'], str) else ""
+    plexname = sanitize_filename(f'{title}{episode}{year}{song}.mp4')
+  elif its['type']=='tvshow':
+    if isinstance(season := its['season'], int) and isinstance(episode := its['episode'], int):
+      seaepi = f' S{season:d}E{episode:02d}'
+    elif isinstance(season, int):
+      seaepi = f' S{season:d}'
+    elif isinstance(episode, int):
+      seaepi = f' S1E{episode:02d}'
+    else:
+      seapi = ""
+    song = ' ' + alphabetize(i) if isinstance(i := its['song'], str) else ""
+    plexname = sanitize_filename(f'{title}{seaepi}{song}.mp4')
+  else:
+    return None
+  return sanitize_filename(plexname)
 
-    parser.add_argument('--version', action='version', version='%(prog)s '+version)
-    parser.add_argument('-v','--verbose',dest='loglevel',action='store_const', const=logging.INFO)
-    parser.add_argument('-d','--debug',dest='loglevel',action='store_const', const=logging.DEBUG)
-    parser.set_defaults(loglevel=logging.WARN)
-    parser.add_argument('-l','--log',dest='logfile',action='store')
-    parser.add_argument('files', nargs='*', metavar='FILES', help='files to update')
-    parser.add_argument('--descdir',dest='descdir',action='store',help='directory for .txt files with descriptive data')
-    parser.add_argument('--artdir',dest='artdir',action='store',help='directory for .jpg and .png cover art')
-    parser.add_argument('--omdbkey',dest='omdbkey',action='store',help='your OMDB key to automatically retrieve posters')
-    inifile=f'{os.path.splitext(sys.argv[0])[0]}.ini'
+def retag(f):
+  (dirname, filename) = os.path.split(f)
+  (name, ext) = os.path.splitext(f)
+  if ext not in { ".mp4" }:
+    log.warning(f'{f} has invalid extension, skipping.')
+    return
+
+  its = collections.defaultdict(lambda: None)
+
+  if (m := re.fullmatch(r'(.*)\s+(\([12]\d\d\d\))',name)):
+    its['type'] = "movie"
+    its['title'] = m[1]
+    its['year'] = m[2]
+  elif (m := re.fullmatch(r'(.*)\s+(\([12]\d\d\d\))\s+(.*)',name)):
+    its['type'] = "movie"
+    its['title'] = m[1]
+    its['year'] = int(m[2])
+    its['song'] = m[3]
+  elif (m := re.fullmatch(r'(.*)\s+S0*([1-9]\d+)E(\d+)\s+(.*)',name)):
+    its['type'] = "tvshow"
+    its['show'] = m[1]
+    its['season'] = int(m[2])
+    its['episode'] = int(m[3])
+    its['song'] = m[4]
+  elif (m := re.fullmatch(r'(.*)\s+S0*([1-9]\d+)\s+(.*)',name)):
+    its['type'] = "tvshow"
+    its['show'] = m[1]
+    its['season'] = int(m[2])
+    its['song'] = m[3]
+  else:
+    log.warning(f"{f} name not recognized, skipping.")
+    return
+
+  XXX
+
+  if not (plexname := make_filename(its)):
+    log.warning(f'Generating filename for {f} failed, skipping.')
+    return
+
+  if (p := os.path.join(dirname, plexname + ext)) == f: return
+  if os.path.exists(p):
+    log.warning(f'Renaming {f} to {plexname}, target exists, skipping.')
+    return
+
+  log.info(f'Renaming {f} to {plexname}.')
+  if not args.dryrun: os.rename(f, cname)
+
+if __name__ == "__main__":
+  parser = argparse.ArgumentParser(description=desc, fromfile_prefix_chars='@',prog=prog,epilog='Written by: '+author)
+
+  parser.add_argument('--version', action='version', version='%(prog)s '+version)
+  parser.add_argument('-v','--verbose',dest='loglevel',action='store_const', const=logging.INFO)
+  parser.add_argument('-d','--debug',dest='loglevel',action='store_const', const=logging.DEBUG)
+  parser.set_defaults(loglevel=logging.WARN)
+  parser.add_argument('-l','--log',dest='logfile',action='store')
+  parser.add_argument('files', nargs='*', metavar='FILES', help='files to update')
+  parser.add_argument('--descdir',dest='descdir',action='store',help='directory for .txt files with descriptive data')
+  parser.add_argument('--artdir',dest='artdir',action='store',help='directory for .jpg and .png cover art')
+  parser.add_argument('--omdbkey',dest='omdbkey',action='store',help='your OMDB key to automatically retrieve posters')
+
+  for inifile in [ f'{os.path.splitext(sys.argv[0])[0]}.ini', prog + '.ini', '..\\' + prog + '.ini' ]:
     if os.path.exists(inifile): sys.argv.insert(1,'@'+inifile)
-    inifile=prog + '.ini'
-    if os.path.exists(inifile): sys.argv.insert(1,'@'+inifile)
-    inifile='..\\' + prog + '.ini'
-    if os.path.exists(inifile): sys.argv.insert(1,'@'+inifile)
-    args = parser.parse_args()
-    print(args)
+  args = parser.parse_args()
+
+  logformat = logging.Formatter('%(asctime)s [%(levelname)s]: %(message)s')
+
+  slogger=logging.StreamHandler()
+  slogger.setLevel(args.loglevel)
+  slogger.setFormatter(logformat)
+  log.addHandler(slogger)
+
+  if not args.files: args.files = ['*.mp4', '*.m4r', '*.m4b', '*.m4a']
+  infiles = []
+  for f in args.files: infiles.extend(glob.glob(f))
+  if not infiles:
+    log.error(f'No input files.')
+    exit(1)
+
+  for f in infiles: retag(f)
+

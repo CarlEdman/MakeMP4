@@ -1,12 +1,16 @@
 #!/usr/bin/python
 # A subclass of ConfigParser with advanced features
 
+import os.path
+import collections
+from fractions import Fraction
+from weakref import WeakValueDictionary, finalize
+
 from cetools import *
 
 from configparser import ConfigParser, RawConfigParser
-from os.path import exists, isfile, getmtime, getsize, join, basename, splitext, abspath, dirname
-from fractions import Fraction
-from weakref import WeakValueDictionary, finalize
+
+log = logging.getLogger()
 
 class AdvConfig(RawConfigParser):
   """A subclass of RawConfigParser for with advanced features"""
@@ -32,15 +36,15 @@ class AdvConfig(RawConfigParser):
     self.sync()
 
   def sync(self):
-    if not exists(self.filename):
+    if not os.path.exists(self.filename):
       with open(self.filename, 'wt', encoding='utf-8') as fp: self.write(fp)
     elif self.modified:
-      if self.mtime<getmtime(self.filename):
+      if self.mtime<os.path.getmtime(self.filename):
         warning('Overwriting external edits in "{}"'.format(self.filename))
       with open(self.filename, 'wt', encoding='utf-8') as fp: self.write(fp)
-    elif self.mtime<getmtime(self.filename):
+    elif self.mtime<os.path.getmtime(self.filename):
       with open(self.filename, 'rt', encoding='utf-8') as fp: self.read_file(fp)
-    self.mtime=getmtime(self.filename)
+    self.mtime=os.path.getmtime(self.filename)
     self.modified=False
 
   def setsection(self,sect):
@@ -96,7 +100,6 @@ class AdvConfig(RawConfigParser):
       RawConfigParser.set(self,section,opt,self.valtostr(nval))
     else:
       RawConfigParser.remove_option(self,section,opt)
-    debug(f'{section} {opt}: {oval}({type(oval)}) => {nval}({type(nval)})')
 
   def items(self,section=None):
     if not section: section=self.currentsection
@@ -111,7 +114,6 @@ class AdvConfig(RawConfigParser):
       if oval == nval: continue
       if not nval and oval is None: continue
       if oval: continue
-      debug(f'{section} {opt}: => {nval}{type(nval)}')
       self.set(opt, nval, section=section)
 
   def get(self, opt, default=None, section=None):

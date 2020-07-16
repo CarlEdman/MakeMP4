@@ -8,7 +8,13 @@ import re
 import logging
 import logging.handlers
 
-loggername = 'DEFAULT'
+if os.name == 'nt':
+  import ctypes
+  import win32api
+  import win32process
+  import win32con
+
+log = logging.getLogger()
 
 def export(func):
   if '__all__' not in func.__globals__:
@@ -16,113 +22,50 @@ def export(func):
   func.__globals__['__all__'].append(func.__name__)
   return func
 
-def debug(*args):
-  logging.getLogger(loggername).debug(*args)
-
-def info(*args):
-  logging.getLogger(loggername).info(*args)
-
-def warning(*args):
-  logging.getLogger(loggername).warning(*args)
-
-def error(*args):
-  logging.getLogger(loggername).error(*args)
-
-def critical(*args):
-  logging.getLogger(loggername).critical(*args)
-
 class TitleHandler(logging.Handler):
+  """
+  A handler class which writes logging records, appropriately formatted,
+  to the windows' title bar.
+  """
+
+  def __init__(self):
     """
-    A handler class which writes logging records, appropriately formatted,
-    to the windows' title bar.
+    Initialize the handler.
     """
 
-    def __init__(self):
-        """
-        Initialize the handler.
-        """
+    logging.Handler.__init__(self)
 
-        logging.Handler.__init__(self)
+  def flush(self):
+    """
+    Flushes the stream.  (A noop for this handler)
+    """
 
-    def flush(self):
-        """
-        Flushes the stream.  (A noop for this handler)
-        """
+    pass
 
-        pass
+  def emit(self, record):
+    """
+    Emit a record.
 
-    def emit(self, record):
-        """
-        Emit a record.
+    If a formatter is specified, it is used to format the record.
+    The record is then written to the title bar of the current window.
+    """
 
-        If a formatter is specified, it is used to format the record.
-        The record is then written to the title bar of the current window.
-        """
-
-        if os.name != 'nt': return
-        import ctypes
-        ctypes.windll.kernel32.SetConsoleTitleA(self.format(record).encode(encoding='cp1252', errors='ignore'))
-
-def startlogging(logfile,loglevel,loginterval=None):
-  logger = logging.getLogger(loggername)
-  logger.setLevel(logging.DEBUG)
-  logformat = logging.Formatter('%(asctime)s [%(levelname)s]: %(message)s')
-  if logfile:
-    if isinstance(loginterval, str):
-      w=loginterval.lstrip('0123456789')
-      i=int(loginterval.rstrip('abcdefghijklmnopqrstuvxyzABCDEFGHIJKLMNOPQRSTUVXYZ'))
-      flogger=logging.handlers.TimedRotatingFileHandler(logfile,when=w,interval=i, encoding='utf-8')
-    elif isinstance(loginterval, int):
-      flogger=logging.handlers.TimedRotatingFileHandler(logfile,when='d',interval=loginterval, encoding='utf-8')
-    else:
-      flogger=logging.handlers.WatchedFileHandler(logfile, 'a', 'utf-8')
-    flogger.setLevel(logging.DEBUG)
-    flogger.setFormatter(logformat)
-    logger.addHandler(flogger)
-
-  tlogger=TitleHandler()
-  tlogger.setLevel(logging.DEBUG)
-  tlogger.setFormatter(logformat)
-  logger.addHandler(tlogger)
-
-  slogger=logging.StreamHandler()
-  slogger.setLevel(loglevel)
-  slogger.setFormatter(logformat)
-  logger.addHandler(slogger)
-  #logging.basicConfig(level=args.loglevel,filename=args.logfile,format='%(asctime)s [%(levelname)s]: %(message)s')
+    if os.name == 'nt':
+      ctypes.windll.kernel32.SetConsoleTitleA(self.format(record).encode(encoding='cp1252', errors='ignore'))
 
 def nice(niceness):
   '''Nice for Windows Processes.  Nice is a value between -3-2 where 0 is normal priority.'''
-  if os.name != 'nt': return os.nice(niceness)
+  if os.name == 'nt':
+    pcs = [win32process.IDLE_PRIORITY_CLASS, win32process.BELOW_NORMAL_PRIORITY_CLASS,
+        win32process.NORMAL_PRIORITY_CLASS, win32process.ABOVE_NORMAL_PRIORITY_CLASS,
+        win32process.HIGH_PRIORITY_CLASS, win32process.REALTIME_PRIORITY_CLASS]
+    pri = pcs[max(0, min(2-niceness, len(pcs)-1))]
 
-  import win32api,win32process,win32con
-
-  priorityclasses = [win32process.IDLE_PRIORITY_CLASS,
-      win32process.BELOW_NORMAL_PRIORITY_CLASS,
-      win32process.NORMAL_PRIORITY_CLASS,
-      win32process.ABOVE_NORMAL_PRIORITY_CLASS,
-      win32process.HIGH_PRIORITY_CLASS,
-      win32process.REALTIME_PRIORITY_CLASS]
-  pid = win32api.GetCurrentProcessId()
-  handle = win32api.OpenProcess(win32con.PROCESS_ALL_ACCESS, True, pid)
-  if niceness<-3: win32process.SetPriorityClass(handle, priorityclasses[5])
-  elif niceness>2: win32process.SetPriorityClass(handle, priorityclasses[0])
-  else: win32process.SetPriorityClass(handle, priorityclasses[2-niceness])
-
-def secsToParts(s):
-  '''Convert a number of seconds (given as float) into a tuple of (neg (string), hours (int), mins (int), secs (int), msecs (int)).'''
-
-  neg = "-" if s<0 else ""
-  secs, msecs= divmod(int(abs(s)*1000),1000)
-  mins, secs = divmod(secs,60)
-  hours, mins = divmod(mins,60)
-  return (neg,hours,mins,secs,msecs)
-
-def partsToSecs(p):
-  '''Convert a tuple of (neg (string), hours (int), mins (int), secs (int), msecs (int)) into a number of seconds (given as float).'''
-
-  neg,hours,mins,secs,msecs=p
-  return (-1 if neg=='-' else 1)*(float(msecs)/1000+secs+(mins+hours*60)*60)
+    pid = win32api.GetCurrentProcessId()
+    handle = win32api.OpenProcess(win32con.PROCESS_ALL_ACCESS, True, pid)
+    win32process.SetPriorityClass(handle, pri)
+  else:
+    return os.nice(niceness)
 
 def dict_inverse(d):
   '''Create an inverse dict from a dict.'''
@@ -131,15 +74,11 @@ def dict_inverse(d):
 
 def alphabetize(s):
   s=s.strip()
-  if s.startswith("The "):
-    s=s[4:]
-  elif s.startswith("A "):
-    s=s[2:]
-  elif s.startswith("An "):
-    s=s[3:]
+  if s.startswith("The "): s=s[4:]
+  elif s.startswith("A "): s=s[2:]
+  elif s.startswith("An "): s=s[3:]
 
-  if s.endswith("."):
-    s=s[:-1]
+  if s.endswith("."): s=s[:-1]
   return s
 
 def sortkey(s):
@@ -162,15 +101,16 @@ def sanitize_filename(s):
   return s.translate(trans)
 
 def parse_time(s):
-  m = re.fullmatch(r'(?=(?P<hrs>\d+):)?(?=(?P<mins>\d+):)?(?P<secs>\d+(\.\d*)?)', s)
+  m = re.fullmatch(r'(?P<neg>-)?(?=(?P<hrs>\d+):)?(?=(?P<mins>\d+):)?(?P<secs>\d+(\.\d*)?)', s)
   if not m: return m
   t =         float(m['secs'])
   t +=   60.0*float(m['mins']) if 'mins' in m else 0
   t += 3600.0*float(m['hrs']) if 'hrs' in m else 0
+  if neg in m: t = -t
   return t
 
 def unparse_time(t):
-  return f'{int(t/3600.0):02d}:{int(t/60.0)%60:02d}:{int(t)%60:02d}:{int(t*1000.0)%1000:03d}'
+  return f'{"-" if t<0 else ""}{int(abs(t)/3600.0):02d}:{int(abs(t)/60.0)%60:02d}:{int(abs(t))%60:02d}:{int(abs(t)*1000.0)%1000:03d}'
 
 def semicolon_join(s, t):
   if not isinstance(s, str): return t

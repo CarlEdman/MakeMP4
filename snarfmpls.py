@@ -1,14 +1,15 @@
 #!/usr/bin/python
 
+prog='SnarfMPLS'
+version='0.1'
+author='Carl Edman (CarlEdman@gmail.com)'
+desc='Read mpls and spit out their m2ts.'
+
 import os.path
 import glob
 import argparse
 
-prog='SnarfMPLS'
-version='0.1'
-author='Carl Edman (CarlEdman@gmail.com)'
-
-parser = argparse.ArgumentParser(description='Read mpls and spit out their m2ts.')
+parser = argparse.ArgumentParser(fromfile_prefix_chars='@',prog=prog,epilog='Written by: '+author)
 parser.add_argument('--version', action='version', version='%(prog)s '+version)
 parser.add_argument('dir', type=str, help='directory to search for mpls')
 args = parser.parse_args()

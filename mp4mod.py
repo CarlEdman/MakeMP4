@@ -1,10 +1,9 @@
 #!/usr/bin/python
-# Version: 0.1
-# Author: Carl Edman (email full name as one word at gmail.com)
 
 prog='MP4mod'
 version='0.3'
 author='Carl Edman (CarlEdman@gmail.com)'
+desc='Import, Export, and Swap MP4Meta Data.'
 
 import re
 import os
@@ -12,8 +11,13 @@ import os.path
 import argparse
 import subprocess
 import glob
+import logging
 
 from cetools import *
+
+parser = None
+args = None
+log = logging.getLogger()
 
 tags = {
   '-A':r'\s*Album:\s*(.+)', # -album       STR  Set the album title
@@ -80,10 +84,12 @@ media_n2t = dict_inverse(media_t2n)
 def mp4_valid(f):
   valid_exts = ['.mp4','.m4a','.m4b','.m4v']
   if not os.path.exists(f):
-    critical('file "' + f + '" does not exist')
+    log.error('file "' + f + '" does not exist')
+    exit(-1)
   b, e = os.path.splitext(f)
   if e not in valid_exts:
-    critical('file "' + f + '" does not have valid mp4 extension (' + ','.join(valid_exts) + ')')
+    log.error('file "' + f + '" does not have valid mp4 extension (' + ','.join(valid_exts) + ')')
+    exit(-1)
   return (b,e)
 
 def mp4meta_export(f):
@@ -91,12 +97,14 @@ def mp4meta_export(f):
   t = b + '.txt'
   if os.path.exists(t):
     if not args.force:
-      critical('cannot export metadata from "' + f + '" because "' + t + '" already exists')
+      log.error('cannot export metadata from "' + f + '" because "' + t + '" already exists')
+      exit(-1)
     os.remove(t)
   cs = reglob(re.escape(b)+r'(\.cover)?(\.art\[\d+\])?\.(jpg|png|gif|bmp)')
   if cs:
     if not args.force:
-      critical('cannot export metadata from "' + f + '" because "' + '","'.join(cs) + '" already exist(s)')
+      log.error('cannot export metadata from "' + f + '" because "' + '","'.join(cs) + '" already exist(s)')
+      exit(-1)
     for c in cs: os.remove(c)
   subprocess.check_call(['mp4info', f], stdout=open(t, "wt", encoding='utf-8', errors='replace'))
   subprocess.check_output(['mp4art', '--extract', f])
@@ -106,7 +114,8 @@ def mp4meta_import(f):
   if args.loglevel <= logging.DEBUG: debug('Before import info:\n' + subprocess.check_output(['mp4info', f]).decode(encoding='utf-8', errors='replace'))
   t = b + '.txt'
   if not os.path.exists(t):
-    critical('cannot extract metadata from "' + f + '" because "' + t + '" does not exist')
+    log.error('cannot extract metadata from "' + f + '" because "' + t + '" does not exist')
+    exit(-1)
   ts = []
   with open(t,'rt', encoding='utf-8', errors='replace') as td:
     for line in td:
@@ -175,7 +184,7 @@ def mp4meta_swap(f1, f2):
 if __name__ == '__main__':
   ops = ['export', 'import', 'swap']
 
-  parser = argparse.ArgumentParser(description='Import, Export, and Swap MP4Meta Data.')
+  parser = argparse.ArgumentParser(description=)
   parser.add_argument('--version', action='version', version='%(prog)s ' + version)
   parser.add_argument('operation', choices = ops, help='operation to be performed')
   parser.add_argument('files', nargs='+', help='files to be operated on')
@@ -188,23 +197,24 @@ if __name__ == '__main__':
   parser.add_argument('-l','--log',dest='logfile',action='store')
   args = parser.parse_args()
   logging.basicConfig(level=args.loglevel,filename=args.logfile,format='%(asctime)s [%(levelname)s]: %(message)s')
+
   if args.operation=='export':
     for g in args.files:
       fs = glob.glob(g)
       if not fs:
-        critical('"' + g + '" does not match any files')
+        log.error('"' + g + '" does not match any files')
       for f in fs:
         mp4meta_export(f)
   elif args.operation=='import':
     for g in args.files:
       fs = glob.glob(g)
       if not fs:
-        critical('"' + g + '" does not match any files')
+        log.error('"' + g + '" does not match any files')
       for f in fs:
         mp4meta_import(f)
   elif args.operation=='swap':
     if len(args.files) != 2:
-      critical('swap operation requires exactly two arguments')
+      log.error('swap operation requires exactly two arguments')
     mp4meta_swap(args.files[0],args.files[1])
   else:
-    critical('operation argument must be one of: ' + ', '.join(ops))
+    log.error('operation argument must be one of: ' + ', '.join(ops))

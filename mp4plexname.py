@@ -1,12 +1,21 @@
 #!/usr/bin/python
-# Version: 0.1
-# Author: Carl Edman (email full name as one word at gmail.com)
 
 prog='mp4plexname'
-version='0.1'
+version='0.3'
 author='Carl Edman (CarlEdman@gmail.com)'
+desc='Rename TV show extras Plex perferred format.'
 
-import os, re, os.path, argparse, warnings, logging, glob
+import os
+import re
+import os.path
+import argparse
+import logging
+import logging.handlers
+import glob
+
+parser = None
+args = None
+log = logging.getLogger()
 
 def plexRename(dir):
   base = os.path.basename(dir)
@@ -26,12 +35,12 @@ def plexRename(dir):
     name = d['name']
     if season>0 and (episode or volume): continue
     if season>0:
-      pre = 'Season {:d} '.format(season)
+      pre = f'Season {season:d} '
       if not name.startswith(pre): name = pre + name
     nr[base + ' S0E{:02d} ' + name] = fn
 
   if not nrany:
-     warnings.warn('No appropriate files in {}, skipping.'.format(dir))
+     log.warning(f'No appropriate files in {dir}, skipping.')
      return
 
   for (nfn, ep) in zip(sorted(nr.keys()),range(1,len(nr)+1)):
@@ -39,14 +48,21 @@ def plexRename(dir):
     nfile = os.path.join(dir, nfn.format(ep))
     if ofile==nfile: continue
     if os.path.exists(nfile):
-      warnings.warn('{} already exists, skipping.'.format(nfile))
-    if args.dryrun:
-      print('mv "{}" "{}"'.format(ofile, nfile))
-    else:
-      os.rename(ofile, nfile)
+      log.warning(f'{nfile} already exists, skipping.')
+    log.info(f'mv "{ofile}" "{nfile}"')
+    if args.dryrun: continue
+    os.rename(ofile, nfile)
+
+def main():
+  for gd in args.dirs:
+    ig = [d for d in glob.iglob(gd) if os.path.isdir(d)]
+    if len(ig)==0:
+      log.warning(f'No directories matching {gd}, skipping.')
+      continue
+    for d in ig: plexRename(d)
 
 if __name__ == '__main__':
-  parser = argparse.ArgumentParser(description='Rename TV show extras Plex perferred format.')
+  parser = argparse.ArgumentParser(fromfile_prefix_chars='@',prog=prog,epilog='Written by: '+author)
   parser.add_argument('--version', action='version', version='%(prog)s ' + version)
   parser.add_argument('--dryrun', dest='dryrun', action='store_true', help='do not perform operations, but only print them.')
   parser.add_argument('dirs', nargs='+', help='directories to be operated on')
@@ -54,12 +70,21 @@ if __name__ == '__main__':
   parser.add_argument('-d','--debug',dest='loglevel',action='store_const', const=logging.DEBUG)
   parser.add_argument('-l','--log',dest='logfile',action='store')
   parser.set_defaults(loglevel=logging.WARN)
-  args = parser.parse_args()
-  logging.basicConfig(level=args.loglevel,filename=args.logfile,format='%(asctime)s [%(levelname)s]: %(message)s')
 
-  for gd in args.dirs:
-    ig = [d for d in glob.iglob(gd) if os.path.isdir(d)]
-    if len(ig)==0:
-      warnings.warn('No directories matching {}, skipping.'.format(gd))
-      continue
-    for d in ig: plexRename(d)
+  args = parser.parse_args()
+  if args.dryrun and args.loglevel > logging.INFO: args.loglevel = logging.INFO
+
+  logformat = logging.Formatter('%(asctime)s [%(levelname)s]: %(message)s')
+
+  if args.logfile:
+    flogger=logging.handlers.WatchedFileHandler(args.logfile, 'a', 'utf-8')
+    flogger.setLevel(logging.DEBUG)
+    flogger.setFormatter(logformat)
+    log.addHandler(flogger)
+
+  slogger=logging.StreamHandler()
+  slogger.setLevel(args.loglevel)
+  slogger.setFormatter(logformat)
+  log.addHandler(slogger)
+
+  main()
