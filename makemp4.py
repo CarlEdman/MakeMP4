@@ -1157,8 +1157,9 @@ def main():
       if cfg.get('disable',False): continue
       build_video(cfg)
 
-  parser = argparse.ArgumentParser(fromfile_prefix_chars='@',prog=prog,epilog='Written by: '+author)
 
+if __name__ == "__main__":
+  parser = argparse.ArgumentParser(fromfile_prefix_chars='@',prog=prog,epilog='Written by: '+author)
   parser.add_argument('--version', action='version', version='%(prog)s '+version)
   parser.add_argument('-v','--verbose',dest='loglevel',action='store_const', const=logging.INFO)
   parser.add_argument('-d','--debug',dest='loglevel',action='store_const', const=logging.DEBUG)

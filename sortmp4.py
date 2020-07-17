@@ -14,8 +14,7 @@ import subprocess
 import glob
 import re
 
-import mutagen
-from mutagen.mp4 import MP4
+from tagmp4 import get_meta_mutagen
 from cetools import *
 
 parser = None
@@ -49,70 +48,39 @@ def optAndMove(opath,dir,nname=None):
     os.remove(npath)
     raise
 
-def main(f):
-  try:
-    mutmp4 = MP4(f)
-  except mutagen.MutagenError:
-    log.warning(f'Opening "{f}" metadata with mutagen failed, skipping.')
-    continue
+def sortmp4(f):
+  its = get_meta_mutagen(f)
 
-  tags = mutmp4.tags
-
-  if tags is None:
+  if not its:
     log.warning(f'Metadata of "{f}" is empty, skipping.')
-    continue
+    return
 
-  if 'stik' in tags and tags['stik']:
-    stik = tags['stik'][0]
-  else:
-    log.warning(f'No Media Type in {f}, skipping.')
-    continue
+  if 'type' not its:
+    log.warning(f'{f} has no type, skipping.')
+    return
 
-  if '©gen' in tags and tags['©gen']:
-    genre = tags['©gen'][0]
-  else:
-    log.warning(f'No Genre in {f}, skipping.')
-    continue
+  if its['type'] == "tvshow":
+    if 'show' not in its:
+      log.warning(f'No tv show title in {f}, skipping.')
+      return
+    optAndMove(f,os.path.join(args.target,'TV',sanitize_filename(alphabetize(its['show']))))
+    return
 
-  if '©day' in tags and tags['©day']:
-    year = tags['©day'][0]
-  else:
-    log.warning(f'No Year in {f}, skipping.')
-    continue
-
-  if 'desc' in tags and tags['desc']:
-    pass
-  else:
-    log.warning(f'No Description in {f}, skipping.')
-    continue
-
-  if '©nam' in tags and tags['©nam']:
-    name = tags['©nam'][0]
-  else:
-    log.warning(f'No Name in {f}, skipping.')
-    continue
-
-  if 'covr' in tags and tags['covr']:
-    pass
-  else:
-    log.warning(f'No Cover Art in {f}, skipping.')
-    continue
-
-  if stik in { 6, 10 }:
-    if 'tvsh' in tags and tags['tvsh']:
-      tvsh = tags['tvsh'][0].strip()
-    else:
-      log.warning(f'No tv show title in {f}.')
-      continue
-
-    optAndMove(f,os.path.join(args.target,'TV',sanitize_filename(alphabetize(tvsh))))
-  elif stik in { 0, 9 }:
-    if not os.path.isdir(os.path.join(args.target,'Movies',genre)):
-      log.warning(f'Genre "{genre}" in {f} not recognized, skipping.')
-      continue
-
-    if ':' in name:
-      (main, sub) = name.rsplit(':', 2)
+  if its['type'] == "movie":
+    if 'genre' not in its:
+      log.warning(f'No Genre in {f}, skipping.')
+      return
+    if not os.path.isdir(d:=os.path.join(args.target,'Movies',its['genre'])):
+      log.warning(f'Genre "{its['genre']}" in {f} not recognized, skipping.')
+      return
+    if 'year' not in its:
+      log.warning(f'No year for {f}, skipping.')
+      return
+    if 'name' not in its:
+      log.warning(f'No name for {f}, skipping.')
+      return
+    if ':' in its['name']:
+      (main, sub) = its['name'].rsplit(':', 2)
       sub = sub.strip()
       if 'interview' in sub.casefold():
         suffix = '-interview'
@@ -122,20 +90,25 @@ def main(f):
         suffix = '-trailer'
       else:
         suffix = '-behindthescenes'
-      ndir  = sanitize_filename(alphabetize(f'{main} ({year})'))
+      ndir  = sanitize_filename(alphabetize(f'{main} ({its['year']})'))
       nname = sanitize_filename(alphabetize(f'{sub}{suffix}.mp4'))
-      optAndMove(f, os.path.join(args.target, 'Movies', genre, ndir), nname)
+      optAndMove(f, os.path.join(d, ndir), nname)
     else:
-      ndir  = sanitize_filename(alphabetize(f'{name} ({year})'))
+      ndir  = sanitize_filename(alphabetize(f'{its['name']} ({its['year']})'))
       nname = ndir + ".mp4"
-      optAndMove(f, os.path.join(args.target, 'Movies', genre, ndir), nname)
-  elif stik in { 2 }:
+      optAndMove(f, os.path.join(d, ndir), nname)
+    return
+
+  if its['type'] == "audiobook":
     optAndMove(f, os.path.join(args.target,'Audiobooks'))
-  elif stik in { 14 }:
+    return
+
+  if its['type'] == "ringtone":
     optAndMove(f, os.path.join(args.target,'Music','Ringtones'))
-  else:
-    log.warning(f'Media Type "{stik}" in {f} not recognized, skipping.')
-    continue
+    return
+
+  log.warning(f'Media Type "{its["type"]}" in {f} not recognized, skipping.')
+  return
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser(description=desc,fromfile_prefix_chars='@',prog=prog,epilog='Written by: '+author)
@@ -151,7 +124,7 @@ if __name__ == '__main__':
   args = parser.parse_args()
   if args.dryrun and args.loglevel > logging.INFO: args.loglevel = logging.INFO
 
-  log = logging.getLogger()
+  log.setLevel(0)
   logformat = logging.Formatter('%(asctime)s [%(levelname)s]: %(message)s')
 
   slogger=logging.StreamHandler()

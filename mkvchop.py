@@ -96,18 +96,14 @@ if __name__ == '__main__':
   parser.add_argument('outfiles', type=str, help='mkv files to be created with decimal {} formatter')
   parser.add_argument('split', nargs='+', metavar='timecodeOrChapter', help='splitting points; may be either integer (for timecode from chapter number), +integer (to generate additional cutting points at regular chapter intervals starting at the last chapter given), float (for timecode in seconds), or hh:mm:ss.ms (for timecode in alternate format)')
 
-  if 'args' not in globals():
-    global args
-    args = parser.parse_args()
+  args = parser.parse_args()
 
-  if 'log' not in globals():
-    global log
-    log = logging.getLogger()
-    logformat = logging.Formatter('%(asctime)s [%(levelname)s]: %(message)s')
+  log.setLevel(0)
+  logformat = logging.Formatter('%(asctime)s [%(levelname)s]: %(message)s')
 
-    slogger=logging.StreamHandler()
-    slogger.setLevel(args.loglevel)
-    slogger.setFormatter(logformat)
-    log.addHandler(slogger)
+  slogger=logging.StreamHandler()
+  slogger.setLevel(args.loglevel)
+  slogger.setFormatter(logformat)
+  log.addHandler(slogger)
 
   main()

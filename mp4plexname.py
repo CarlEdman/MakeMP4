@@ -74,6 +74,7 @@ if __name__ == '__main__':
   args = parser.parse_args()
   if args.dryrun and args.loglevel > logging.INFO: args.loglevel = logging.INFO
 
+  log.setLevel(0)
   logformat = logging.Formatter('%(asctime)s [%(levelname)s]: %(message)s')
 
   if args.logfile:

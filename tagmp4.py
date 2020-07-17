@@ -14,6 +14,7 @@ import sys
 import json
 import logging
 import collections
+import glob
 
 from urllib.request import urlopen
 from urllib.parse   import urlparse, urlunparse, urlencode
@@ -26,6 +27,19 @@ from cetools        import *
 parser = None
 args = None
 log = logging.getLogger()
+
+type2stik = { "music": 1,
+              "audiobook": 2,
+              "musicvideo": 6,
+              "movie": 9,
+              "tvshow": 10,
+              "booklet": 11,
+              "ringtone": 14 }
+
+stik2type = dict_inverse(type2stik)
+
+rating2rtng = { }
+rtng2rating = dict_inverse(rating2rtng)
 
 def test_str(s):
   if not isinstance(s, str): return False
@@ -393,11 +407,93 @@ def get_meta_omdb(title, season, episode, artpath,
   return its
 
 @export
+def get_meta_mutagen(f):
+  its = dict()
+
+  try:
+    mutmp4 = MP4(f)
+  except mutagen.MutagenError:
+    log.error(f'Opening "{f}" metadata with mutagen failed.')
+
+  if mutmp4.tags is None: return its
+  t = mutmp4.tags
+
+  mp2its = { '©too': 'tool'
+           , '©gen': 'genre'
+           , '©cmt': 'comment'
+           , 'tvsn': 'season'
+           , 'tves': 'episode'
+           , 'tven': 'episodeid'
+           , '©ART': 'artist'
+           , '©wrt': 'writer'
+           , 'tvnn': 'network'
+           , '©day': 'year'
+           , 'desc': 'description'
+           , 'ldes': 'description'
+           , '©nam': 'name'
+           , 'tvsh': 'show'
+           , 'song': 'song'
+           }
+
+  for k, v in mp2its.items():
+    if k in t and t[k]:
+      w = ';'.join(str(x) for x in t[k])
+      try:
+        its[v] = int(w)
+      except ValueError:
+        its[v] = w
+
+  if 'hdvd' in t and t['hdvd']: its['hdvideo'] = True
+  if 'stik' in t and (w:=t['stik']):
+    its['type'] = ";".join(stik2type[x] for x in w if x in stik2type)
+  if 'rtng' in t and (w:=t['rtng']):
+    its['rating'] = ";".join(rtng2rating[x] for x in w if x in rtng2rating)
+
+  return its
+
+@export
+def get_meta_filename(f):
+  its = dict()
+
+  (dirname, filename) = os.path.split(f)
+  (name, ext) = os.path.splitext(filename)
+
+  if (m := re.fullmatch(r'(.*)\s+(\([12]\d\d\d\))',name)):
+    its['type'] = "movie"
+    its['title'] = m[1]
+    its['year'] = m[2]
+    return its
+
+  if (m := re.fullmatch(r'(.*)\s+(\([12]\d\d\d\))\s+(.*)',name)):
+    its['type'] = "movie"
+    its['title'] = m[1]
+    its['year'] = int(m[2])
+    its['song'] = m[3]
+    return its
+
+  if (m := re.fullmatch(r'(.*)\s+S0*([1-9]\d*)E(\d+)(\s+(.*))?',name)):
+    its['type'] = "tvshow"
+    its['show'] = m[1]
+    its['season'] = int(m[2])
+    its['episode'] = int(m[3])
+    if m[4]: its['song'] = m[4]
+    return its
+
+  if (m := re.fullmatch(r'(.*)\s+S0*([1-9]\d*)\s+(.*)',name)):
+    its['type'] = "tvshow"
+    its['show'] = m[1]
+    its['season'] = int(m[2])
+    its['song'] = m[3]
+    return its
+
+  return None
+
+@export
 def set_meta_mutagen(outfile, its):
   try:
     mutmp4 = MP4(outfile)
   except mutagen.MutagenError:
-    error(f'Opening "{outfile}" metadata with mutagen failed.')
+    log.error(f'Opening "{outfile}" metadata with mutagen failed.')
 
   if mutmp4.tags is None: mutmp4.add_tags()
   t = mutmp4.tags
@@ -405,8 +501,6 @@ def set_meta_mutagen(outfile, its):
   if test_str(p := its.get('tool', '__')): t['©too'] = [ p ]
   else: warning(f'"{outfile}" has no tool')
 
-  type2stik = { "music": 1, "audiobook": 2, "musicvideo": 6, "movie": 9,
-    "tvshow": 10, "booklet": 11, "ringtone": 14 }
   if (p := its.get('type', '__')) in type2stik: t['stik'] = [ type2stik[p] ]
   else: warning(f'"{outfile}" has no type')
 
@@ -468,7 +562,7 @@ def set_meta_mutagen(outfile, its):
   try:
     mutmp4.save()
   except mutagen.MutagenError:
-    error(f'Saving "{outfile}" metadata with mutagen failed.')
+    log.error(f'Saving "{outfile}" metadata with mutagen failed.')
 
 @export
 def set_chapters_mutagen(outfile, its):
@@ -480,7 +574,6 @@ def set_chapters_mutagen(outfile, its):
     if is_instance(cts, float):
       cts = [cts*elong+delay]
     elif test_str(cts):
-      breakpoint()
       cts = [float(i)*elong+delay for i in cts.split(';')]
     else:
       log.error(f'Chapter times "{cts}" for "{outfile}" are invalid')
@@ -542,7 +635,7 @@ def set_meta_cmd(outfile, its):
     cp = subprocess.run(call, check=True, capture_output=True)
   except subprocess.CalledProcessError as cpe:
     with open(outfile, 'w') as f: f.truncate(0)
-    error(f'Error code for {cpe.cmd}: {cpe.returncode} : {cpe.stdout} : {cpe.stderr}')
+    log.error(f'Error code for {cpe.cmd}: {cpe.returncode} : {cpe.stdout} : {cpe.stderr}')
 
   if 'coverart' in its:
     call = [ 'mp4art', outfile ]
@@ -553,7 +646,7 @@ def set_meta_cmd(outfile, its):
       cp = subprocess.run(call, check=True, capture_output=True)
     except subprocess.CalledProcessError as cpe:
       with open(outfile, 'w') as f: f.truncate(0)
-    error(f'Error code for {cpe.cmd}: {cpe.returncode} : {cpe.stdout} : {cpe.stderr}')
+      log.error(f'Error code for {cpe.cmd}: {cpe.returncode} : {cpe.stdout} : {cpe.stderr}')
   else:
     log.warning(f'"{outfile}" has no cover art')
 
@@ -595,23 +688,27 @@ def set_chapters_cmd(outfile, its):
 
 @export
 def make_filename(its):
-  print(its.keys())
   title = its.get('title', None) or its.get('show', None)
   title = alphabetize(title) if isinstance(title, str) else None
   if its['type']=='movie':
-    episode = f'- pt{i:d}' if isinstance(i := its['episode'], int) else ""
-    year = f' ({i:04d})' if isinstance(i := its['year'], int) else ""
-    song = " " + alphabetize(i) if isinstance(i := its['song'], str) else ""
+    episode = its.get('episode', None)
+    episode = f'- pt{i:d}' if isinstance(episode, int) else ""
+    year = its.get('year', None)
+    year = f' ({i:04d})' if isinstance(year, int) else ""
+    song = its.get('song', None)
+    song = " " + alphabetize(i) if isinstance(song, str) else ""
     plexname = sanitize_filename(f'{title}{episode}{year}{song}.mp4')
   elif its['type']=='tvshow':
-    if isinstance(season := its['season'], int) and isinstance(episode := its['episode'], int):
+    season = its.get('season', None)
+    episode = its.get('episode', None)
+    if isinstance(season, int) and isinstance(episode, int):
       seaepi = f' S{season:d}E{episode:02d}'
     elif isinstance(season, int):
       seaepi = f' S{season:d}'
     elif isinstance(episode, int):
       seaepi = f' S1E{episode:02d}'
     else:
-      seapi = ""
+      seaepi = ""
     song = ' ' + alphabetize(i) if isinstance(i := its['song'], str) else ""
     plexname = sanitize_filename(f'{title}{seaepi}{song}.mp4')
   else:
@@ -619,51 +716,53 @@ def make_filename(its):
   return sanitize_filename(plexname)
 
 def retag(f):
+  def upd(i):
+    if not i: return
+    for k,v in i.items():
+      if not v:
+        continue
+      elif k == 'comment':
+        its['comment'] = semicolon_join(v, its['comment'])
+      else:
+        its.setdefault(k, v)
+
   (dirname, filename) = os.path.split(f)
-  (name, ext) = os.path.splitext(f)
+  (name, ext) = os.path.splitext(filename)
   if ext not in { ".mp4" }:
     log.warning(f'{f} has invalid extension, skipping.')
     return
 
   its = collections.defaultdict(lambda: None)
+  upd(get_meta_filename(f))
+  upd(get_meta_mutagen(f))
 
-  if (m := re.fullmatch(r'(.*)\s+(\([12]\d\d\d\))',name)):
-    its['type'] = "movie"
-    its['title'] = m[1]
-    its['year'] = m[2]
-  elif (m := re.fullmatch(r'(.*)\s+(\([12]\d\d\d\))\s+(.*)',name)):
-    its['type'] = "movie"
-    its['title'] = m[1]
-    its['year'] = int(m[2])
-    its['song'] = m[3]
-  elif (m := re.fullmatch(r'(.*)\s+S0*([1-9]\d+)E(\d+)\s+(.*)',name)):
-    its['type'] = "tvshow"
-    its['show'] = m[1]
-    its['season'] = int(m[2])
-    its['episode'] = int(m[3])
-    its['song'] = m[4]
-  elif (m := re.fullmatch(r'(.*)\s+S0*([1-9]\d+)\s+(.*)',name)):
-    its['type'] = "tvshow"
-    its['show'] = m[1]
-    its['season'] = int(m[2])
-    its['song'] = m[3]
-  else:
-    log.warning(f"{f} name not recognized, skipping.")
-    return
+  title = its['title'] or its['show'] or its['base']
+  fn = f'{its["show"] or ""}{" S"+str(its["season"]) if its["season"] else ""}'
 
-  XXX
+  if args.descdir:
+    upd(get_meta_local(title, its['season'], its['episode'],
+      os.path.join(args.descdir, f'{fn}.txt')))
+
+  if args.omdbkey and args.artdir:
+    upd(get_meta_omdb(title, its['season'], its['episode'],
+      os.path.join(args.artdir, f'{fn}.jpg'),
+      its['omdb_id'], its['omdb_status'], args.omdbkey))
+
+  log.info(f'Updating "{f}" metadata keys {", ".join(its.keys())}.')
+  if not args.dryrun: set_meta_mutagen(f, its)
 
   if not (plexname := make_filename(its)):
     log.warning(f'Generating filename for {f} failed, skipping.')
     return
 
-  if (p := os.path.join(dirname, plexname + ext)) == f: return
+  if (p := os.path.join(dirname, plexname)) == f:
+    return
   if os.path.exists(p):
     log.warning(f'Renaming {f} to {plexname}, target exists, skipping.')
     return
 
-  log.info(f'Renaming {f} to {plexname}.')
-  if not args.dryrun: os.rename(f, cname)
+  log.info(f'Renaming "{f}" to "{plexname}".')
+  if not args.dryrun: os.rename(f, plexname)
 
 if __name__ == "__main__":
   parser = argparse.ArgumentParser(description=desc, fromfile_prefix_chars='@',prog=prog,epilog='Written by: '+author)
@@ -677,11 +776,14 @@ if __name__ == "__main__":
   parser.add_argument('--descdir',dest='descdir',action='store',help='directory for .txt files with descriptive data')
   parser.add_argument('--artdir',dest='artdir',action='store',help='directory for .jpg and .png cover art')
   parser.add_argument('--omdbkey',dest='omdbkey',action='store',help='your OMDB key to automatically retrieve posters')
+  parser.add_argument('--dryrun', action='store_true', default=False, help='only print updates, but do not execute them.')
 
   for inifile in [ f'{os.path.splitext(sys.argv[0])[0]}.ini', prog + '.ini', '..\\' + prog + '.ini' ]:
     if os.path.exists(inifile): sys.argv.insert(1,'@'+inifile)
   args = parser.parse_args()
+  if args.dryrun and args.loglevel > logging.INFO: args.loglevel = logging.INFO
 
+  log.setLevel(0)
   logformat = logging.Formatter('%(asctime)s [%(levelname)s]: %(message)s')
 
   slogger=logging.StreamHandler()

@@ -1,5 +1,5 @@
 @updategodaddy
 MakeMP4.sublime-project
 MakeMP4.sublime-workspace
-makemp4.ini
+*.ini
 __pycache__/

@@ -100,6 +100,7 @@ class AdvConfig(RawConfigParser):
       RawConfigParser.set(self,section,opt,self.valtostr(nval))
     else:
       RawConfigParser.remove_option(self,section,opt)
+    log.debug(f'{section} {opt}: {oval}({type(oval)}) => {nval}({type(nval)})')
 
   def items(self,section=None):
     if not section: section=self.currentsection
@@ -114,6 +115,7 @@ class AdvConfig(RawConfigParser):
       if oval == nval: continue
       if not nval and oval is None: continue
       if oval: continue
+      log.debug(f'{section} {opt}: => {nval}{type(nval)}')
       self.set(opt, nval, section=section)
 
   def get(self, opt, default=None, section=None):
