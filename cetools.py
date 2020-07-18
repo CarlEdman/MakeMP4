@@ -29,13 +29,13 @@ def export(func):
   func.__globals__['__all__'].append(func.__name__)
   return func
 
-class SyncDict(UserDict):
+class SyncDict(collections.UserDict):
   """A subclass of Userdict for use by SyncConfig"""
 
   def __init__(self, config):
     super().__init__()
     self.config = config
-    self.modified = True
+    self.modified = False
 
   def __getitem__(self, key):
     if key in self.data:
@@ -84,11 +84,11 @@ class SyncConfig(ConfigParser):
         sects_modified = True
         self[s].modified = False
 
-    file_modified = self.mtime<os.path.getmtime(self.filename)
+    file_modified = self.mtime < os.path.getmtime(self.filename)
 
     if sects_modified:
       if file_modified:
-        warning(f'Overwriting external edits in "{self.filename}"')
+        log.warning(f'Overwriting external edits in "{self.filename}"')
       with open(self.filename, 'wt', encoding='utf-8') as f:
         self.write(f)
     elif file_modified:

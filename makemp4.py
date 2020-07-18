@@ -21,7 +21,6 @@ import glob
 import subprocess
 from fractions import Fraction
 
-import regex
 from AdvConfig import AdvConfig
 
 from cetools import *
@@ -147,32 +146,31 @@ def config_from_base(cfg,base):
   cfg.set('type','')
 
   #cfg.set('audio_languages','eng') # Set if we want to keep only some languages
-  r=regex.RegEx()
-  if r(r'^(?P<show>.*?) (pt\.? *(?P<episode>\d+) *)?\((?P<year>\d*)\) *(?P<song>.*?)$',base):
+  if (m := re.fullmatch(r'(?P<show>.*?) (pt\.? *(?P<episode>\d+) *)?\((?P<year>\d*)\) *(?P<song>.*?)',base)):
     cfg.set('type','movie')
-    cfg.set('show',r.show)
-    if r.episode: cfg.set('episode',int(r.episode))
-    cfg.set('year',r.year)
-    cfg.set('song',r.song)
-  elif r(r'^(?P<show>.*?) S(?P<season>\d+)E(?P<episode>\d+)$') or r(r'^(.*?) (Se\.\s*(?P<season>\d+)\s*)?Ep\.\s*(?P<episode>\d+)$'):
+    cfg.set('show',m['show'])
+    if m['episode']: cfg.set('episode',int(m['episode']))
+    cfg.set('year',m['year'])
+    cfg.set('song',m['song'])
+  elif (m := re.fullmatch(r'(?P<show>.*?) S(?P<season>\d+)E(?P<episode>\d+)$')) or (m := re.fullmatch(r'(.*?) (Se\.\s*(?P<season>\d+)\s*)?Ep\.\s*(?P<episode>\d+)$')):
     cfg.set('type','tvshow')
-    cfg.set('show',r.show)
-    if r.season and r.season!='0': cfg.set('season',int(r.season))
-    cfg.set('episode',int(r.episode))
-  elif r(r'^(?P<show>.*) S(?P<season>\d+) +(?P<song>.*?)$') or r(r'^(.*) Se\. *(?P<season>\d+) *(?P<song>.*?)$'):
+    cfg.set('show',m['show'])
+    if m['season'] and m['season']!='0': cfg.set('season',int(m['season']))
+    cfg.set('episode',int(m['episode']))
+  elif (m := re.fullmatch(r'(?P<show>.*) S(?P<season>\d+) +(?P<song>.*?)')) or (m := re.fullmatch(r'(.*) Se\. *(?P<season>\d+) *(?P<song>.*?)')):
     cfg.set('type','tvshow')
-    cfg.set('show',r.show)
-    cfg.set('season',int(r.season))
-    cfg.set('song',r.song)
-  elif r(r'^(?P<show>.*) (S(?P<season>\d+))?(V|Vol\. )(?P<episode>\d+)$'):
+    cfg.set('show',m['show'])
+    cfg.set('season',int(m['season']))
+    cfg.set('song',m['song'])
+  elif (m := re.fullmatch(r'(?P<show>.*) (S(?P<season>\d+))?(V|Vol\. )(?P<episode>\d+)')):
     cfg.set('type','tvshow')
-    cfg.set('show',r.show)
-    cfg.set('season',int(r.season))
-    cfg.set('episode',int(r.episode))
-  elif r(r'^(?P<show>.*) S(?P<season>\d+)D\d+$'):
+    cfg.set('show',m['show'])
+    cfg.set('season',int(m['season']))
+    cfg.set('episode',int(m['episode']))
+  elif (m := re.fullmatch(r'(?P<show>.*) S(?P<season>\d+)D\d+')):
     cfg.set('type','tvshow')
-    cfg.set('show',r.show)
-    cfg.set('season',int(r.season))
+    cfg.set('show',m['show'])
+    cfg.set('season',int(m['season']))
     cfg.set('episode','')
   cfg.sync()
 
@@ -182,18 +180,16 @@ def config_from_idxfile(cfg,idxfile):
   timestamp=[]
   filepos=[]
   for l in idx.splitlines():
-    if re.fullmatch(r'\s*#.*',l):
-      continue
-    elif re.fullmatch(r'\s*$',l):
-      continue
+    if re.fullmatch(r'\s*#.*',l): continue
+    elif re.fullmatch(r'\s*',l): continue
     elif (m := re.fullmatch(r'\s*timestamp:\s*(?P<time>.*),\s*filepos:\s*(?P<pos>[0-9a-fA-F]+)\s*',l)) and (t := parse_time(m['time'])):
       timestamp.append(str(t))
       filepos.append(m['pos'])
-    elif m := re.fullmatch(r'\s*id\s*:\s*(\w+?)\s*, index:\s*(\d+)\s*$',l):
+    elif (m := re.fullmatch(r'\s*id\s*:\s*(\w+?)\s*, index:\s*(\d+)\s*',l)):
       cfg.set('language' ,m[1]) # Convert to 3 character codes
       cfg.set('langindex',m[2])
-    elif m := re.fullmatch(r'\s*(\w+)\s*:\s*(.*?)\s*',l):
-      cfg.set(m[1],r[2])
+    elif (m := re.fullmatch(r'\s*(\w+)\s*:\s*(.*?)\s*',l)):
+      cfg.set(m[1],m[2])
     else:
       log.warning(f'{cfg.get("base","NOBASE","MAIN")}: Ignorning in {idxfile} uninterpretable line: {l}')
   cfg.set('timestamp',','.join(timestamp))
@@ -231,7 +227,6 @@ def prepare_mpg(mpgfile):
   cfg.sync()
   config_from_dgifile(cfg,dgifile)
 
-  r=regex.RegEx()
   for file in glob.iglob(f'{base} *'):
     m = re.fullmatch(re.escape(base)+r'\s+T[0-9a-fA-F][0-9a-fA-F]\s+(.*)\.(ac3|dts|mpa|mp2|wav|pcm)',file)
     if not m: continue
@@ -249,17 +244,21 @@ def prepare_mpg(mpgfile):
 #    cfg.set('elongation',1.0)
 #    cfg.set('normalize',False)
     cfg.set('features',feat)
-    if r(r'\bDELAY (-?\d+)ms\b',feat): cfg.set('delay',float(r[0])/1000.0)
-    if r(r'([_0-9]+)ch\b',feat):
-      cfg.set('channels',r[0])
+    if m := re.search(r'\bDELAY (-?\d+)ms\b',feat):
+      cfg.set('delay',float(m[1])/1000.0)
+    if m := re.search(r'([_0-9]+)ch\b',feat):
+      cfg.set('channels',m[1])
 #      if r[0]=="3_2": cfg.set('downmix',2)
-    if r(r'\b([\d.]+)(K|Kbps|bps)\b',feat):
-      bps=int(r[0])
-      if r[1][0]=="K": bps=bps*1000
+    if m := re.search(r'\b([\d.]+)(K|Kbps|bps)\b',feat):
+      bps=int(m[1])
+      if m[2][0]=="K": bps=bps*1000
       cfg.set('bit_rate',bps)
-    if r(r'\b([0-9]+)bit\b',feat): cfg.set('bit_depth',r[0])
-    if r(r'\b([0-9]+)rate\b',feat): cfg.set('sample_rate',r[0])
-    if r(r'\b([a-z]{3})-lang\b',feat):  cfg.set('language',r[0])
+    if m := re.search(r'\b([0-9]+)bit\b',feat):
+      cfg.set('bit_depth',m[1])
+    if m := re.search(r'\b([0-9]+)rate\b',feat):
+      cfg.set('sample_rate',m[1])
+    if m := re.search(r'\b([a-z]{3})-lang\b',feat):
+      cfg.set('language',m[1])
     cfg.sync()
 
   if make_srt(cfg,track+1,[mpgfile]): track+=1
@@ -493,9 +492,9 @@ def prepare_mkv(mkvfile):
 def prepare_vob(vobfile):
   base=os.path.splitext(os.path.basename(vobfile))[0]
   r=regex.RegEx()
-  if r(r'^(.*)_(\d+)$',base):
-    if int(r[1])!=1: return
-    base=r[0]
+  if m := re.fullmatch(r'(.*)_(\d+)',base):
+    if int(m[1])!=2: return
+    base=m[1]
   cfgfile=base+'.cfg'
   if not readytomake(cfgfile,vobfile): return False
   cfg=AdvConfig(cfgfile)
@@ -549,13 +548,13 @@ def config_from_dgifile(cfg):
     if not os.path.exists(logfile): continue
     with open(logfile,'rt', encoding='utf-8-sig', errors='replace') as fp: log = fp.read()
     for l in log.splitlines():
-      if not r('^([^:]*):(.*)$',l):
+      if m := re.fullmatch('([^:]*):(.*)',l):
+        k='dg'+m[1].translate(trans)
+        v=m[2].strip()
+        if not v: continue
+        cfg.set(k, cfg.get(k) + ";" + v if cfg.has(k) else v)
+      else:
         log.warning(f'Unrecognized DGIndex log line: "{repr(l)}"')
-        continue
-      k='dg'+r[0].translate(trans)
-      v=r[1].strip()
-      if not v: continue
-      cfg.set(k, cfg.get(k) + ";" + v if cfg.has(k) else v)
     if cfg.get('dginfo')=='Finished!': break
   os.remove(logfile)
   cfg.sync()
@@ -565,54 +564,60 @@ def config_from_dgifile(cfg):
   if len(dgip)!=4:
     log.error('Malformed index file ' + dgifile)
     open(dgifile,'w').truncate(0)
-    return
-  r=regex.RegEx()
-  if r(r'^DG(AVC|MPG|VC1)IndexFileNV(14|15|16)',dgip[0]):
-    if not r(r'\bCLIP\ *(?P<left>\d+) *(?P<right>\d+) *(?P<top>\d+) *(?P<bottom>\d+)',dgip[2]):
-      log.error('No CLIP in ' + dgifile)
+    return False
+  if re.fullmatch('^DG(AVC|MPG|VC1)IndexFileNV(14|15|16)',dgip[0]):
+    m = re.search(r'\bCLIP\ *(?P<left>\d+) *(?P<right>\d+) *(?P<top>\d+) *(?P<bottom>\d+)',dgip[2])
+    if not m:
+      log.error(f'No CLIP in {dgifile}')
       open(dgifile,'w').truncate(0)
-      return
-    cl=int(r.left)
-    cr=int(r.right)
-    ct=int(r.top)
-    cb=int(r.bottom)
-    cl=cr=ct=cb=0
-    if not r(r'\bSIZ *(?P<sizex>\d+) *x *(?P<sizey>\d+)',dgip[3]):
+      return False
+
+    cl = int(m['left'])
+    cr = int(m['right'])
+    ct = int(m['top'])
+    cb = int(m['bottom'])
+    m = re.search(r'\bSIZ *(?P<sizex>\d+) *x *(?P<sizey>\d+)',dgip[3])
+    if not m:
       log.error('No SIZ in ' + dgifile)
       open(dgifile,'w').truncate(0)
-      return
-    psx=int(r.sizex)
-    psy=int(r.sizey)
+      return False
+    psx = int(m['sizex'])
+    psy = int(m['sizey'])
 
     if cfg.has('dgsar'):
       sarf=cfg.get('dgsar')
     elif cfg.has('display_width') and cfg.has('display_height') and cfg.has('pixel_width') and cfg.has('pixel_height'):
       sarf=Fraction(cfg.get('display_width')*cfg.get('pixel_height'),cfg.get('display_height')*cfg.get('pixel_width'))
-#    elif r(r'^\s*(\d+)\s*x\s*(\d+)\s*XXX\s*(\d+)\s*:(\d+)',cfg.get('dgdisplaysize','')+'XXX'+cfg.get('dgaspectratio','')):
+#    elif m := re.fullmatch(r'\s*(\d+)\s*x\s*(\d+)\s*XXX\s*(\d+)\s*:(\d+)',cfg.get('dgdisplaysize','')+'XXX'+cfg.get('dgaspectratio','')):
 #      sarf=Fraction(int(r[1])*int(r[2]),int(r[0])*int(r[3]))
-#    elif r(r'^\s*(\d+)\s*x\s*(\d+)\s*XXX\s*(\d+)\s*:(\d+)',cfg.get('dgcodedsize','')+'XXX'+cfg.get('dgaspectratio','')):
+#    elif m := re.fullmatch(r'\s*(\d+)\s*x\s*(\d+)\s*XXX\s*(\d+)\s*:(\d+)',cfg.get('dgcodedsize','')+'XXX'+cfg.get('dgaspectratio','')):
 #      sarf=Fraction(int(r[1])*int(r[2]),int(r[0])*int(r[3]))
-#    elif cfg.has('display_width') and cfg.has('display_height') and r(r'^\s*(\d+)\s*x\s*(\d+)\s*$',cfg.get('picture_size','')):
+#    elif cfg.has('display_width') and cfg.has('display_height') and re.fullmatch(r'\s*(\d+)\s*x\s*(\d+)\s*$',cfg.get('picture_size','')):
 #      sarf=Fraction(cfg.get('display_width')*int(r[0]),cfg.get('display_height')*int(r[1]))
     else:
       log.warning(f'Guessing 1:1 SAR for {dgifile}')
       sarf=Fraction(1,1)
 
-    if not r(r'\bORDER *(?P<order>\d+)',dgip[3]):
+    m = re.search(r'\bORDER *(?P<order>\d+)',dgip[3])
+    if not m:
       log.error('No ORDER in ' + dgifile)
       open(dgifile,'w').truncate(0)
-      return
-    fio=int(r.order)
-    if not r(r'\bFPS *(?P<num>\d+) */ *(?P<denom>\d+) *',dgip[3]):
+      return False
+    fio=int(m['order'])
+
+    m = re.search(r'\bFPS *(?P<num>\d+) */ *(?P<denom>\d+) *',dgip[3])
+    if not m:
       log.error('No FPS in ' + dgifile)
       open(dgifile,'w').truncate(0)
-      return
-    frf=Fraction(int(r.num),int(r.denom))
-    if not r(r'\b(?P<ipercent>\d*\.\d*)% *FILM',dgip[3]):
+      return False
+    frf=Fraction(int(m['num']),int(m['denom']))
+
+    m = re.search(r'\b(?P<ipercent>\d*\.\d*)% *FILM',dgip[3])
+    if not m:
       log.error('No FILM in ' + dgifile)
       open(dgifile,'w').truncate(0)
-      return
-    ilp = float(r.ipercent)/100.0
+      return False
+    ilp = float(r['ipercent'])/100.0
 
     if fio == 0:
       ilt = 'PROGRESSIVE'
@@ -621,32 +626,46 @@ def config_from_dgifile(cfg):
     else:
       ilt = 'INTERLACE'
 
-    if not r(r'\bPLAYBACK *(?P<playback>\d+)',dgip[3]): # ALSO 'CODED' FRAMES
+    # ALSO 'CODED' FRAMES
+    m = re.search(r'\bPLAYBACK *(?P<playback>\d+)',dgip[3])
+    if not m:
       log.error('No PLAYBACK in ' + dgifile)
       open(dgifile,'w').truncate(0)
-      return
-    frames = int(r.playback)
-  elif r(r'^DGIndexProjectFile16',dgip[0]):
-    if not r(r'^FINISHED\s+([0-9.]+)%\s+(.*?)\s*$',dgip[3]): return False
-    ilp=float(r[0])/100.0
-    ilt=r[1]
-    if not r(r'\bAspect_Ratio=(\d+):(\d+)',dgip[1]): return False
-    arf=Fraction(int(r[0]),int(r[1]))
-    if not r(r'\bClipping=\ *(\d+) *, *(\d+) *, *(\d+) *, *(\d+)',dgip[1]): return False
-    cl,cr,ct,cb=[int(r[i]) for i in range(4)]
-    if not r(r'\bPicture_Size= *(\d+)x(\d+)',dgip[1]): return False
-    psx,psy=[int(r[i]) for i in range(2)]
+      return False
+    frames = int(r['playback'])
+  elif re.fullmatch(r'DGIndexProjectFile16',dgip[0]):
+    m = re.search(r'FINISHED\s+([0-9.]+)%\s+(.*?)\s*',dgip[3])
+    if not m: return False
+
+    ilp=float(m[1])/100.0
+    ilt=m[2]
+
+    m = re.search(r'\bAspect_Ratio=(\d+):(\d+)',dgip[1])
+    if not m: return False
+    arf=Fraction(int(m[1]),int(m[2]))
+
+    m = re.search(r'\bClipping=\ *(\d+) *, *(\d+) *, *(\d+) *, *(\d+)',dgip[1])
+    if not m: return False
+    cl,cr,ct,cb=[int(m[i]) for i in range(1, 5)]
+
+    m = re.search(r'\bPicture_Size= *(\d+)x(\d+)',dgip[1])
+    if not m: return False
+    psx,psy=[int(m[i]) for i in range(1, 3)]
     sarf=arf/Fraction(psx,psy)
-    if not r(r'\bField_Operation= *(\d+)',dgip[1]): return False
-    fio=int(r[0])
-    if not r(r'\bFrame_Rate= *(\d+) *\((\d+)/(\d+)\)',dgip[1]): return False
+
+    m = re.search(r'\bField_Operation= *(\d+)',dgip[1])
+    if not m: return False
+    fio=int(m[1])
+
+    m = re.search(r'\bFrame_Rate= *(\d+) *\((\d+)/(\d+)\)',dgip[1])
+    if not m: return False
     frm=float(r[0])/1000.0
     frf=Fraction(int(r[1]),int(r[2]))
 
     frames=0
     for l in dgip[2].splitlines():
-      if r(r'^([0-9a-f]+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(?P<flags>([0-9a-f]+ +)*[0-9a-f]+)\s*$',l):
-        frames += len(r[7].split())
+      if m := re.fullmatch(r'([0-9a-f]+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(?P<flags>([0-9a-f]+ +)*[0-9a-f]+)\s*',l):
+        frames += len(m[8].split())
   else:
     log.error('Unrecognize index file ' + dgifile)
     open(dgifile,'w').truncate(0)
@@ -817,8 +836,8 @@ def build_audio(cfg):
   call += [ '|', 'qaac64', '--threading', '--ignorelength', '--no-optimize', '--tvbr', str(cfg.get('quality',60)), '--quality', '2', '-', '-o', outfile]
 
   res=do_call(call, outfile)
-  if res and r(r'\bwrote (\d+\.?\d*) seconds\b',res):
-    cfg.set('duration',float(r[0]))
+  if res and (m := re.match(r'\bwrote (\d+\.?\d*) seconds\b',res)):
+    cfg.set('duration',float(m[1]))
   if cfg.has('duration') and cfg.has('duration',section='MAIN') and abs(cfg.get('duration')-cfg.get('duration',section='MAIN'))>0.5:
     log.warning(f'Audio track "{infile}" duration differs (elongation={cfg.get("duration")/cfg.get("duration",section="MAIN"):f})')
   cfg.sync()
@@ -894,9 +913,9 @@ def build_video(cfg):
   cfg.set('frame_rate_ratio_out',fro)
 
   if cfg.has('crop'):
-    if r(r'^\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*$',cfg.get('crop')):
+    if m := re.fullmatch(r'\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*$',cfg.get('crop')):
       cl,cr,ct,cb=[int(r[i]) for i in range(4)]
-      if r(r'^\s*(\d+)\s*x\s*(\d+)\s*$',cfg.get('picture_size','')):
+      if m := re.fullmatch(r'\s*(\d+)\s*x\s*(\d+)\s*$',cfg.get('picture_size','')):
         px, py=[int(r[i]) for i in range(2)]
         if (px-cl-cr) % 2!=0: cr+=1
         if (py-ct-cb) % 2!=0: cb+=1
@@ -963,14 +982,14 @@ def build_video(cfg):
 
   cfg.sync()
   res=do_call(call,outfile)
-  if res and r(r'\bencoded (\d+) frames\b',res):
+  if res and (m := re.match(r'\bencoded (\d+) frames\b',res)):
     cfg.sync()
-    frames=int(r[0])
+    frames=int(m[1])
     oframes = int(fro/fri*cfg.get('frames')) # Adjust oframes for difference between frame-rate-in and frame-rate-out
     if cfg.has('frames') and abs(frames-oframes)>2:
       log.warning(f'Encoding changed frames in "{infile}" from {oframes:d} to {frames:d}')
     cfg.set('frames',frames)
-    cfg.set('duration',float(int(r[0])/fro))
+    cfg.set('duration',float(frames/fro))
     mdur=cfg.get('duration',cfg.get('duration'),section='MAIN')
     if abs(cfg.get('duration')-mdur)>60.0:
       log.warning(f'Video track "{infile}" duration differs (elongation={cfg.get("duration")/mdur:f})')
