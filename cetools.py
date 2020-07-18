@@ -8,6 +8,13 @@ import re
 import logging
 import logging.handlers
 
+import collections
+import weakref
+from weakref import WeakValueDictionary, finalize
+from configparser import ConfigParser
+
+from cetools import *
+
 if os.name == 'nt':
   import ctypes
   import win32api
@@ -21,6 +28,73 @@ def export(func):
     func.__globals__['__all__'] = []
   func.__globals__['__all__'].append(func.__name__)
   return func
+
+class SyncDict(UserDict):
+  """A subclass of Userdict for use by SyncConfig"""
+
+  def __init__(self, config):
+    super().__init__()
+    self.config = config
+    self.modified = True
+
+  def __getitem__(self, key):
+    if key in self.data:
+      return self.data[key]
+    return None
+
+  def __setitem__(self, key, item):
+    if item is None:
+      if key not in self.data: return
+      del self.data[key]
+    else:
+      if self.data[key] == item: return
+      self.data[key] = item
+    self.modified = True
+
+class SyncConfig(ConfigParser):
+  """A subclass of ConfigParser with automatic syncing to files"""
+  _configs = weakref.WeakValueDictionary()
+
+  def __new__(cls, filename):
+    if filename in SyncConfig._configs:
+      n = SyncConfig._configs[filename]
+      n.sync()
+    else:
+      n = super(SyncConfig, cls).__new__(cls)
+      SyncConfig._configs[filename]=n
+      weakref.finalize(n, n.sync)
+    return n
+
+  def __init__(self, filename):
+    if hasattr(self, 'filename') and self.filename == filename: return
+    self.filename = filename
+    self.dict_type = SyncDict
+    super().__init__(allow_no_value=True)
+    self.sync()
+
+  def sync(self):
+    if not os.path.exists(self.filename):
+      with open(self.filename, 'wt', encoding='utf-8') as fp: self.write(fp)
+      self.mtime=os.path.getmtime(self.filename)
+      return
+
+    sects_modified = False
+    for s in self.sections():
+      if self[s].modified:
+        sects_modified = True
+        self[s].modified = False
+
+    file_modified = self.mtime<os.path.getmtime(self.filename)
+
+    if sects_modified:
+      if file_modified:
+        warning(f'Overwriting external edits in "{self.filename}"')
+      with open(self.filename, 'wt', encoding='utf-8') as f:
+        self.write(f)
+    elif file_modified:
+      with open(self.filename, 'rt', encoding='utf-8') as f:
+        self.read_file(f)
+
 
 class TitleHandler(logging.Handler):
   """
