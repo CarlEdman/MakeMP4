@@ -55,14 +55,15 @@ def sortmp4(f):
     log.warning(f'Metadata of "{f}" is empty, skipping.')
     return
 
-  if 'type' not its:
+  if 'type' not in its:
     log.warning(f'{f} has no type, skipping.')
     return
 
+  if 'show' not in its:
+    log.warning(f'No show title in {f}, skipping.')
+    return
+
   if its['type'] == "tvshow":
-    if 'show' not in its:
-      log.warning(f'No tv show title in {f}, skipping.')
-      return
     optAndMove(f,os.path.join(args.target,'TV',sanitize_filename(alphabetize(its['show']))))
     return
 
@@ -71,7 +72,7 @@ def sortmp4(f):
       log.warning(f'No Genre in {f}, skipping.')
       return
     if not os.path.isdir(d:=os.path.join(args.target,'Movies',its['genre'])):
-      log.warning(f'Genre "{its['genre']}" in {f} not recognized, skipping.')
+      log.warning(f'Genre "{its["genre"]}" in {f} not recognized, skipping.')
       return
     if 'year' not in its:
       log.warning(f'No year for {f}, skipping.')
@@ -79,9 +80,10 @@ def sortmp4(f):
     if 'name' not in its:
       log.warning(f'No name for {f}, skipping.')
       return
-    if ':' in its['name']:
-      (main, sub) = its['name'].rsplit(':', 2)
-      sub = sub.strip()
+    shyr = alphabetize(sanitize_filename(f'{its["show"]} ({its["year"]})'))
+    tdir = os.path.join(d, shyr)
+    if its["name"].startswith(its["show"] + ':'):
+      sub = its["name"][len(its["show"])+1:].strip()
       if 'interview' in sub.casefold():
         suffix = '-interview'
       elif 'scene' in sub.casefold():
@@ -90,13 +92,9 @@ def sortmp4(f):
         suffix = '-trailer'
       else:
         suffix = '-behindthescenes'
-      ndir  = sanitize_filename(alphabetize(f'{main} ({its['year']})'))
-      nname = sanitize_filename(alphabetize(f'{sub}{suffix}.mp4'))
-      optAndMove(f, os.path.join(d, ndir), nname)
+      optAndMove(f, tdir, sanitize_filename(alphabetize(f'{sub}{suffix}.mp4')))
     else:
-      ndir  = sanitize_filename(alphabetize(f'{its['name']} ({its['year']})'))
-      nname = ndir + ".mp4"
-      optAndMove(f, os.path.join(d, ndir), nname)
+      optAndMove(f, tdir, shyr + ".mp4")
     return
 
   if its['type'] == "audiobook":
@@ -132,7 +130,7 @@ if __name__ == '__main__':
   slogger.setFormatter(logformat)
   log.addHandler(slogger)
 
-  if not args.files: args.files = ['*.mp4', '*.m4r', '*.m4b', '*.m4a']
+  if not args.files: args.files = ['*.mp4', '*.m4r', '*.m4b']
   infiles = []
   for f in args.files: infiles.extend(glob.glob(f))
   if not infiles:

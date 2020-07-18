@@ -1101,9 +1101,9 @@ def main():
       del its['comment']
     cfg.item_defs(its)
 
-    its = get_meta_omdb(title, cfg.get('season'), cfg.get('episode'),
+    its = get_meta_imdb(title, cfg.get('season'), cfg.get('episode'),
       os.path.join(args.artdir, f'{fn}.jpg'),
-      cfg.get('omdb_id'), cfg.get('omdb_status'), args.omdbkey)
+      cfg.get('imdb_id'), cfg.get('omdb_status'), args.omdbkey)
     if 'comment' in its:
       cfg.set('comment',semicolon_join(cfg.get('comment',None), its['comment']))
       del its['comment']

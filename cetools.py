@@ -101,12 +101,12 @@ def sanitize_filename(s):
   return s.translate(trans)
 
 def parse_time(s):
-  m = re.fullmatch(r'(?P<neg>-)?(?=(?P<hrs>\d+):)?(?=(?P<mins>\d+):)?(?P<secs>\d+(\.\d*)?)', s)
+  m = re.fullmatch(r'(?P<neg>-)?(?P<hrs>\d+):(?P<mins>\d+):(?P<secs>\d+(\.\d*)?)', s)
   if not m: return m
-  t =         float(m['secs'])
-  t +=   60.0*float(m['mins']) if 'mins' in m else 0
-  t += 3600.0*float(m['hrs']) if 'hrs' in m else 0
-  if neg in m: t = -t
+  t = float(m['secs'])
+  if m['mins']: t += 60.0*float(m['mins'])
+  if m['secs']: t += 3600.0*float(m['hrs'])
+  if m['neg']:  t = -t
   return t
 
 def unparse_time(t):
@@ -122,7 +122,7 @@ def work_lock(file):
   if not file:
     return False
   if os.path.exists(file+worklock):
-    warning('File "' + file + '" already worklocked')
+    log.warning('File "' + file + '" already worklocked')
     return False
   open(file+worklock,'w').truncate(0)
   return True
@@ -131,10 +131,10 @@ def work_unlock(file):
   if not file:
     return False
   if not os.path.exists(file+worklock):
-    warning('File "' + file + '" not worklocked')
+    log.warning('File "' + file + '" not worklocked')
     return False
   if os.path.getsize(file+worklock) != 0:
-    error('Worklock for "' + file + '" not empty!')
+    log.error('Worklock for "' + file + '" not empty!')
     return False
   os.remove(file+worklock)
 
@@ -145,12 +145,12 @@ def work_lock_delete():
   for l in os.listdir(os.getcwd()):
     if not l.endswith(worklock): continue
     if os.path.getsize(l) != 0:
-       error('Worklock for "' + file + '" not empty!')
+       log.error('Worklock for "' + file + '" not empty!')
        continue
     os.remove(l)
     f = l[:-len(worklock)]
     if not os.path.exists(f):
-      warning('No file existed for worklock "' + l + '"')
+      log.warning('No file existed for worklock "' + l + '"')
       continue
     os.remove(f)
 
