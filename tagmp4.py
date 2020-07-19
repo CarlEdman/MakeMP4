@@ -508,22 +508,22 @@ def set_meta_mutagen(outfile, its):
   t = mutmp4.tags
 
   if test_str(p := its.get('tool', None)): t['©too'] = [ p ]
-  else: warning(f'"{outfile}" has no tool')
+  else: log.warning(f'"{outfile}" has no tool')
 
   if (p := its.get('type', None)) in type2stik: t['stik'] = [ type2stik[p] ]
-  else: warning(f'"{outfile}" has no type')
+  else: log.warning(f'"{outfile}" has no type')
 
   rating2rtng = { }
   if (p := its.get('rating', None)):
     t['rtng'] = (rating2rtng[q] for q in p.split(';') if q in rating2rtng)
 
   if test_str(p := its.get('genre', None)): t['©gen'] = p.split(';')
-  else: warning(f'"{outfile}" has no genre')
+  else: log.warning(f'"{outfile}" has no genre')
 
   if test_str(p := its.get('comment', None)): t['©cmt'] = p.split(';')
 
   if test_int(p := its.get('year', None)): t['©day'] = [ str(p) ]
-  else: warning(f'"{outfile}" has no year')
+  else: log.warning(f'"{outfile}" has no year')
 
   if test_str(p := its.get('description', None)):
     if len(p)>255:
@@ -601,23 +601,23 @@ def set_meta_cmd(outfile, its):
   call=[ 'mp4tags', outfile ]
 
   if test_str(p := its.get('tool', None)): call += [ '-tool' , p ]
-  else: warning(f'"{outfile}" has no tool')
+  else: log.warning(f'"{outfile}" has no tool')
 
   if test_str(p := its.get('type', None)): call += [ '-type' , p ]
-  else: warning(f'"{outfile}" has no type')
+  else: log.warning(f'"{outfile}" has no type')
 
   if test_str(p := its.get('genre', None)): call += [ '-genre' , p ]
-  else: warning(f'"{outfile}" has no genre')
+  else: log.warning(f'"{outfile}" has no genre')
 
   if test_str(p := its.get('comment', None)): call += [ '-comment' , p ]
 
   if test_int(p := its.get('year', None)): call += [ '-year' , str(p) ]
-  else: warning(f'"{outfile}" has no year')
+  else: log.warning(f'"{outfile}" has no year')
 
   if test_str(p := its.get('description', None)):
     if len(p)>255: call += [ '-desc', p[:255], '-longdesc', p ]
     elif len(p)>0: call += [ '-desc' , p ]
-  else: warning(f'"{outfile}" has no description')
+  else: log.warning(f'"{outfile}" has no description')
 
   if test_int(p := its.get('season', None)): call += [ '-season' , str(p) ]
   if test_int(p := its.get('episode', None)): call += [ '-episode' , str(p) ]
@@ -750,9 +750,14 @@ def retag(f):
       os.path.join(args.descdir, f'{fn}.txt')))
 
   if args.omdbkey and args.artdir:
-    upd(get_meta_omdb(title, its['season'], its['episode'],
+    upd(get_meta_imdb(title, its['season'], its['episode'],
       os.path.join(args.artdir, f'{fn}.jpg'),
       its['imdb_id'], its['omdb_status'], args.omdbkey))
+
+  if args.artdir:
+    upd({'coverart': ';'.join(i for i in glob.iglob(os.path.join(args.artdir, f'{fn}*')) if os.path.splitext(i)[1].casefold() in { '.jpg', '.jpeg', '.png'} )})
+
+  upd({ 'tool': f'{prog} {version} on {time.strftime("%A, %B %d, %Y, at %X")}' })
 
   log.info(f'Updating "{f}" metadata keys {", ".join(its.keys())}.')
   if not args.dryrun: set_meta_mutagen(f, its)
