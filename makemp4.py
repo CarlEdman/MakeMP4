@@ -248,7 +248,7 @@ def prepare_mpg(mpgfile):
       cfg.set('delay',float(m[1])/1000.0)
     if m := re.search(r'([_0-9]+)ch\b',feat):
       cfg.set('channels',m[1])
-#      if r[0]=="3_2": cfg.set('downmix',2)
+#      if m[1]=="3_2": cfg.set('downmix',2)
     if m := re.search(r'\b([\d.]+)(K|Kbps|bps)\b',feat):
       bps=int(m[1])
       if m[2][0]=="K": bps=bps*1000
@@ -589,11 +589,11 @@ def config_from_dgifile(cfg):
     elif cfg.has('display_width') and cfg.has('display_height') and cfg.has('pixel_width') and cfg.has('pixel_height'):
       sarf=Fraction(cfg.get('display_width')*cfg.get('pixel_height'),cfg.get('display_height')*cfg.get('pixel_width'))
 #    elif m := re.fullmatch(r'\s*(\d+)\s*x\s*(\d+)\s*XXX\s*(\d+)\s*:(\d+)',cfg.get('dgdisplaysize','')+'XXX'+cfg.get('dgaspectratio','')):
-#      sarf=Fraction(int(r[1])*int(r[2]),int(r[0])*int(r[3]))
+#      sarf=Fraction(int(m[2])*int(m[3]),int(m[1])*int(m[4]))
 #    elif m := re.fullmatch(r'\s*(\d+)\s*x\s*(\d+)\s*XXX\s*(\d+)\s*:(\d+)',cfg.get('dgcodedsize','')+'XXX'+cfg.get('dgaspectratio','')):
-#      sarf=Fraction(int(r[1])*int(r[2]),int(r[0])*int(r[3]))
+#      sarf=Fraction(int(m[2])*int(m[3]),int(m[1])*int(m[4]))
 #    elif cfg.has('display_width') and cfg.has('display_height') and re.fullmatch(r'\s*(\d+)\s*x\s*(\d+)\s*$',cfg.get('picture_size','')):
-#      sarf=Fraction(cfg.get('display_width')*int(r[0]),cfg.get('display_height')*int(r[1]))
+#      sarf=Fraction(cfg.get('display_width')*int(m[1]),cfg.get('display_height')*int(m[2]))
     else:
       log.warning(f'Guessing 1:1 SAR for {dgifile}')
       sarf=Fraction(1,1)
@@ -617,7 +617,7 @@ def config_from_dgifile(cfg):
       log.error('No FILM in ' + dgifile)
       open(dgifile,'w').truncate(0)
       return False
-    ilp = float(r['ipercent'])/100.0
+    ilp = float(m['ipercent'])/100.0
 
     if fio == 0:
       ilt = 'PROGRESSIVE'
@@ -632,7 +632,7 @@ def config_from_dgifile(cfg):
       log.error('No PLAYBACK in ' + dgifile)
       open(dgifile,'w').truncate(0)
       return False
-    frames = int(r['playback'])
+    frames = int(m['playback'])
   elif re.fullmatch(r'DGIndexProjectFile16',dgip[0]):
     m = re.search(r'FINISHED\s+([0-9.]+)%\s+(.*?)\s*',dgip[3])
     if not m: return False
@@ -659,8 +659,8 @@ def config_from_dgifile(cfg):
 
     m = re.search(r'\bFrame_Rate= *(\d+) *\((\d+)/(\d+)\)',dgip[1])
     if not m: return False
-    frm=float(r[0])/1000.0
-    frf=Fraction(int(r[1]),int(r[2]))
+    frm=float(m[1])/1000.0
+    frf=Fraction(int(m[2]),int(m[3]))
 
     frames=0
     for l in dgip[2].splitlines():
@@ -914,9 +914,9 @@ def build_video(cfg):
 
   if cfg.has('crop'):
     if m := re.fullmatch(r'\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*$',cfg.get('crop')):
-      cl,cr,ct,cb=[int(r[i]) for i in range(4)]
+      cl,cr,ct,cb=[int(m[i]) for i in range(1, 5)]
       if m := re.fullmatch(r'\s*(\d+)\s*x\s*(\d+)\s*$',cfg.get('picture_size','')):
-        px, py=[int(r[i]) for i in range(2)]
+        px, py=[int(m[i]) for i in range(1, 32)]
         if (px-cl-cr) % 2!=0: cr+=1
         if (py-ct-cb) % 2!=0: cb+=1
       if cl or cr or ct or cb:
