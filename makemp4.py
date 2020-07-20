@@ -5,28 +5,28 @@ version='6.0'
 author='Carl Edman (CarlEdman@gmail.com)'
 desc='Extract all tracks from .mkv, .mpg, .TiVo, or .vob files; convert video tracks to h264, audio tracks to aac; then recombine all tracks into properly tagged .mp4'
 
-import re
+import argparse
+import glob
+import json
+import logging
+import math
 import os
 import os.path
-import sys
-import argparse
-import logging
-import time
-import math
+import re
 import shutil
-import tempfile
-import json
 import string
-import glob
 import subprocess
-from fractions import Fraction
+import sys
+import tempfile
+import time
+import xml.etree.ElementTree as ET
 
+
+from fractions import Fraction
 from AdvConfig import AdvConfig
 
 from cetools import *
 from tagmp4 import *
-
-import xml.etree.ElementTree as ET
 
 parser = None
 args = None
@@ -227,7 +227,7 @@ def prepare_mpg(mpgfile):
   cfg.sync()
   config_from_dgifile(cfg,dgifile)
 
-  for file in glob.iglob(f'{base} *'):
+  for file in reglob(f'{base} .*'):
     m = re.fullmatch(re.escape(base)+r'\s+T[0-9a-fA-F][0-9a-fA-F]\s+(.*)\.(ac3|dts|mpa|mp2|wav|pcm)',file)
     if not m: continue
     feat=m[1]
@@ -491,7 +491,6 @@ def prepare_mkv(mkvfile):
 
 def prepare_vob(vobfile):
   base=os.path.splitext(os.path.basename(vobfile))[0]
-  r=regex.RegEx()
   if m := re.fullmatch(r'(.*)_(\d+)',base):
     if int(m[1])!=2: return
     base=m[1]
@@ -540,19 +539,21 @@ def config_from_dgifile(cfg):
   dgifile = cfg.get('dgi_file', None)
   if not file or not dgifile: return
   logfile = os.path.splitext(file)[0]+'.log'
-  r=regex.RegEx()
 
   trans = str.maketrans(string.ascii_uppercase,string.ascii_lowercase,string.whitespace)
   while True:
     time.sleep(1)
     if not os.path.exists(logfile): continue
-    with open(logfile,'rt', encoding='utf-8-sig', errors='replace') as fp: log = fp.read()
-    for l in log.splitlines():
+    with open(logfile,'rt', encoding='utf-8-sig', errors='replace') as fp: logs = fp.read()
+    for l in logs.splitlines():
       if m := re.fullmatch('([^:]*):(.*)',l):
-        k='dg'+m[1].translate(trans)
-        v=m[2].strip()
+        k = 'dg' + m[1].translate(trans)
+        v = m[2].strip()
         if not v: continue
-        cfg.set(k, cfg.get(k) + ";" + v if cfg.has(k) else v)
+        o = cfg.get(k, None)
+        if o == v: continue
+        elif o: cfg.set(k, f'{o};v')
+        else: cfg.set(k, v)
       else:
         log.warning(f'Unrecognized DGIndex log line: "{repr(l)}"')
     if cfg.get('dginfo')=='Finished!': break
@@ -565,7 +566,7 @@ def config_from_dgifile(cfg):
     log.error('Malformed index file ' + dgifile)
     open(dgifile,'w').truncate(0)
     return False
-  if re.fullmatch('^DG(AVC|MPG|VC1)IndexFileNV(14|15|16)',dgip[0]):
+  if re.match('DG(AVC|MPG|VC1)IndexFileNV(14|15|16)',dgip[0]):
     m = re.search(r'\bCLIP\ *(?P<left>\d+) *(?P<right>\d+) *(?P<top>\d+) *(?P<bottom>\d+)',dgip[2])
     if not m:
       log.error(f'No CLIP in {dgifile}')
@@ -633,7 +634,7 @@ def config_from_dgifile(cfg):
       open(dgifile,'w').truncate(0)
       return False
     frames = int(m['playback'])
-  elif re.fullmatch(r'DGIndexProjectFile16',dgip[0]):
+  elif re.match(r'DGIndexProjectFile16',dgip[0]):
     m = re.search(r'FINISHED\s+([0-9.]+)%\s+(.*?)\s*',dgip[3])
     if not m: return False
 
@@ -813,8 +814,6 @@ def build_audio(cfg):
   cfg.sync()
   if not readytomake(outfile,infile): return False
 
-  r=regex.RegEx()
-
   if inext in (): # ('dts', 'thd'):
     call = [ 'dcadec', '-6', infile, '-']
   else:
@@ -867,7 +866,6 @@ def build_video(cfg):
 
   if not readytomake(outfile,infile,dgifile): return False
 
-  r=regex.RegEx()
   avs=''
 
   ilt=cfg.get('interlace_type')
@@ -916,7 +914,7 @@ def build_video(cfg):
     if m := re.fullmatch(r'\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*$',cfg.get('crop')):
       cl,cr,ct,cb=[int(m[i]) for i in range(1, 5)]
       if m := re.fullmatch(r'\s*(\d+)\s*x\s*(\d+)\s*$',cfg.get('picture_size','')):
-        px, py=[int(m[i]) for i in range(1, 32)]
+        px, py=[int(m[i]) for i in range(1, 3)]
         if (px-cl-cr) % 2!=0: cr+=1
         if (py-ct-cb) % 2!=0: cb+=1
       if cl or cr or ct or cb:
@@ -998,7 +996,6 @@ def build_video(cfg):
 
 
 def build_result(cfg):
-  r=regex.RegEx()
   for track in sorted([t for t in cfg.sections() if t.startswith('TRACK') and not cfg.get('disable',section=t)]):
     cfg.setsection(track)
     if cfg.get('type')=='audio' and cfg.has('language') and cfg.has('audio_languages',section='MAIN') and cfg.get('language') not in cfg.get('audio_languages',section='MAIN').split(";"): continue
@@ -1101,7 +1098,7 @@ def main():
       else:
         log.warning(f'Source file type not recognized "{os.path.join(d,f)}"')
 
-  for f in glob.iglob('*.cfg'):
+  for f in glob.iglob(r'*.cfg'):
     cfg = AdvConfig(f)
     if not cfg: continue
     cfg.setsection("MAIN")
@@ -1128,18 +1125,17 @@ def main():
       del its['comment']
     cfg.item_defs(its)
 
-    coverfiles = (i for i in glob.iglob(os.path.join(args.artdir, f'{fn}*')) if os.path.splitext(i)[1].casefold() in { '.jpg', '.jpeg', '.png'} )
     ufn = ''.join([c for c in fn.strip().upper() if c.isalnum()])
     its = { 'year': f'_{ufn}YEAR_'
           , 'genre': f'_{ufn}GENRE_'
           , 'description': f'_{ufn}DESC_'
-          , 'coverart': ';'.join(coverfiles) }
+          , 'coverart': ';'.join(i for i in reglob(rf'{fn}(\s*P\d+)?(.jpg|.jpeg|.png)', args.artdir)) }
     cfg.item_defs(its)
 
     cfg.sync()
     build_result(cfg)
 
-  for f in glob.iglob('*.cfg'):
+  for f in glob.iglob(r'*.cfg'):
     cfg = AdvConfig(f)
     if not cfg: continue
     for track in sorted([t for t in cfg.sections() if t.startswith('TRACK')]):
@@ -1148,7 +1144,7 @@ def main():
       if cfg.get('disable',False): continue
       build_indices(cfg)
 
-  for f in glob.iglob('*.cfg'):
+  for f in glob.iglob(r'*.cfg'):
     cfg = AdvConfig(f)
     if not cfg: continue
     for track in sorted([t for t in cfg.sections() if t.startswith('TRACK')]):
@@ -1157,7 +1153,7 @@ def main():
       if cfg.get('disable',False): continue
       build_subtitle(cfg)
 
-  for f in glob.iglob('*.cfg'):
+  for f in glob.iglob(r'*.cfg'):
     cfg = AdvConfig(f)
     if not cfg: continue
     for track in sorted([t for t in cfg.sections() if t.startswith('TRACK')]):
@@ -1167,7 +1163,7 @@ def main():
       if cfg.has('language') and cfg.has('audio_languages',section='MAIN') and cfg.get('language') not in cfg.get('audio_languages',section='MAIN').split(";"): continue
       build_audio(cfg)
 
-  for f in glob.iglob('*.cfg'):
+  for f in glob.iglob(r'*.cfg'):
     cfg = AdvConfig(f)
     if not cfg: continue
     for track in sorted([t for t in cfg.sections() if t.startswith('TRACK')]):

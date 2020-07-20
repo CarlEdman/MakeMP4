@@ -6,23 +6,22 @@ author='Carl Edman (CarlEdman@gmail.com)'
 desc='Update Metadata in MP4 files based on filenames and external sources'
 
 import argparse
-import shutil
-import os
-import os.path
-import subprocess
-import sys
-import json
-import logging
 import collections
 import glob
-
-from urllib.request import urlopen
-from urllib.parse   import urlparse, urlunparse, urlencode
-from urllib.error   import HTTPError
-
+import json
+import logging
 import mutagen
-from mutagen.mp4    import MP4, MP4Cover, MP4Tags, MP4Chapters
+import os
+import os.path
+import shutil
+import subprocess
+import sys
+
 from cetools        import *
+from mutagen.mp4    import MP4, MP4Cover, MP4Tags, MP4Chapters
+from urllib.error   import HTTPError
+from urllib.parse   import urlparse, urlunparse, urlencode
+from urllib.request import urlopen
 
 parser = None
 args = None
@@ -754,10 +753,8 @@ def retag(f):
       os.path.join(args.artdir, f'{fn}.jpg'),
       its['imdb_id'], its['omdb_status'], args.omdbkey))
 
-  if args.artdir:
-    upd({'coverart': ';'.join(i for i in glob.iglob(os.path.join(args.artdir, f'{fn}*')) if os.path.splitext(i)[1].casefold() in { '.jpg', '.jpeg', '.png'} )})
-
-  upd({ 'tool': f'{prog} {version} on {time.strftime("%A, %B %d, %Y, at %X")}' })
+  upd({ 'coverart': ';'.join(i for i in reglob(fn + r'(\s*P\d+)?(.jpg|.jpeg|.png)', args.artdir))
+      , 'tool': f'{prog} {version} on {time.strftime("%A, %B %d, %Y, at %X")}' })
 
   log.info(f'Updating "{f}" metadata keys {", ".join(its.keys())}.')
   if not args.dryrun: set_meta_mutagen(f, its)

@@ -1,17 +1,17 @@
 #!/usr/bin/python
 # Various utility functions
 
-import os
-import os.path
-import time
-import re
+import collections
 import logging
 import logging.handlers
-
-import collections
+import os
+import os.path
+import re
+import time
 import weakref
-from weakref import WeakValueDictionary, finalize
+
 from configparser import ConfigParser
+from weakref import WeakValueDictionary, finalize
 
 from cetools import *
 
@@ -163,9 +163,9 @@ def sortkey(s):
   s=re.sub(r'\d+',lambda m: m[0].zfill(10),s)
   return s.casefold()
 
-def reglob(pat):
+def reglob(filepat, dir = None):
   '''A replacement for glob.glob which uses regular expressions and sorts numbers up to 10 digits correctly.'''
-  (dir, filepat) = os.path.split(pat)
+  if dir is None: dir = '.'
   if os.name == 'nt': filepat = r'(?i)' + filepat
   files = (os.path.join(dir,f) for f in os.listdir(dir) if re.fullmatch(filepat, f))
   return sorted(files, key=sortkey)

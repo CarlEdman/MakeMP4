@@ -1,14 +1,14 @@
 #!/usr/bin/python
 # A subclass of ConfigParser with advanced features
 
-import os.path
 import collections
+import os.path
+
 from fractions import Fraction
 from weakref import WeakValueDictionary, finalize
+from configparser import ConfigParser, RawConfigParser
 
 from cetools import *
-
-from configparser import ConfigParser, RawConfigParser
 
 log = logging.getLogger()
 

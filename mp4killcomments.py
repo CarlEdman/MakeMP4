@@ -5,14 +5,14 @@ version='2.1'
 author='Carl Edman (CarlEdman@gmail.com)'
 desc='Disable commentary (and other multi-language tracks) on all mp4 files in directory (and subdirectories).'
 
+import argparse
 import logging
-import re
-import shlex
 import os
 import os.path
-import argparse
-import sys
+import re
+import shlex
 import subprocess
+import sys
 
 parser = None
 args = None

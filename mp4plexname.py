@@ -5,13 +5,15 @@ version='0.3'
 author='Carl Edman (CarlEdman@gmail.com)'
 desc='Rename TV show extras Plex perferred format.'
 
-import os
-import re
-import os.path
 import argparse
+import glob
 import logging
 import logging.handlers
-import glob
+import os
+import os.path
+import re
+
+from cetools import *
 
 parser = None
 args = None

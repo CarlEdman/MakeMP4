@@ -5,13 +5,12 @@ version='0.3'
 author='Carl Edman (CarlEdman@gmail.com)'
 desc='Import, Export, and Swap MP4Meta Data.'
 
-import re
+import argparse
+import logging
 import os
 import os.path
-import argparse
+import re
 import subprocess
-import glob
-import logging
 
 from cetools import *
 
@@ -200,14 +199,14 @@ if __name__ == '__main__':
 
   if args.operation=='export':
     for g in args.files:
-      fs = glob.glob(g)
+      fs = reglob(g)
       if not fs:
         log.error('"' + g + '" does not match any files')
       for f in fs:
         mp4meta_export(f)
   elif args.operation=='import':
     for g in args.files:
-      fs = glob.glob(g)
+      fs = reglob(g)
       if not fs:
         log.error('"' + g + '" does not match any files')
       for f in fs:

@@ -4,10 +4,13 @@ prog='OMDB'
 version='0.1'
 author='Carl Edman (CarlEdman@gmail.com)'
 
+import argparse
+import json
+import sys
+
 from urllib.request import urlopen
 from urllib.parse import urlparse, urlunparse, urlencode
 
-import json, sys, argparse
 
 parser = argparse.ArgumentParser(description='Request IMDB data through OMDB API.')
 parser.add_argument('--version', action='version', version='%(prog)s ' + version)

@@ -5,16 +5,16 @@ version='2.1'
 author='Carl Edman (CarlEdman@gmail.com)'
 desc='Tabular list of mp4 metadata in directory and all subdirectories.'
 
+import argparse
+import codecs
 import logging
 import logging.handlers
-import re
-import shlex
 import os
 import os.path
-import argparse
-import sys
+import re
+import shlex
 import subprocess
-import codecs
+import sys
 
 from cetools import *
 

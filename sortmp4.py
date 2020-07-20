@@ -5,14 +5,14 @@ version='0.5'
 author='Carl Edman (CarlEdman@gmail.com)'
 desc='Sort mp4s from current directory to target subdirectories'
 
-import shutil
+import argparse
+import glob
+import logging
 import os
 import os.path
-import argparse
-import logging
-import subprocess
-import glob
 import re
+import shutil
+import subprocess
 
 from tagmp4 import get_meta_mutagen
 from cetools import *

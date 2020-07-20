@@ -5,15 +5,15 @@ version='0.3'
 author='Carl Edman (CarlEdman@gmail.com)'
 desc='Convert audio files to m4b audiobook, creating chapters as necessary.'
 
+import argparse
+import glob
 import logging
-import re
+import math
 import os
 import os.path
-import argparse
+import re
 import subprocess
-import math
 import sys
-import glob
 
 from cetools import *
 

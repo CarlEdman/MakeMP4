@@ -5,14 +5,14 @@ version='0.4'
 author='Carl Edman (CarlEdman@gmail.com)'
 desc='Chop an mkv file into subfiles at timecodes or chapters.'
 
-import logging
-import re
-import os
 import argparse
-import subprocess
+import logging
 import math
-import sys
+import os
 import os.path
+import re
+import subprocess
+import sys
 
 from cetools import *
 

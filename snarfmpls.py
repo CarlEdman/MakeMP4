@@ -5,9 +5,9 @@ version='0.1'
 author='Carl Edman (CarlEdman@gmail.com)'
 desc='Read mpls and spit out their m2ts.'
 
-import os.path
-import glob
 import argparse
+import glob
+import os.path
 
 parser = argparse.ArgumentParser(fromfile_prefix_chars='@',prog=prog,epilog='Written by: '+author)
 parser.add_argument('--version', action='version', version='%(prog)s '+version)
