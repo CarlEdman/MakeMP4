@@ -21,7 +21,6 @@ import tempfile
 import time
 import xml.etree.ElementTree as ET
 
-
 from fractions import Fraction
 from AdvConfig import AdvConfig
 
@@ -225,7 +224,7 @@ def prepare_mpg(mpgfile):
   cfg.setsection(f'TRACK{track:02d}')
   cfg.set('file',mpgfile)
   cfg.sync()
-  config_from_dgifile(cfg,dgifile)
+  config_from_dgifile(cfg)
 
   for file in reglob(f'{base} .*'):
     m = re.fullmatch(re.escape(base)+r'\s+T[0-9a-fA-F][0-9a-fA-F]\s+(.*)\.(ac3|dts|mpa|mp2|wav|pcm)',file)
@@ -342,6 +341,13 @@ def prepare_mkv(mkvfile):
 #        cfg.set('t2c_file',f'{base} T{tid:02d}.t2c')
       cfg.set('dgi_file',f'{base} T{tid:02d}.dgi')
     elif codec in ('A_AC3','A_EAC3','AC3/EAC3','AC-3/E-AC-3', 'AC-3','E-AC-3'):
+      cfg.set('extension','ac3')
+      cfg.set('file',f'{base} T{tid:02d}.ac3')
+      cfg.set('quality',60)
+      cfg.set('delay',0.0)
+    elif codec in ('E-AC-3'):
+      log.warning(f'{cfg.get("base","NOBASE","MAIN")}: Track type {codec} in {mkvfile} not supported, disabling.')
+      cfg.set('disable', 'yes')
       cfg.set('extension','ac3')
       cfg.set('file',f'{base} T{tid:02d}.ac3')
       cfg.set('quality',60)
@@ -660,7 +666,6 @@ def config_from_dgifile(cfg):
 
     m = re.search(r'\bFrame_Rate= *(\d+) *\((\d+)/(\d+)\)',dgip[1])
     if not m: return False
-    frm=float(m[1])/1000.0
     frf=Fraction(int(m[2]),int(m[3]))
 
     frames=0
@@ -683,7 +688,7 @@ def config_from_dgifile(cfg):
   #cfg.set('out_format', 'h264')
   cfg.set('out_format', 'h265')
 
-  cfg.set('crop', 'auto' if cl==cr==ct==cb==0 else '0,0,0,0')
+  cfg.set('crop', 'auto')
 #  cfg.set('aspect_ratio',str(arf))
   cfg.set('picture_size', f"{psx:d}x{psy:d}")
 
@@ -845,7 +850,6 @@ def build_audio(cfg):
 
 def build_video(cfg):
   infile = cfg.get('file')
-  inext = cfg.get('extension')
   dgifile = cfg.get('dgi_file', None)
 
   outfile = cfg.get('out_file')
@@ -970,7 +974,7 @@ def build_video(cfg):
     if cfg.has('x265_bit_depth'): call += ['--output-depth', cfg.get('x265_output_depth')]
     # --display-window <left,top,right,bottom> Instead of crop?
   else:
-    log.error(f'{file}: Unrecognized output format "{cfg.get("out_format", "UNSPECIFIED")}"')
+    log.error(f'{outfile}: Unrecognized output format "{cfg.get("out_format", "UNSPECIFIED")}"')
     return False
 
   call += ['--fps', str(fro)]

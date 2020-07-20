@@ -6,6 +6,7 @@ author='Carl Edman (CarlEdman@gmail.com)'
 desc='Import, Export, and Swap MP4Meta Data.'
 
 import argparse
+import glob
 import logging
 import os
 import os.path
@@ -199,14 +200,14 @@ if __name__ == '__main__':
 
   if args.operation=='export':
     for g in args.files:
-      fs = reglob(g)
+      fs = glob.glob(g)
       if not fs:
         log.error('"' + g + '" does not match any files')
       for f in fs:
         mp4meta_export(f)
   elif args.operation=='import':
     for g in args.files:
-      fs = reglob(g)
+      fs = glob.glob(g)
       if not fs:
         log.error('"' + g + '" does not match any files')
       for f in fs:

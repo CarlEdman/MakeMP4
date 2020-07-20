@@ -12,8 +12,8 @@ import weakref
 
 from configparser import ConfigParser
 from weakref import WeakValueDictionary, finalize
+from fractions import Fraction
 
-from cetools import *
 
 if os.name == 'nt':
   import ctypes
@@ -46,10 +46,68 @@ class SyncDict(collections.UserDict):
     if item is None:
       if key not in self.data: return
       del self.data[key]
-    else:
-      if self.data[key] == item: return
-      self.data[key] = item
+      self.modified = True
+      return
+    
+    if not isinstance(item, str): item = str(item)
+    if self.data[key] == item: return
+
+    self.data[key] = item
     self.modified = True
+
+  def getstr(self, key):
+    if key not in self.data: return None
+    v = self.data[key]
+    if isinstance(v, str) and v[0]=='_' and v[-1]=='_': return None
+    return v
+
+  def getint(self, key):
+    if key not in self.data: return None
+    v = self.data[key]
+    try:
+      return int(v)
+    except ValueError:
+      return None
+
+  def getfloat(self, key):
+    if key not in self.data: return None
+    v = self.data[key]
+    try:
+      return float(v)
+    except ValueError:
+      return None
+
+  def getfraction(self, key):
+    if key not in self.data: return None
+    v = self.data[key]
+    if ':' in v:
+      try:
+        [ num, denom ] = v.split(':')
+        return Fraction(int(num),int(denom)) 
+      except ValueError:
+        return None
+    if '/' in v:
+      try:
+        [ num, denom ] = v.split('/')
+        return Fraction(int(num),int(denom)) 
+      except ValueError:
+        return None
+    try:
+      [ num, denom ] = float(v).as_integer_ratio()
+      return Fraction(int(num),int(denom)) 
+    except ValueError:
+      return None
+    return v
+
+  def getlist(self, key):
+    if key not in self.data: return []
+    v = self.data[key]
+    return v.split(';')
+
+  def getset(self, key):
+    if key not in self.data: return []
+    v = self.data[key]
+    return set(v.split(';'))
 
 class SyncConfig(ConfigParser):
   """A subclass of ConfigParser with automatic syncing to files"""
