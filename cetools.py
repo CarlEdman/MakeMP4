@@ -72,6 +72,21 @@ class SyncDict(collections.UserDict):
   def getfloat(self, key):
     if key not in self.data: return None
     v = self.data[key]
+
+    if ':' in v:
+      try:
+        [ num, denom ] = v.split(':')
+        return float(int(num)/int(denom))
+      except ValueError:
+        return None
+    
+    if '/' in v:
+      try:
+        [ num, denom ] = v.split('/')
+        return float(int(num)/int(denom))
+      except ValueError:
+        return None
+    
     try:
       return float(v)
     except ValueError:
@@ -80,6 +95,7 @@ class SyncDict(collections.UserDict):
   def getfraction(self, key):
     if key not in self.data: return None
     v = self.data[key]
+    
     if ':' in v:
       try:
         [ num, denom ] = v.split(':')
@@ -92,12 +108,12 @@ class SyncDict(collections.UserDict):
         return Fraction(int(num),int(denom)) 
       except ValueError:
         return None
+    
     try:
       [ num, denom ] = float(v).as_integer_ratio()
       return Fraction(int(num),int(denom)) 
     except ValueError:
       return None
-    return v
 
   def getlist(self, key):
     if key not in self.data: return []
