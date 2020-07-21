@@ -14,7 +14,6 @@ from configparser import ConfigParser
 from weakref import WeakValueDictionary, finalize
 from fractions import Fraction
 
-
 if os.name == 'nt':
   import ctypes
   import win32api
@@ -32,9 +31,8 @@ def export(func):
 class SyncDict(collections.UserDict):
   """A subclass of Userdict for use by SyncConfig"""
 
-  def __init__(self, config):
+  def __init__(self):
     super().__init__()
-    self.config = config
     self.modified = False
 
   def __getitem__(self, key):
@@ -95,7 +93,7 @@ class SyncDict(collections.UserDict):
   def getfraction(self, key):
     if key not in self.data: return None
     v = self.data[key]
-    
+
     if ':' in v:
       try:
         [ num, denom ] = v.split(':')
@@ -177,33 +175,20 @@ class TitleHandler(logging.Handler):
   """
 
   def __init__(self):
-    """
-    Initialize the handler.
-    """
-
     logging.Handler.__init__(self)
 
   def flush(self):
-    """
-    Flushes the stream.  (A noop for this handler)
-    """
-
     pass
 
   def emit(self, record):
-    """
-    Emit a record.
-
-    If a formatter is specified, it is used to format the record.
-    The record is then written to the title bar of the current window.
-    """
-
     if os.name == 'nt':
       ctypes.windll.kernel32.SetConsoleTitleA(self.format(record).encode(encoding='cp1252', errors='ignore'))
 
 def nice(niceness):
   '''Nice for Windows Processes.  Nice is a value between -3-2 where 0 is normal priority.'''
-  if os.name == 'nt':
+  if 'nice' in os:
+    return os.nice(niceness)
+  elif os.name == 'nt':
     pcs = [win32process.IDLE_PRIORITY_CLASS, win32process.BELOW_NORMAL_PRIORITY_CLASS,
         win32process.NORMAL_PRIORITY_CLASS, win32process.ABOVE_NORMAL_PRIORITY_CLASS,
         win32process.HIGH_PRIORITY_CLASS, win32process.REALTIME_PRIORITY_CLASS]
@@ -211,30 +196,40 @@ def nice(niceness):
 
     pid = win32api.GetCurrentProcessId()
     handle = win32api.OpenProcess(win32con.PROCESS_ALL_ACCESS, True, pid)
-    win32process.SetPriorityClass(handle, pri)
-  else:
-    return os.nice(niceness)
+    win32process.SetPriorityClass(handle, pri)    
 
 def dict_inverse(d):
   '''Create an inverse dict from a dict.'''
 
-  return { v:k for k,v in d.items()}
+  return { v:k for k,v in d.items() }
 
 def alphabetize(s):
-  s=s.strip()
+  s=s.strip().rstrip('.')
   if s.startswith("The "): s=s[4:]
   elif s.startswith("A "): s=s[2:]
   elif s.startswith("An "): s=s[3:]
-
-  if s.endswith("."): s=s[:-1]
   return s
+
+def romanize(s):
+  rom = { "M": 1000, "CM": 900, "D": 500, "CD": 400, "C": 100, "XC": 90,
+          "L": 50, "XL": 40, "X": 10, "IX": 9, "V": 5, "IV": 4, "I": 1 }
+  if s == "I": return s
+  t = s
+  r = 0
+  for k, v in rom.items():
+    while t.startswith(k):
+      t = t[len(k):]
+      r += v
+  return s if t else r
 
 def sortkey(s):
   '''A sorting key for strings that alphabetizes and orders numbers correctly.'''
+
   s = alphabetize(s)
   # TODO: Sort Roman Numerals Correctly?
   # TODO: Sort Spelled-out numerals correctly?
-  s=re.sub(r'\d+',lambda m: m[0].zfill(10),s)
+  s=re.sub(r'\b[IVXLCDM]+\b',lambda m: str(romanize(m[0])),s)
+  s=re.sub(r'\d+',lambda m: romanize(m[0]).zfill(10),s)
   return s.casefold()
 
 def reglob(filepat, dir = None):
@@ -270,7 +265,7 @@ def work_lock(file):
   if not file:
     return False
   if os.path.exists(file+worklock):
-    log.warning('File "' + file + '" already worklocked')
+    log.warning(f'File "{file}" already worklocked')
     return False
   open(file+worklock,'w').truncate(0)
   return True
@@ -279,10 +274,10 @@ def work_unlock(file):
   if not file:
     return False
   if not os.path.exists(file+worklock):
-    log.warning('File "' + file + '" not worklocked')
+    log.warning('File "{file}" not worklocked')
     return False
   if os.path.getsize(file+worklock) != 0:
-    log.error('Worklock for "' + file + '" not empty!')
+    log.error(f'Worklock for "{file}" not empty!')
     return False
   os.remove(file+worklock)
 
@@ -293,7 +288,7 @@ def work_lock_delete():
   for l in os.listdir(os.getcwd()):
     if not l.endswith(worklock): continue
     if os.path.getsize(l) != 0:
-       log.error('Worklock for "' + file + '" not empty!')
+       log.error(f'Worklock "{l}" not empty!')
        continue
     os.remove(l)
     f = l[:-len(worklock)]
