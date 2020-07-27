@@ -24,8 +24,8 @@ import xml.etree.ElementTree as ET
 from fractions import Fraction
 from AdvConfig import AdvConfig
 
-from cetools import *
-from tagmp4 import *
+from cetools import * # pylint: disable=unused-wildcard-import
+from tagmp4 import * # pylint: disable=unused-wildcard-import
 
 parser = None
 args = None
@@ -122,6 +122,7 @@ def do_call(args,outfile=None,infile=None):
   return outstr+errstr
 
 def make_srt(cfg,track,files):
+  # pylint: disable=unreachable
   return True
   base=cfg.get('base',section='MAIN')
   srtfile=f'{base} T{track:02d}.srt'
@@ -151,22 +152,23 @@ def config_from_base(cfg,base):
     if m['episode']: cfg.set('episode',int(m['episode']))
     cfg.set('year',m['year'])
     cfg.set('song',m['song'])
-  elif (m := re.fullmatch(r'(?P<show>.*?) S(?P<season>\d+)E(?P<episode>\d+)$')) or (m := re.fullmatch(r'(.*?) (Se\.\s*(?P<season>\d+)\s*)?Ep\.\s*(?P<episode>\d+)$')):
+  elif (m := re.fullmatch(r'(?P<show>.*?) S(?P<season>\d+)E(?P<episode>\d+)', base)):
     cfg.set('type','tvshow')
     cfg.set('show',m['show'])
     if m['season'] and m['season']!='0': cfg.set('season',int(m['season']))
     cfg.set('episode',int(m['episode']))
-  elif (m := re.fullmatch(r'(?P<show>.*) S(?P<season>\d+) +(?P<song>.*?)')) or (m := re.fullmatch(r'(.*) Se\. *(?P<season>\d+) *(?P<song>.*?)')):
+  elif (m := re.fullmatch(r'(?P<show>.*) S(?P<season>\d+) +(?P<song>.*?)', base)) or \
+     (m := re.fullmatch(r'(.*) Se\. *(?P<season>\d+) *(?P<song>.*?)', base)):
     cfg.set('type','tvshow')
     cfg.set('show',m['show'])
     cfg.set('season',int(m['season']))
     cfg.set('song',m['song'])
-  elif (m := re.fullmatch(r'(?P<show>.*) (S(?P<season>\d+))?(V|Vol\. )(?P<episode>\d+)')):
+  elif (m := re.fullmatch(r'(?P<show>.*) (S(?P<season>\d+))?(V|Vol\. )(?P<episode>\d+)', base)):
     cfg.set('type','tvshow')
     cfg.set('show',m['show'])
     cfg.set('season',int(m['season']))
     cfg.set('episode',int(m['episode']))
-  elif (m := re.fullmatch(r'(?P<show>.*) S(?P<season>\d+)D\d+')):
+  elif (m := re.fullmatch(r'(?P<show>.*) S(?P<season>\d+)D\d+', base)):
     cfg.set('type','tvshow')
     cfg.set('show',m['show'])
     cfg.set('season',int(m['season']))
@@ -729,7 +731,6 @@ def config_from_dgifile(cfg):
 def build_indices(cfg):
   for vt in sorted([t for t in cfg.sections() if t.startswith('TRACK') and not cfg.get('disable',section=t) and cfg.get('type',section=t)=='video']):
     cfg.setsection(vt)
-    file=cfg.get('file')
     dgifile=cfg.get('dgi_file', None)
     if not dgifile or os.path.exists(dgifile): continue
     if dgifile.endswith('.dgi'):
@@ -1006,7 +1007,6 @@ def build_result(cfg):
     if cfg.get('type')=='video' and cfg.has('macroblocks'):
       cfg.set('hdvideo', cfg.has('macroblocks') >= 3600, section='MAIN')
 
-    file=cfg.get('file')
     outfile=cfg.get('out_file',None)
     if not outfile: return False
     if not os.path.exists(outfile): return False
@@ -1070,7 +1070,7 @@ def build_result(cfg):
   if not readytomake(outfile,*infiles): return False
 
   if vts+ats+sts>18:
-    log.warning(f'Result for "{base}" has {tracks:d} tracks.')
+    log.warning(f'Result for "{base}" has {vts+ats+sts:d} tracks.')
 
   cfg.setsection('MAIN')
   cfg.set('tool', f'{prog} {version} on {time.strftime("%A, %B %d, %Y, at %X")}')

@@ -10,8 +10,6 @@ import re
 import time
 import weakref
 
-from configparser import ConfigParser
-from weakref import WeakValueDictionary, finalize
 from fractions import Fraction
 
 if os.name == 'nt':
@@ -28,30 +26,26 @@ def export(func):
   func.__globals__['__all__'].append(func.__name__)
   return func
 
-class SyncDict(collections.UserDict):
+class DefaultDict(collections.UserDict):
   """A subclass of Userdict for use by SyncConfig"""
 
-  def __init__(self):
-    super().__init__()
-    self.modified = False
+  def __init__(self, *args, **kwargs):
+    super().__init__(*args, **kwargs)
 
   def __getitem__(self, key):
-    if key in self.data:
-      return self.data[key]
-    return None
+    return self.data[key] if key in self.data else None
 
   def __setitem__(self, key, item):
+#   log,debug((key, type(key), item, type(item)))
     if item is None:
       if key not in self.data: return
       del self.data[key]
-      self.modified = True
-      return
-    
-    if not isinstance(item, str): item = str(item)
-    if self.data[key] == item: return
+    else:
+      if key in self.data and self.data[key] == item: return
+      self.data[key] = item
 
-    self.data[key] = item
-    self.modified = True
+  def additem(self, key):
+    self.data[key] = DefaultDict()
 
   def getstr(self, key):
     if key not in self.data: return None
@@ -77,14 +71,14 @@ class SyncDict(collections.UserDict):
         return float(int(num)/int(denom))
       except ValueError:
         return None
-    
+
     if '/' in v:
       try:
         [ num, denom ] = v.split('/')
         return float(int(num)/int(denom))
       except ValueError:
         return None
-    
+
     try:
       return float(v)
     except ValueError:
@@ -94,24 +88,21 @@ class SyncDict(collections.UserDict):
     if key not in self.data: return None
     v = self.data[key]
 
-    if ':' in v:
-      try:
-        [ num, denom ] = v.split(':')
-        return Fraction(int(num),int(denom)) 
-      except ValueError:
-        return None
-    if '/' in v:
-      try:
-        [ num, denom ] = v.split('/')
-        return Fraction(int(num),int(denom)) 
-      except ValueError:
-        return None
-    
     try:
-      [ num, denom ] = float(v).as_integer_ratio()
-      return Fraction(int(num),int(denom)) 
+      if isinstance(v, Fraction):
+        return v
+      elif isinstance(v, float):
+        [ num, denom ] = float(v).as_integer_ratio()
+        return Fraction(int(num),int(denom))
+      elif isinstance(v, str) and ':' in v:
+        [ num, denom ] = v.split(':')
+        return Fraction(int(num),int(denom))
+      elif isinstance(v, str) and '/' in v:
+        [ num, denom ] = v.split('/')
+        return Fraction(int(num),int(denom))
     except ValueError:
       return None
+    return None
 
   def getlist(self, key):
     if key not in self.data: return []
@@ -122,50 +113,6 @@ class SyncDict(collections.UserDict):
     if key not in self.data: return []
     v = self.data[key]
     return set(v.split(';'))
-
-class SyncConfig(ConfigParser):
-  """A subclass of ConfigParser with automatic syncing to files"""
-  _configs = weakref.WeakValueDictionary()
-
-  def __new__(cls, filename):
-    if filename in SyncConfig._configs:
-      n = SyncConfig._configs[filename]
-      n.sync()
-    else:
-      n = super(SyncConfig, cls).__new__(cls)
-      SyncConfig._configs[filename]=n
-      weakref.finalize(n, n.sync)
-    return n
-
-  def __init__(self, filename):
-    if hasattr(self, 'filename') and self.filename == filename: return
-    self.filename = filename
-    self.dict_type = SyncDict
-    super().__init__(allow_no_value=True)
-    self.sync()
-
-  def sync(self):
-    if not os.path.exists(self.filename):
-      with open(self.filename, 'wt', encoding='utf-8') as fp: self.write(fp)
-      self.mtime=os.path.getmtime(self.filename)
-      return
-
-    sects_modified = False
-    for s in self.sections():
-      if self[s].modified:
-        sects_modified = True
-        self[s].modified = False
-
-    file_modified = self.mtime < os.path.getmtime(self.filename)
-
-    if sects_modified:
-      if file_modified:
-        log.warning(f'Overwriting external edits in "{self.filename}"')
-      with open(self.filename, 'wt', encoding='utf-8') as f:
-        self.write(f)
-    elif file_modified:
-      with open(self.filename, 'rt', encoding='utf-8') as f:
-        self.read_file(f)
 
 
 class TitleHandler(logging.Handler):
@@ -186,8 +133,8 @@ class TitleHandler(logging.Handler):
 
 def nice(niceness):
   '''Nice for Windows Processes.  Nice is a value between -3-2 where 0 is normal priority.'''
-  if 'nice' in os:
-    return os.nice(niceness)
+  if hasattr(os, 'nice'):
+    return os.nice(niceness) # pylint: disable=no-member
   elif os.name == 'nt':
     pcs = [win32process.IDLE_PRIORITY_CLASS, win32process.BELOW_NORMAL_PRIORITY_CLASS,
         win32process.NORMAL_PRIORITY_CLASS, win32process.ABOVE_NORMAL_PRIORITY_CLASS,
@@ -196,7 +143,7 @@ def nice(niceness):
 
     pid = win32api.GetCurrentProcessId()
     handle = win32api.OpenProcess(win32con.PROCESS_ALL_ACCESS, True, pid)
-    win32process.SetPriorityClass(handle, pri)    
+    win32process.SetPriorityClass(handle, pri)
 
 def dict_inverse(d):
   '''Create an inverse dict from a dict.'''
@@ -213,7 +160,6 @@ def alphabetize(s):
 def romanize(s):
   rom = { "M": 1000, "CM": 900, "D": 500, "CD": 400, "C": 100, "XC": 90,
           "L": 50, "XL": 40, "X": 10, "IX": 9, "V": 5, "IV": 4, "I": 1 }
-  if s == "I": return s
   t = s
   r = 0
   for k, v in rom.items():
@@ -226,10 +172,9 @@ def sortkey(s):
   '''A sorting key for strings that alphabetizes and orders numbers correctly.'''
 
   s = alphabetize(s)
-  # TODO: Sort Roman Numerals Correctly?
   # TODO: Sort Spelled-out numerals correctly?
-  s=re.sub(r'\b[IVXLCDM]+\b',lambda m: str(romanize(m[0])),s)
-  s=re.sub(r'\d+',lambda m: romanize(m[0]).zfill(10),s)
+  s=re.sub(r'\b[IVXLCDM]+\b',lambda m: str(romanize(m[0])) if m[0]!="I" else s,s)
+  s=re.sub(r'\d+',lambda m: m[0].zfill(10),s)
   return s.casefold()
 
 def reglob(filepat, dir = None):
