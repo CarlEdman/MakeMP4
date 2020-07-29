@@ -84,6 +84,43 @@ def readytomake(file,*comps):
       return True
   return False
 
+worklock='.working'
+def work_lock(file):
+  if not file:
+    return False
+  if os.path.exists(file+worklock):
+    log.warning(f'File "{file}" already worklocked')
+    return False
+  open(file+worklock,'w').truncate(0)
+  return True
+
+def work_unlock(file):
+  if not file:
+    return False
+  if not os.path.exists(file+worklock):
+    log.warning('File "{file}" not worklocked')
+    return False
+  if os.path.getsize(file+worklock) != 0:
+    log.error(f'Worklock for "{file}" not empty!')
+    return False
+  os.remove(file+worklock)
+
+def work_locked(file):
+  return os.path.exists(file+worklock)
+
+def work_lock_delete():
+  for l in os.listdir(os.getcwd()):
+    if not l.endswith(worklock): continue
+    if os.path.getsize(l) != 0:
+       log.error(f'Worklock "{l}" not empty!')
+       continue
+    os.remove(l)
+    f = l[:-len(worklock)]
+    if not os.path.exists(f):
+      log.warning('No file existed for worklock "' + l + '"')
+      continue
+    os.remove(f)
+
 def do_call(args,outfile=None,infile=None):
   def cookout(s):
     s=re.sub(r'\s*\n\s*',r'\n',s)
