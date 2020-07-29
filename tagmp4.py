@@ -27,14 +27,8 @@ parser = None
 args = None
 log = logging.getLogger()
 
-type2stik = { "music": 1,
-              "audiobook": 2,
-              "musicvideo": 6,
-              "movie": 9,
-              "tvshow": 10,
-              "booklet": 11,
-              "ringtone": 14 }
-
+type2stik = { "music": 1, "audiobook": 2, "musicvideo": 6,
+  "movie": 9, "tvshow": 10, "booklet": 11, "ringtone": 14 }
 stik2type = dict_inverse(type2stik)
 
 rating2rtng = { }
@@ -466,20 +460,20 @@ def get_meta_filename(f):
   (dirname, filename) = os.path.split(f)
   (name, ext) = os.path.splitext(filename)
 
-  if (m := re.fullmatch(r'(.*)\s+(\([12]\d\d\d\))',name)):
+  if m := re.fullmatch(r'(.*)\s+(\([12]\d\d\d\))',name):
     its['type'] = "movie"
     its['title'] = m[1]
     its['year'] = m[2]
     return its
 
-  if (m := re.fullmatch(r'(.*)\s+(\([12]\d\d\d\))\s+(.*)',name)):
+  if m := re.fullmatch(r'(.*)\s+(\([12]\d\d\d\))\s+(.*)',name):
     its['type'] = "movie"
     its['title'] = m[1]
     its['year'] = int(m[2])
     its['song'] = m[3]
     return its
 
-  if (m := re.fullmatch(r'(.*)\s+S0*([1-9]\d*)E(\d+)(\s+(.*))?',name)):
+  if m := re.fullmatch(r'(.*)\s+S0*([1-9]\d*)E(\d+)(\s+(.*))?',name):
     its['type'] = "tvshow"
     its['show'] = m[1]
     its['season'] = int(m[2])
@@ -487,7 +481,7 @@ def get_meta_filename(f):
     if m[4]: its['song'] = m[4]
     return its
 
-  if (m := re.fullmatch(r'(.*)\s+S0*([1-9]\d*)\s+(.*)',name)):
+  if m := re.fullmatch(r'(.*)\s+S0*([1-9]\d*)\s+(.*)',name):
     its['type'] = "tvshow"
     its['show'] = m[1]
     its['season'] = int(m[2])
