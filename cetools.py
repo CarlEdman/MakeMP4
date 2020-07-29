@@ -26,95 +26,6 @@ def export(func):
   func.__globals__['__all__'].append(func.__name__)
   return func
 
-class DefaultDict(collections.UserDict):
-  """A subclass of Userdict for use by SyncConfig"""
-
-  def __init__(self, *args, **kwargs):
-    super().__init__(*args, **kwargs)
-
-  def __getitem__(self, key):
-    return self.data[key] if key in self.data else None
-
-  def __setitem__(self, key, item):
-#   log,debug((key, type(key), item, type(item)))
-    if item is None:
-      if key not in self.data: return
-      del self.data[key]
-    else:
-      if key in self.data and self.data[key] == item: return
-      self.data[key] = item
-
-  def additem(self, key):
-    self.data[key] = DefaultDict()
-
-  def getstr(self, key):
-    if key not in self.data: return None
-    v = self.data[key]
-    if isinstance(v, str) and v[0]=='_' and v[-1]=='_': return None
-    return v
-
-  def getint(self, key):
-    if key not in self.data: return None
-    v = self.data[key]
-    try:
-      return int(v)
-    except ValueError:
-      return None
-
-  def getfloat(self, key):
-    if key not in self.data: return None
-    v = self.data[key]
-
-    if ':' in v:
-      try:
-        [ num, denom ] = v.split(':')
-        return float(int(num)/int(denom))
-      except ValueError:
-        return None
-
-    if '/' in v:
-      try:
-        [ num, denom ] = v.split('/')
-        return float(int(num)/int(denom))
-      except ValueError:
-        return None
-
-    try:
-      return float(v)
-    except ValueError:
-      return None
-
-  def getfraction(self, key):
-    if key not in self.data: return None
-    v = self.data[key]
-
-    try:
-      if isinstance(v, Fraction):
-        return v
-      elif isinstance(v, float):
-        [ num, denom ] = float(v).as_integer_ratio()
-        return Fraction(int(num),int(denom))
-      elif isinstance(v, str) and ':' in v:
-        [ num, denom ] = v.split(':')
-        return Fraction(int(num),int(denom))
-      elif isinstance(v, str) and '/' in v:
-        [ num, denom ] = v.split('/')
-        return Fraction(int(num),int(denom))
-    except ValueError:
-      return None
-    return None
-
-  def getlist(self, key):
-    if key not in self.data: return []
-    v = self.data[key]
-    return v.split(';')
-
-  def getset(self, key):
-    if key not in self.data: return []
-    v = self.data[key]
-    return set(v.split(';'))
-
-
 class TitleHandler(logging.Handler):
   """
   A handler class which writes logging records, appropriately formatted,
@@ -204,43 +115,6 @@ def semicolon_join(s, t):
   if not isinstance(s, str): return t
   if not isinstance(t, str): return s
   return ';'.join(sorted(set(s.split(';')) | set(t.split(';'))))
-
-worklock='.working'
-def work_lock(file):
-  if not file:
-    return False
-  if os.path.exists(file+worklock):
-    log.warning(f'File "{file}" already worklocked')
-    return False
-  open(file+worklock,'w').truncate(0)
-  return True
-
-def work_unlock(file):
-  if not file:
-    return False
-  if not os.path.exists(file+worklock):
-    log.warning('File "{file}" not worklocked')
-    return False
-  if os.path.getsize(file+worklock) != 0:
-    log.error(f'Worklock for "{file}" not empty!')
-    return False
-  os.remove(file+worklock)
-
-def work_locked(file):
-  return os.path.exists(file+worklock)
-
-def work_lock_delete():
-  for l in os.listdir(os.getcwd()):
-    if not l.endswith(worklock): continue
-    if os.path.getsize(l) != 0:
-       log.error(f'Worklock "{l}" not empty!')
-       continue
-    os.remove(l)
-    f = l[:-len(worklock)]
-    if not os.path.exists(f):
-      log.warning('No file existed for worklock "' + l + '"')
-      continue
-    os.remove(f)
 
 def sleep_change_directories(dirs,state=None):
   '''Sleep until any of the files in any of the dirs has changed.'''
