@@ -209,7 +209,7 @@ def get_meta_local_movie(ls):
   return its
 
 @export
-def get_meta_local(title, season, episode, descpath):
+def get_meta_local(title, year, season, episode, descpath):
   try:
     with open(os.path.join(descpath),'rt', encoding='utf-8') as f:
       ls = []
@@ -235,7 +235,7 @@ def get_meta_local(title, season, episode, descpath):
   return get_meta_local_tv(episode, ls) if season else get_meta_local_movie(ls)
 
 @export
-def get_meta_imdb(title, season, episode, artpath,
+def get_meta_imdb(title, year, season, episode, artpath,
                   imdb_id, omdb_status, omdb_key):
   its = dict()
   if not omdb_key: return its
@@ -247,15 +247,18 @@ def get_meta_imdb(title, season, episode, artpath,
     q['i'] = imdb_id
   elif season and episode:
     q['t'] = title
+    if year: q['y'] = str(year)
     q['type'] = 'episode'
     q['Season'] = str(season)
     q['Episode'] = str(episode)
   elif season:
     q['t'] = title
+    if year: q['y'] = str(year)
     q['type'] = 'series'
     q['Season'] = str(season)
   else:
     q['t'] = title
+    if year: q['y'] = str(year)
     q['type'] = 'movie'
 
   u = urlunparse(['http','www.omdbapi.com', '/', '', urlencode(q), ''])
@@ -573,7 +576,7 @@ def set_chapters_mutagen(outfile, its):
     elong = its.get('chapter_elongation',1.0)
 
     cts = its['chapter_time']
-    if is_instance(cts, float):
+    if isinstance(cts, float):
       cts = [cts*elong+delay]
     elif test_str(cts):
       cts = [float(i)*elong+delay for i in cts.split(';')]
@@ -655,7 +658,7 @@ def set_meta_cmd(outfile, its):
 @export
 def set_chapters_cmd(outfile, its):
   chapterfile = os.path.splitext(outfile)[0]+'.chapters.txt'
-  if os.path.exists(chapterfile) and getsize(chapterfile)!=0:
+  if os.path.exists(chapterfile) and os.path.getsize(chapterfile)!=0:
     log.warning(f'Adding chapters from existing config file "{chapterfile}"')
     try:
       cp = subprocess.run(['mp4chaps', '--import', outfile], check=True, capture_output=True)
@@ -739,11 +742,11 @@ def retag(f):
   fn = f'{its["show"] or ""}{" S"+str(its["season"]) if its["season"] else ""}'
 
   if args.descdir:
-    upd(get_meta_local(title, its['season'], its['episode'],
+    upd(get_meta_local(title, its['year'], its['season'], its['episode'],
       os.path.join(args.descdir, f'{fn}.txt')))
 
   if args.omdbkey and args.artdir:
-    upd(get_meta_imdb(title, its['season'], its['episode'],
+    upd(get_meta_imdb(title, its['year'], its['season'], its['episode'],
       os.path.join(args.artdir, f'{fn}.jpg'),
       its['imdb_id'], its['omdb_status'], args.omdbkey))
 
