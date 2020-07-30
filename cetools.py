@@ -99,17 +99,42 @@ def sanitize_filename(s):
   trans = str.maketrans('','',r':"/\:*?<>|'+r"'")
   return s.translate(trans)
 
-def parse_time(s):
-  m = re.fullmatch(r'(?P<neg>-)?(?P<hrs>\d+):(?P<mins>\d+):(?P<secs>\d+(\.\d*)?)', s)
-  if not m: return m
-  t = float(m['secs'])
-  if m['mins']: t += 60.0*float(m['mins'])
-  if m['secs']: t += 3600.0*float(m['hrs'])
-  if m['neg']:  t = -t
-  return t
-
 def unparse_time(t):
   return f'{"-" if t<0 else ""}{int(abs(t)/3600.0):02d}:{int(abs(t)/60.0)%60:02d}:{int(abs(t))%60:02d}:{int(abs(t)*1000.0)%1000:03d}'
+
+def to_float(s):
+  try:
+    return float(s)
+  except ValueError:
+    pass
+
+  if isinstance(s, str):
+    if m := re.fullmatch(r'(?P<neg>-)?(?P<hrs>\d+):(?P<mins>\d+):(?P<secs>\d+(\.\d*)?)', s):
+      t = float(m['secs'])
+      if m['mins']: t += 60.0*float(m['mins'])
+      if m['hrs']: t += 3600.0*float(m['hrs'])
+      if m['neg']:  t = -t
+      return t
+
+    if s.endswith('%'):
+      try:
+        return float(s[:-1])/100.0
+      except ValueError:
+        pass
+
+    if len(t := s.split('/'))==2:
+      try:
+        return float(t[0])/float(t[1])
+      except ValueError:
+        pass
+
+    if len(t := s.split(':'))==2:
+      try:
+        return float(t[0])/float(t[1])
+      except ValueError:
+        pass
+
+  raise ValueError
 
 def semicolon_join(s, t):
   if not isinstance(s, str): return t
