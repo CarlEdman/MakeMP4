@@ -65,6 +65,15 @@ iso6392BtoT = {
   'Chinese':'zho'
   }
 
+def parse_time(s):
+  m = re.fullmatch(r'(?P<neg>-)?(?P<hrs>\d+):(?P<mins>\d+):(?P<secs>\d+(\.\d*)?)', s)
+  if not m: return m
+  t = float(m['secs'])
+  if m['mins']: t += 60.0*float(m['mins'])
+  if m['hrs']: t += 3600.0*float(m['hrs'])
+  if m['neg']:  t = -t
+  return t
+
 def readytomake(file,*comps):
   for f in comps:
     if not os.path.exists(f) or not os.path.isfile(f) or os.path.getsize(f)==0 or work_locked(f): return False
@@ -1152,13 +1161,13 @@ def main():
     fn = f'{cfg.get("show") or ""}{season}'
 
     descpath = os.path.join(args.descdir, f'{fn}.txt')
-    its = get_meta_local(title, cfg.get('season'), cfg.get('episode'), descpath)
+    its = get_meta_local(title, cfg.get('year'), cfg.get('season'), cfg.get('episode'), descpath)
     if 'comment' in its:
       cfg.set('comment',semicolon_join(cfg.get('comment',None), its['comment']))
       del its['comment']
     cfg.item_defs(its)
 
-    its = get_meta_imdb(title, cfg.get('season'), cfg.get('episode'),
+    its = get_meta_imdb(title, cfg.get('year'), cfg.get('season'), cfg.get('episode'),
       os.path.join(args.artdir, f'{fn}.jpg'),
       cfg.get('imdb_id'), cfg.get('omdb_status'), args.omdbkey)
     if 'comment' in its:
