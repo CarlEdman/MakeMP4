@@ -23,7 +23,7 @@ log = logging.getLogger()
 def main():
   chaps=dict()
   for l in subprocess.check_output(['mkvextract', 'chapters', '--simple', args.infile], universal_newlines = True).splitlines():
-    if m := re.fullmatch(r'CHAPTER(\d+)=(.*)',l) and t := parse_time(m[2]):
+    if m := re.fullmatch(r'CHAPTER(\d+)=(.*)',l) and t := to_float(m[2]):
        chaps[int(m[1])]=t
 
   splits=[]
@@ -43,7 +43,7 @@ def main():
       while chap in chaps:
         splits.append(chaps[chap])
         chap+=i
-    elif t := parse_time(s):
+    elif t := to_float(s):
       splits.append(t)
 
   timecodes=",".join(unparse_time(s) for s in splits)
@@ -57,7 +57,7 @@ def main():
     chaptimes=[]
     chapnames=[]
     for l in subprocess.check_output(['mkvextract', 'chapters', '--simple', tf], universal_newlines = True).splitlines():
-      if m := re.fullmatch(r'CHAPTER(\d+)=(.*)',l) and t := parse_time(m[2]):
+      if m := re.fullmatch(r'CHAPTER(\d+)=(.*)',l) and t := to_float(m[2]):
         chaptimes.append(t)
       elif m := re.fullmatch(r'^CHAPTER(\d+)NAME=(.*)$',l):
         chapnames.append(m[1])
@@ -77,7 +77,7 @@ def main():
     if chapchange:
       chapfile=tf+'.chap.txt'
       with open(chapfile,'w') as cf:
-        for no,cn,ct in zip(range(1000),chapnames,chaptimes):
+        for no,cn,ct in zip(range(sys.maxint),chapnames,chaptimes):
           cf.write(f'CHAPTER{no:02d}={unparse_time(ct)}\n')
           cf.write(f'CHAPTER{no:02d}NAME={cn}\n')
 
