@@ -17,7 +17,7 @@ import shutil
 import subprocess
 import sys
 
-from cetools        import *
+from cetools import * # pylint: disable=unused-wildcard-import
 from mutagen.mp4    import MP4, MP4Cover, MP4Tags, MP4Chapters
 from urllib.error   import HTTPError
 from urllib.parse   import urlparse, urlunparse, urlencode
@@ -27,8 +27,7 @@ parser = None
 args = None
 log = logging.getLogger()
 
-type2stik = { "music": 1, "audiobook": 2, "musicvideo": 6,
-  "movie": 9, "tvshow": 10, "booklet": 11, "ringtone": 14 }
+type2stik = { "music": 1, "audiobook": 2, "musicvideo": 6, "movie": 9, "tvshow": 10, "booklet": 11, "ringtone": 14 }
 stik2type = dict_inverse(type2stik)
 
 rating2rtng = { }
@@ -97,7 +96,7 @@ def get_meta_local_tv(episode, ls):
     log.warning(f'TV series file contains no Episode header.')
     return its
 
-  cur = None
+  cur = dict()
   ld = dict()
   for l in ls:
     ds = l.split('\t')
@@ -106,13 +105,11 @@ def get_meta_local_tv(episode, ls):
       if 'Episode' in cur:
         ld[int(cur['Episode'])] = cur
         del cur['Episode']
-    elif cur == None:
+    elif cur:
+      cur['Description'] = f'cur["Description"]  l' if 'Description' in cur else l
+    else:
       log.warning(f'TV series file does not start with a valid data line.')
       return its
-    elif 'Description' in cur:
-      cur['Description'] += f'  {l}'
-    else:
-      cur['Description'] = l
 
   if episode not in ld:
     log.warning(f'TV series file does not contain episode {episode}.')
@@ -184,7 +181,7 @@ def get_meta_local_movie(ls):
       its['duration'] = (3600*float(m.group('hours')) if m.group('hours') else 0) + (60*float(m.group('minutes')) if m.group('minutes') else 0)
       if m.group('format'):  comment.append(f'Format: {m.group("format")}')
     elif (m := re.fullmatch(r'This movie is\s.*',l)):
-      desc.append(l)
+      desc += l
     elif (m := re.fullmatch(r'Genres?\s*:*\s*(.*)',l)):
       genres = [ genre_trans[w.strip()] for w in m[1].split(',') if w.strip() in genre_trans ]
       if genres:
@@ -385,7 +382,7 @@ def get_meta_imdb(title, year, season, episode, artpath,
           continue
         comment.append(t)
     elif k=='Poster':
-      imdb_poster = v
+      pass # imdb_poster = v
     else:
       log.warning(f'{title}: Unrecognized IMDB "{k}" = "{v}"')
 
@@ -460,8 +457,8 @@ def get_meta_mutagen(f):
 def get_meta_filename(f):
   its = dict()
 
-  (dirname, filename) = os.path.split(f)
-  (name, ext) = os.path.splitext(filename)
+  filename = os.path.split(f)[1]
+  name = os.path.splitext(filename)[0]
 
   if m := re.fullmatch(r'(.*)\s+(\([12]\d\d\d\))',name):
     its['type'] = "movie"
@@ -637,7 +634,7 @@ def set_meta_cmd(outfile, its):
   elif song: call += ['-song', song]
 
   try:
-    cp = subprocess.run(call, check=True, capture_output=True)
+    subprocess.run(call, check=True, capture_output=True)
   except subprocess.CalledProcessError as cpe:
     with open(outfile, 'w') as f: f.truncate(0)
     log.error(f'Error code for {cpe.cmd}: {cpe.returncode} : {cpe.stdout} : {cpe.stderr}')
@@ -648,7 +645,7 @@ def set_meta_cmd(outfile, its):
       call += [ '--add', i ]
     call += [ outfile ]
     try:
-      cp = subprocess.run(call, check=True, capture_output=True)
+      subprocess.run(call, check=True, capture_output=True)
     except subprocess.CalledProcessError as cpe:
       with open(outfile, 'w') as f: f.truncate(0)
       log.error(f'Error code for {cpe.cmd}: {cpe.returncode} : {cpe.stdout} : {cpe.stderr}')
@@ -661,7 +658,7 @@ def set_chapters_cmd(outfile, its):
   if os.path.exists(chapterfile) and os.path.getsize(chapterfile)!=0:
     log.warning(f'Adding chapters from existing config file "{chapterfile}"')
     try:
-      cp = subprocess.run(['mp4chaps', '--import', outfile], check=True, capture_output=True)
+      subprocess.run(['mp4chaps', '--import', outfile], check=True, capture_output=True)
     except subprocess.CalledProcessError as cpe:
       with open(outfile, 'w') as f: f.truncate(0)
       log.error(f'Error code for {cpe.cmd}: {cpe.returncode} : {cpe.stdout} : {cpe.stderr}')
@@ -682,7 +679,7 @@ def set_chapters_cmd(outfile, its):
         f.write(f'{unparse_time(ct)} {cn} ({int (ct/60.0):d}m {int (ct)%60:d}s)\n')
     try:
       os.rename(outfile, tempfile)
-      cp = subprocess.run(['mp4chaps', '--import', tempfile], check=True, capture_output=True)
+      subprocess.run(['mp4chaps', '--import', tempfile], check=True, capture_output=True)
     except subprocess.CalledProcessError as cpe:
       with open(tempfile, 'w') as f: f.truncate(0)
       log.error(f'Error code for {cpe.cmd}: {cpe.returncode}')
@@ -696,7 +693,10 @@ def make_filename(its):
   title = its.get('title', None) or its.get('show', None)
   title = alphabetize(title) if title else None
   if its['type']=='movie':
-    episode = f'- pt{i:d}' if (i := test_int(its.get('episode', None))) else ""
+    if i := test_int(its['episode']):
+      episode = f'- pt{i:d}'
+    else:
+      episode = ""
     year = f' ({i:04d})' if (i := test_int(its.get('year', None))) else ""
     song = " " + alphabetize(i) if (i := its.get('song', None)) else ""
     plexname = sanitize_filename(f'{title}{episode}{year}{song}.mp4')
@@ -729,7 +729,7 @@ def retag(f):
         its.setdefault(k, v)
 
   (dirname, filename) = os.path.split(f)
-  (name, ext) = os.path.splitext(filename)
+  ext = os.path.splitext(filename)[1]
   if ext not in { ".mp4" }:
     log.warning(f'{f} has invalid extension, skipping.')
     return
