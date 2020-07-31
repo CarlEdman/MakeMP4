@@ -198,13 +198,13 @@ def make_srt(cfg, track):
   base = cfg['base']
   srt = maketrack(cfg)
   srt['file']=f'{base} T{srt["id"]:02d}.srt'
-  if not os.path.exists(srtfile):
-    do_call(['ccextractorwin', track['file'], '-o', srtfile],srtfile)
-  if os.path.exists(srtfile) and os.path.getsize(srtfile)==0:
-    os.remove(srtfile)
-  if not os.path.exists(srtfile):
+  if not os.path.exists(srt['file']):
+    do_call(['ccextractorwin', track['file'], '-o', srt['file']],srt['file'])
+  if os.path.exists(srt['file']) and os.path.getsize(srt['file'])==0:
+    os.remove(srt['file'])
+  if not os.path.exists(srt['file']):
     return False
-  srt['file'] = srtfile
+  srt['file'] = srt['file']
   srt['type'] = 'subtitles'
   srt['delay'] = 0.0
   srt['elongation'] = 1.0
@@ -389,7 +389,7 @@ def prepare_mkv(cfg, mkvfile):
   for track in tracks(cfg):
     if 't2cfile' not in track or 'mkvtrack' not in track: continue
     if not os.path.exists(track['t2cfile']) and track['mkvtrack']:
-      tcs.append(f'{track["mkvtrack"]}:{t2cfile}')
+      tcs.append(f'{track["mkvtrack"]}:{track["t2cfile"]}')
   if tcs:
     do_call(['mkvextract', 'timecodes_v2', mkvfile] + tcs)
 
@@ -799,12 +799,13 @@ def build_video(cfg, track):
 
   res=do_call((c for c in call if c), outfile)
   if res and (m := re.match(r'\bencoded (\d+) frames\b',res)):
-    nframes=int(m[1])
+    nframes = int(m[1])
+    oframes = int(track['frame_rate_ratio_out']/track['frame_rate_ratio']*track['frames'])
     # Adjust oframes for difference between frame-rate-in and frame-rate-out
-    if 'frames' in track and (oframes := int(track['frame_rate_ratio_out']/track['frame_rate_ratio']*track['frames'])) and abs(nframes-oframes)>2:
+    if 'frames' in track and abs(nframes-oframes)>2:
       log.warning(f'Encoding changed frames in "{infile}" from {oframes:d} to {nframes:d}')
     track['frames']=nframes
-    track['duration']=frames/track['frame_rate_ratio_out']
+    track['duration']=nframes/track['frame_rate_ratio_out']
     mdur=track['duration'] or cfg['duration']
     if abs(track['duration'] - mdur)>5.0:
       log.warning(f'Video track "{infile}" duration differs (elongation={track["duration"]/mdur:f})')
