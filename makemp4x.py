@@ -24,8 +24,6 @@ import tempfile
 import time
 import xml.etree.ElementTree as ET
 
-from contextlib import contextmanager
-
 from cetools import * # pylint: disable=unused-wildcard-import
 from tagmp4 import * # pylint: disable=unused-wildcard-import
 
@@ -45,27 +43,6 @@ iso6392BtoT = {
   'Svenska':'swe', 'Latin':'lat', 'Dutch':'nld',
   'Chinese':'zho'
   }
-
-class DefaultDict(collections.UserDict):
-  """A subclass of Userdict for use by SyncConfig"""
-
-  def __init__(self, *args, **kwargs):
-    super().__init__(*args, **kwargs)
-
-  def __getitem__(self, key):
-    return self.data[key] if key in self.data else None
-
-  def __setitem__(self, key, item):
-#   log,debug((key, type(key), item, type(item)))
-    if item is None:
-      if key not in self.data: return
-      del self.data[key]
-    else:
-      if key in self.data and self.data[key] == item: return
-      self.data[key] = item
-
-  def additem(self, key):
-    self.data[key] = DefaultDict()
 
 def readytomake(file,*comps):
   for f in comps:
@@ -87,17 +64,39 @@ def readytomake(file,*comps):
   return False
 
 class defdict(dict):
+  def __init__(self, *args, **kwargs):
+    super().__init__(*args, **kwargs)
+    self._modified=False
+
   def __getitem__(self, key):
     return super().__getitem__(key) if key in self else None
+  
+  def __setitem__(self, key, value):
+    if value is None:
+      if key not in self or self[key] is None:
+        return
+      del self[key]
+    else:
+      if key in self and self[key] == value:
+        return
+      super().__setitem__(key, value)
+    self._modified = True
+  
+  def modified(self):
+    if self._modified: return True
+    for s in self.values():
+      if isinstance(s, defdict) and s.modified(): return True
+    return False
 
 def serveconfig(fn):
   try:
     with open(fn, 'r+') as f:
       j = json.load(f, object_hook = defdict)
       yield j
-      f.seek(0)
-      f.truncate(0)
-      json.dump(j, f, ensure_ascii = False, indent = 2, sort_keys = True)
+      if j.modified():
+        f.seek(0)
+        f.truncate(0)
+        json.dump(j, f, ensure_ascii = False, indent = 2, sort_keys = True)
   except json.JSONDecodeError:
     log.error(f'{fn} is not a JSON config file, skipping.')
   except TypeError:
@@ -106,14 +105,6 @@ def serveconfig(fn):
 def configs(path = '.'):
   for fn in glob.iglob(os.path.join(path, '*.cfg')):
     yield from serveconfig(fn)
-
-@contextmanager
-def makeconfig(base, path='.'):
-  fn = os.path.join(path, base+'.cfg')
-  if not os.path.exists(fn):
-    with open(fn, 'w') as f:
-      json.dump({ 'cfgname': fn }, f)
-  yield from serveconfig(fn)
 
 def maketrack(cfg, tid = None):
   track = defdict()
@@ -128,7 +119,7 @@ def maketrack(cfg, tid = None):
 
 def tracks(cfg, typ = None):
   if not isinstance(cfg, dict): return
-  for k in cfg:
+  for k in list(cfg):
     if not re.fullmatch(r'track\d+',k): continue
     track = cfg[k]
     if track['disable']: continue
@@ -606,7 +597,7 @@ def build_subtitle(cfg, track):
     call = ['bdsup2sub++', '--resolution','keep']
     if delay!=0.0: call += ['--delay', delay]
 
-    fps = track['frame_rate_ratio_out'] or cfg[0]['frame_rate_ratio_out']
+    fps = track['frame_rate_ratio_out'] or cfg['track00']['frame_rate_ratio_out']
     fps2target = { 24.0: '24p', 24000/1001: '24p'
                  , 25.0: '25p', 25000/1001: '25p'
                  , 30.0: '30p', 30000/1001: '30p' }
@@ -824,7 +815,7 @@ def build_result(cfg):
     return False
   if args.outdir: outfile = os.path.join(args.outdir,outfile)
 
-  infiles=[cfg['cfgname']]
+  infiles=[ cfg['cfgname'] ]
   coverfiles=[]
   for c in cfg['coverart']:
     if os.path.dirname(c)==None and args.artdir:
@@ -852,7 +843,7 @@ def build_result(cfg):
 
     if lang := track['language']:
       call[-1]+=':lang='+lang
-    if fps := track.getfraction('frame_rate_ratio_out'):
+    if fps := track['frame_rate_ratio_out']:
       call[-1] += ':fps=' + str(fps)
     if mdur or dur: call[-1] += ':dur=' + str(mdur or dur)
 
@@ -916,13 +907,17 @@ def main():
       qf = os.path.join(d,f)
       if not os.path.isfile(qf): continue
       (base, ext) = os.path.splitext(f)
-      ext = ext.casefold()
-      if ext not in preparers:
+      fn = base+'.cfg'
+      if args.outdir: fn = os.path.join(args.outdir, fn)
+      if os.path.exists(fn): continue
+      with open(fn, 'w') as f:
+        json.dump({ 'cfgname': fn }, f)
+      if ext.casefold() not in preparers:
         log.warning(f'Source file type not recognized {qf}')
         continue
-      with makeconfig(base) as cfg:
+      for cfg in serveconfig(fn):
         config_from_base(cfg, base)
-        preparers[ext](cfg, qf)
+        preparers[ext.casefold()](cfg, qf)
 
   for cfg in configs():
     build_meta(cfg)
