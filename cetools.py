@@ -10,8 +10,6 @@ import re
 import time
 import weakref
 
-from fractions import Fraction
-
 if os.name == 'nt':
   import ctypes
   import win32api
