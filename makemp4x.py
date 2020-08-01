@@ -15,7 +15,6 @@ import json
 import logging
 import math
 import os
-import os.path
 import re
 import shutil
 import subprocess
@@ -44,7 +43,7 @@ iso6392BtoT = {
   'Chinese':'zho'
   }
 
-def readytomake(file,*comps):
+def readytomake(file, *comps):
   for f in comps:
     if not os.path.exists(f) or not os.path.isfile(f) or os.path.getsize(f)==0: return False
     fd=os.open(f,os.O_RDONLY|os.O_EXCL)
@@ -70,33 +69,40 @@ class defdict(dict):
 
   def __getitem__(self, key):
     return super().__getitem__(key) if key in self else None
-  
+
   def __setitem__(self, key, value):
     if value is None:
-      if key not in self or self[key] is None:
-        return
+      if key not in self or self[key] is None: return
       del self[key]
     else:
-      if key in self and self[key] == value:
-        return
+      if key in self and self[key] == value: return
       super().__setitem__(key, value)
     self._modified = True
-  
+
   def modified(self):
+    # Note: generator, not list, to enable short-circuiting
     if self._modified: return True
-    for s in self.values():
-      if isinstance(s, defdict) and s.modified(): return True
-    return False
+    m = any(s.modified() for s in self.values() if isinstance(s, defdict))
+    return m
+
+  def modclear(self):
+    # Note: list, not generator, to prevent short-circuiting
+    m = any([s.modclear() for s in self.values() if isinstance(s, defdict)])
+    m = m or self._modified
+    self._modified = False
+    return m
+
+def syncconfig(cfg):
+  if not cfg.modclear(): return
+  with open(cfg['cfgname'], 'w') as f:
+    json.dump(cfg, f, ensure_ascii = False, indent = 2, sort_keys = True)
 
 def serveconfig(fn):
   try:
-    with open(fn, 'r+') as f:
+    with open(fn, 'r') as f:
       j = json.load(f, object_hook = defdict)
-      yield j
-      if j.modified():
-        f.seek(0)
-        f.truncate(0)
-        json.dump(j, f, ensure_ascii = False, indent = 2, sort_keys = True)
+    yield j
+    syncconfig(j)
   except json.JSONDecodeError:
     log.error(f'{fn} is not a JSON config file, skipping.')
   except TypeError:
@@ -859,6 +865,7 @@ def build_result(cfg):
     log.warning(f'Result for "{base}" has more than 18 tracks.')
 
   cfg['tool'] = f'{prog} {version} on {time.strftime("%A, %B %d, %Y, at %X")}'
+  syncconfig(cfg)
   do_call(call,outfile)
   set_meta_mutagen(outfile, cfg)
   set_chapters_cmd(outfile, cfg)
