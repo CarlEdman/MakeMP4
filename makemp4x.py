@@ -789,7 +789,7 @@ def build_video(cfg, track):
     log.error(f'{outfile}: Unrecognized output format "{track["outformat"]}"')
     return False
 
-  (n,d) = track['sample_aspect_ratio'].as_integer_ratio()
+  (n,d) = track['sample_aspect_ratio'].limit_denominator(1000)
   call += [ '--fps', track["frame_rate_ratio_out"]
           , '--sar', f'{n}:{d}'
           , '--output', outfile ]
