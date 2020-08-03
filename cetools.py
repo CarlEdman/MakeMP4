@@ -10,6 +10,8 @@ import re
 import time
 import weakref
 
+from fractions import Fraction
+
 if os.name == 'nt':
   import ctypes
   import win32api
@@ -100,6 +102,16 @@ def sanitize_filename(s):
 def unparse_time(t):
   return f'{"-" if t<0 else ""}{int(abs(t)/3600.0):02d}:{int(abs(t)/60.0)%60:02d}:{int(abs(t))%60:02d}:{int(abs(t)*1000.0)%1000:03d}'
 
+def add_to_list(l, v):
+  if v is None: return l
+  if l is None: return [ v ]
+  if v in l: return l
+  return sorted(l.append(v))
+
+def to_ratio_string(f):
+  (n,d) = Fraction(f).limit_denominator(10000).as_integer_ratio()
+  return f'{n}:{d}'
+
 def to_float(s):
   try:
     return float(s)
@@ -111,7 +123,7 @@ def to_float(s):
       t = float(m['secs'])
       if m['mins']: t += 60.0*float(m['mins'])
       if m['hrs']: t += 3600.0*float(m['hrs'])
-      if m['neg']:  t = -t
+      if m['neg']: t = -t
       return t
 
     if s.endswith('%'):
@@ -134,11 +146,6 @@ def to_float(s):
 
   raise ValueError
 
-def semicolon_join(s, t):
-  if not isinstance(s, str): return t
-  if not isinstance(t, str): return s
-  return ';'.join(sorted(set(s.split(';')) | set(t.split(';'))))
-
 def sleep_change_directories(dirs,state=None):
   '''Sleep until any of the files in any of the dirs has changed.'''
 
@@ -156,3 +163,34 @@ def sleep_change_directories(dirs,state=None):
         for ch in chs: win32file.FindCloseChangeNotification(ch)
     else:
       time.sleep(10)
+
+class defdict(dict):
+  def __init__(self, *args, **kwargs):
+    super().__init__(*args, **kwargs)
+    self._modified=False
+
+  def __getitem__(self, key):
+    return super().__getitem__(key) if key in self else None
+
+  def __setitem__(self, key, value):
+    if value is None:
+      if key not in self or self[key] is None: return
+      del self[key]
+    else:
+      if key in self and self[key] == value: return
+      super().__setitem__(key, value)
+    self._modified = True
+
+  def modified(self):
+    # Note: generator, not list, to enable short-circuiting
+    if self._modified: return True
+    m = any(s.modified() for s in self.values() if isinstance(s, defdict))
+    return m
+
+  def modclear(self):
+    # Note: list, not generator, to prevent short-circuiting
+    m = any([s.modclear() for s in self.values() if isinstance(s, defdict)])
+    m = m or self._modified
+    self._modified = False
+    return m
+
