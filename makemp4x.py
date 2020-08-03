@@ -62,36 +62,6 @@ def readytomake(file, *comps):
       return True
   return False
 
-class defdict(dict):
-  def __init__(self, *args, **kwargs):
-    super().__init__(*args, **kwargs)
-    self._modified=False
-
-  def __getitem__(self, key):
-    return super().__getitem__(key) if key in self else None
-
-  def __setitem__(self, key, value):
-    if value is None:
-      if key not in self or self[key] is None: return
-      del self[key]
-    else:
-      if key in self and self[key] == value: return
-      super().__setitem__(key, value)
-    self._modified = True
-
-  def modified(self):
-    # Note: generator, not list, to enable short-circuiting
-    if self._modified: return True
-    m = any(s.modified() for s in self.values() if isinstance(s, defdict))
-    return m
-
-  def modclear(self):
-    # Note: list, not generator, to prevent short-circuiting
-    m = any([s.modclear() for s in self.values() if isinstance(s, defdict)])
-    m = m or self._modified
-    self._modified = False
-    return m
-
 def syncconfig(cfg):
   if not cfg.modclear(): return
   with open(cfg['cfgname'], 'w') as f:
@@ -783,16 +753,15 @@ def build_video(cfg, track):
       , track['x265_tune'] if 'x265_tune' in track else None
       , '--output-depth' if 'x265_bit_depth' in track else None
       , track['x265_bit_depth'] if 'x265_bit_depth' in track else None
+      , '--output', outfile
       ]
     # --display-window <left,top,right,bottom> Instead of crop?
   else:
     log.error(f'{outfile}: Unrecognized output format "{track["outformat"]}"')
     return False
 
-  (n,d) = track['sample_aspect_ratio'].limit_denominator(1000)
-  call += [ '--fps', track["frame_rate_ratio_out"]
-          , '--sar', f'{n}:{d}'
-          , '--output', outfile ]
+  call += [ '--fps', to_ratio_string(track["frame_rate_ratio_out"])
+          , '--sar', to_ratio_string(track["sample_aspect_ratio"]) ]
 
   res=do_call((c for c in call if c), outfile)
   if res and (m := re.match(r'\bencoded (\d+) frames\b',res)):
@@ -878,7 +847,7 @@ def build_meta(cfg):
       if not v:
         continue
       elif k == 'comment':
-        cfg['comment'] = semicolon_join(v, cfg['comment'])
+        cfg['comment'] = add_to_list(cfg['comment'], v)
       elif cfg[k] is None:
         cfg[k] = v
 
@@ -892,10 +861,10 @@ def build_meta(cfg):
   upd(get_meta_imdb(title, cfg['year'], cfg['season'], cfg['episode'], artfn,
       cfg['imdb_id'], cfg['omdb_status'], args.omdbkey))
 
-  upd({ 'year': f'_{fn.upper()}YEAR_'
-      , 'genre': f'_{fn.upper()}GENRE_'
-      , 'description': f'_{fn.upper()}DESC_'
-      , 'coverart': reglob(rf'{fn}(\s*P\d+)?(.jpg|.jpeg|.png)', args.artdir) })
+  # upd({ 'year': f'_{fn.upper()}YEAR_'
+  #     , 'genre': f'_{fn.upper()}GENRE_'
+  #     , 'description': f'_{fn.upper()}DESC_' })
+  upd({ 'coverart': reglob(rf'{fn}(\s*P\d+)?(.jpg|.jpeg|.png)', args.artdir) })
 
   return True
 
