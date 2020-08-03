@@ -1129,6 +1129,12 @@ def build_result(cfg):
   cfg.sync()
   return True
 
+def semicolon_join(s, t):
+  if not isinstance(s, str): return t
+  if not isinstance(t, str): return s
+  return ';'.join(sorted(set(s.split(';')) | set(t.split(';'))))
+
+
 def main():
 #    if os.path.getmtime(sys.argv[0])>progmodtime:
 #      exec(compile(open(sys.argv[0]).read(), sys.argv[0], 'exec')) # execfile(sys.argv[0])
