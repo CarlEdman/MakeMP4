@@ -51,7 +51,7 @@ def test_int(s):
   return None
 
 def get_meta_local_tv(episode, ls):
-  its = dict()
+  its = defdict()
 
   if not test_int(episode): return its
 
@@ -123,14 +123,13 @@ def get_meta_local_tv(episode, ls):
     elif k == 'Production Code': its['episodeid'] = v
     elif k == 'Released' and (m := re.search(r'\b([12]\d\d\d)\b',v)): its['year']=int(m[0])
     elif k == 'Description': its['description']=v
-    elif 'comment' in its: its['comment'] += f';{k}: {v}'
-    else: its['comment'] = f'{k}: {v}'
+    else: its['comment'] = add_to_list(its['comment'], f'{k}: {v}')
 
   return its
 
 
 def get_meta_local_movie(ls):
-  its = dict()
+  its = defdict()
 
   beg_trans = { 'Cast':'Actors'
               , 'Director':'Director'
@@ -173,13 +172,14 @@ def get_meta_local_movie(ls):
                 , 'Adventure':'Adventure'
                 }
 
-  comment = []
+  its['comment'] = list()
   for l in ls:
     if (m:=re.fullmatch(r'(?P<year>[12]\d\d\d)\s*(?P<rating>G|PG-13|PG|R|NC-17|UR|NR|TV-14|TV-MA)\s*(?:(?P<hours>\d+)h)?\s*(?:(?P<minutes>\d+)m)?\s*(?P<format>.*)',l)):
       its['year'] = int(m.group('year'))
       its['rating'] = m.group('rating')
       its['duration'] = (3600*float(m.group('hours')) if m.group('hours') else 0) + (60*float(m.group('minutes')) if m.group('minutes') else 0)
-      if m.group('format'):  comment.append(f'Format: {m.group("format")}')
+      if m.group('format'):
+        its['comment'] = add_to_list(its['comment'], f'Format: {m.group("format")}')
     elif (m := re.fullmatch(r'This movie is\s.*',l)):
       desc += l
     elif (m := re.fullmatch(r'Genres?\s*:*\s*(.*)',l)):
@@ -194,7 +194,7 @@ def get_meta_local_movie(ls):
       else:
         its['writer'] = m[1]
     elif (m := re.fullmatch(r'(\S*)\s*:*\s*(.*)',l)) and m[1] in beg_trans:
-      comment.append(f'{beg_trans[m[1]]}: {m[2]}')
+      its['comment'] = add_to_list(its['comment'], f'{beg_trans[m[1]]}: {m[2]}')
     elif 'description' in its:
       its['description'] += f'  {l}'
     elif 'title' in its:
@@ -202,7 +202,6 @@ def get_meta_local_movie(ls):
     else:
       its['title'] = l
 
-  its['comment'] = ';'.join(comment)
   return its
 
 @export
@@ -228,13 +227,13 @@ def get_meta_local(title, year, season, episode, descpath):
   except OSError:
     ls = []
 
-  if not ls: return dict()
+  if not ls: return defdict()
   return get_meta_local_tv(episode, ls) if season else get_meta_local_movie(ls)
 
 @export
 def get_meta_imdb(title, year, season, episode, artpath,
                   imdb_id, omdb_status, omdb_key):
-  its = dict()
+  its = defdict()
   if not omdb_key: return its
   if omdb_status and (200<=omdb_status<300 or 400<=omdb_status<500): return its
 
@@ -338,7 +337,7 @@ def get_meta_imdb(title, year, season, episode, artpath,
                 }
 
   description = []
-  comment = []
+  its['comment'] = list()
 
   for k,v in j.items():
     if v=='N/A':
@@ -374,19 +373,15 @@ def get_meta_imdb(title, year, season, episode, artpath,
         description.insert(0, d)
     elif k in comment_trans:
       v = v.rstrip('.')
-      if (c := comment_trans[k] + v) in comment: continue
-      comment.append(c)
+      its['comment'].add(comment_trans[k] + v)
     elif k=='Ratings':
       for r in v:
-        if (t := f'{r["Source"]} Rating: {r["Value"]}') in comment:
-          continue
-        comment.append(t)
+        its['comment'].add(f'{r["Source"]} Rating: {r["Value"]}')
     elif k=='Poster':
       pass # imdb_poster = v
     else:
       log.warning(f'{title}: Unrecognized IMDB "{k}" = "{v}"')
 
-  its['comment']=';'.join(comment)
   its['description']=';'.join(description)
 
   if not artpath or os.path.exists(artpath): return its
@@ -410,7 +405,7 @@ def get_meta_imdb(title, year, season, episode, artpath,
 
 @export
 def get_meta_mutagen(f):
-  its = dict()
+  its = defdict()
 
   try:
     mutmp4 = MP4(f)
@@ -455,7 +450,7 @@ def get_meta_mutagen(f):
 
 @export
 def get_meta_filename(f):
-  its = dict()
+  its = defdict()
 
   filename = os.path.split(f)[1]
   name = os.path.splitext(filename)[0]
@@ -513,7 +508,7 @@ def set_meta_mutagen(outfile, its):
   if test_str(p := its['genre']): t['©gen'] = p.split(';')
   else: log.warning(f'"{outfile}" has no genre')
 
-  if test_str(p := its['comment']): t['©cmt'] = p.split(';')
+  if its['comment']: t['©cmt'] = its['comment']
 
   if test_int(p := its['year']): t['©day'] = [ str(p) ]
   else: log.warning(f'"{outfile}" has no year')
@@ -604,7 +599,7 @@ def set_meta_cmd(outfile, its):
   if test_str(p := its['genre']): call += [ '-genre' , p ]
   else: log.warning(f'"{outfile}" has no genre')
 
-  if test_str(p := its['comment']): call += [ '-comment' , p ]
+  if its['comment']: call += [ '-comment' , ';'.join(its['comment']) ]
 
   if test_int(p := its['year']): call += [ '-year' , str(p) ]
   else: log.warning(f'"{outfile}" has no year')
@@ -728,7 +723,7 @@ def retag(f):
       if not v:
         continue
       elif k == 'comment':
-        its['comment'] = semicolon_join(v, its['comment'])
+        its['comment'] = add_to_list(its['comment'], v)
       else:
         its.setdefault(k, v)
 
