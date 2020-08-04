@@ -373,10 +373,10 @@ def get_meta_imdb(title, year, season, episode, artpath,
         description.insert(0, d)
     elif k in comment_trans:
       v = v.rstrip('.')
-      its['comment'].add(comment_trans[k] + v)
+      its['comment'] = add_to_list(its['comment'], comment_trans[k] + v)
     elif k=='Ratings':
       for r in v:
-        its['comment'].add(f'{r["Source"]} Rating: {r["Value"]}')
+        its['comment'] = add_to_list(its['comment'], f'{r["Source"]} Rating: {r["Value"]}')
     elif k=='Poster':
       pass # imdb_poster = v
     else:

@@ -104,13 +104,14 @@ def unparse_time(t):
 
 def add_to_list(l, v):
   if v is None: return l
-  if l is None: return [ v ]
+  if not l: return [ v ]
   if v in l: return l
-  return sorted(l.append(v))
+  l.append(v)
+  return sorted(l)
 
-def to_ratio_string(f):
+def to_ratio_string(f, sep="/"):
   (n,d) = Fraction(f).limit_denominator(10000).as_integer_ratio()
-  return f'{n}:{d}'
+  return f'{n}{sep}{d}'
 
 def to_float(s):
   try:
