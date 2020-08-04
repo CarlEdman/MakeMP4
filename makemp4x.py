@@ -761,7 +761,7 @@ def build_video(cfg, track):
     return False
 
   call += [ '--fps', to_ratio_string(track["frame_rate_ratio_out"])
-          , '--sar', to_ratio_string(track["sample_aspect_ratio"]) ]
+          , '--sar', to_ratio_string(track["sample_aspect_ratio"], sep=':') ]
 
   res=do_call((c for c in call if c), outfile)
   if res and (m := re.match(r'\bencoded (\d+) frames\b',res)):
@@ -861,10 +861,10 @@ def build_meta(cfg):
   upd(get_meta_imdb(title, cfg['year'], cfg['season'], cfg['episode'], artfn,
       cfg['imdb_id'], cfg['omdb_status'], args.omdbkey))
 
-  # upd({ 'year': f'_{fn.upper()}YEAR_'
-  #     , 'genre': f'_{fn.upper()}GENRE_'
-  #     , 'description': f'_{fn.upper()}DESC_' })
-  upd({ 'coverart': reglob(rf'{fn}(\s*P\d+)?(.jpg|.jpeg|.png)', args.artdir) })
+  upd({ 'year': f'_{fn.upper()}YEAR_'
+      , 'genre': f'_{fn.upper()}GENRE_'
+      , 'description': f'_{fn.upper()}DESC_'
+      , 'coverart': reglob(rf'{fn}(\s*P\d+)?(.jpg|.jpeg|.png)', args.artdir) })
 
   return True
 
