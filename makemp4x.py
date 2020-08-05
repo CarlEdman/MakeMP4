@@ -471,12 +471,6 @@ def build_indices(cfg, track):
       dratio = track['display_width']/track['display_height']
       pratio = track['pixel_width']/track['pixel_height']
       track['sample_aspect_ratio']= dratio/pratio
-#    elif m := re.fullmatch(r'\s*(\d+)\s*x\s*(\d+)\s*XXX\s*(\d+)\s*:(\d+)',cfg.get('dgdisplaysize','')+'XXX'+cfg.get('dgaspectratio','')):
-#      sarf=Fraction(int(m[2])*int(m[3]),int(m[1])*int(m[4]))
-#    elif m := re.fullmatch(r'\s*(\d+)\s*x\s*(\d+)\s*XXX\s*(\d+)\s*:(\d+)',cfg.get('dgcodedsize','')+'XXX'+cfg.get('dgaspectratio','')):
-#      sarf=Fraction(int(m[2])*int(m[3]),int(m[1])*int(m[4]))
-#    elif cfg.has('display_width') and cfg.has('display_height') and re.fullmatch(r'\s*(\d+)\s*x\s*(\d+)\s*$',cfg.get('picture_size','')):
-#      sarf=Fraction(cfg.get('display_width')*int(m[1]),cfg.get('display_height')*int(m[2]))
     else:
       log.warning(f'Guessing 1:1 SAR for {track["dgifile"]}')
       track['sample_aspect_ratio']=1.0
@@ -519,25 +513,25 @@ def build_indices(cfg, track):
   if track['macroblocks']<=1620: # 480p@30fps; 576p@25fps
     track['avc_level'] = 3.0
     track['x264_rate_factor'] = 16.0
-    track['x265_rate_factor'] = 18.0
+    track['x265_rate_factor'] = 17.0
   elif track['macroblocks']<=3600: # 720p@30fps
     track['avc_level'] = 3.1
     track['x264_rate_factor'] = 18.0
-    track['x265_rate_factor'] = 20.0
+    track['x265_rate_factor'] = 19.0
   elif track['macroblocks']<=8192: # 1080p@30fps
     track['avc_level'] = 4.0
     track['x264_rate_factor'] = 19.0
-    track['x265_rate_factor'] = 21.0
+    track['x265_rate_factor'] = 20.0
     cfg['hdvideo'] = True
   elif track['macroblocks']<=22080: # 1080p@72fps; 1920p@30fps
     track['avc_level'] = 5.0
     track['x264_rate_factor'] = 20.0
-    track['x265_rate_factor'] = 22.0
+    track['x265_rate_factor'] = 21.0
     cfg['hdvideo'] = True
   else: # 1080p@120fps; 2048@30fps
     track['avc_level'] = 5.1
     track['x264_rate_factor'] = 21.0
-    track['x265_rate_factor'] = 24.0
+    track['x265_rate_factor'] = 22.0
     cfg['hdvideo'] = True
 
   return True
@@ -747,7 +741,7 @@ def build_video(cfg, track):
   elif track['outformat'] == 'h265':
     call += ['x265', '--input', '-', '--y4m'
       , '--preset', track['x265_preset'] or 'slow'
-      , '--crf', track['x265_rate_factor'] or 24.0
+      , '--crf', track['x265_rate_factor'] or 22.0
       , '--pmode', '--pme'
       , '--tune' if 'x265_tune' in track else None
       , track['x265_tune'] if 'x265_tune' in track else None
@@ -826,7 +820,8 @@ def build_result(cfg):
       trcnt[track['type']] += 1
     else:
       trcnt[track['type']] = 1
-      if track['type'] == 'audio' and not track['defaulttrack']: call[-1]+=':disable'
+
+    if track['type'] == 'audio' and not track['default_track']: call[-1]+=':disable'
 
   if not readytomake(outfile,*infiles): return False
 
@@ -847,13 +842,14 @@ def build_meta(cfg):
       if not v:
         continue
       elif k == 'comment':
-        cfg['comment'] = add_to_list(cfg['comment'], v)
+        for c in v: cfg['comment'] = add_to_list(cfg['comment'], c)
       elif cfg[k] is None:
         cfg[k] = v
 
   title  = cfg['title'] or cfg['show'] or cfg['base']
   season = cfg['season']
-  fn = f'{cfg["show"] or ""}{" " + str(season) if season else ""}'
+  fn = f'{cfg["show"] or ""}{" S" + str(season) if season else ""}'
+  ufn = [ c.upper() for c in fn if c.isalnum() ]
 
   descpath = os.path.join(args.descdir, f'{fn}.txt')
   artfn = os.path.join(args.artdir, f'{fn}.jpg')
@@ -861,9 +857,9 @@ def build_meta(cfg):
   upd(get_meta_imdb(title, cfg['year'], cfg['season'], cfg['episode'], artfn,
       cfg['imdb_id'], cfg['omdb_status'], args.omdbkey))
 
-  upd({ 'year': f'_{fn.upper()}YEAR_'
-      , 'genre': f'_{fn.upper()}GENRE_'
-      , 'description': f'_{fn.upper()}DESC_'
+  upd({ 'year': f'_{ufn}YEAR_'
+      , 'genre': f'_{ufn}GENRE_'
+      , 'description': f'_{ufn}DESC_'
       , 'coverart': reglob(rf'{fn}(\s*P\d+)?(.jpg|.jpeg|.png)', args.artdir) })
 
   return True
