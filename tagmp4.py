@@ -16,6 +16,7 @@ import os.path
 import shutil
 import subprocess
 import sys
+import tempfile
 
 from cetools import * # pylint: disable=unused-wildcard-import
 from mutagen.mp4    import MP4, MP4Cover, MP4Tags, MP4Chapters
@@ -321,7 +322,7 @@ def get_meta_imdb(title, year, season, episode, artpath,
                   , 'Language':'Language: '
                   , 'Metascore':'Metascore: '
                   , 'Rated':'Rating: '
-                  , 'Released':'Released:'
+                  , 'Released':'Released: '
                   , 'Runtime':'Runtime: ' # To duration?
                   , 'Website':'Web Site: '
                   , 'totalSeasons':'Total Seasons: '
@@ -654,7 +655,8 @@ def set_meta_cmd(outfile, its):
 @export
 def set_chapters_cmd(outfile, its):
   chapterfile = os.path.splitext(outfile)[0]+'.chapters.txt'
-  if os.path.exists(chapterfile) and os.path.getsize(chapterfile)!=0:
+  if os.path.exists(chapterfile):
+    if os.path.getsize(chapterfile)==0: return
     log.warning(f'Adding chapters from existing config file "{chapterfile}"')
     try:
       subprocess.run(['mp4chaps', '--import', outfile], check=True, capture_output=True)
@@ -664,28 +666,28 @@ def set_chapters_cmd(outfile, its):
     finally:
       return
 
-  tempfile = os.path.join(os.path.split(outfile)[0],'tmp.mp4')
-  chapterfile = os.path.splitext(tempfile)[0] + '.chapters.txt'
-  if not os.path.exists(tempfile) and not os.path.exists(chapterfile) and 'chapter_time' in its and 'chapter_name' in its:
-    delay=its['chapter_delay'] or 0.0
-    elong=its['chapter_elongation'] or 1.0
-    cns=[i.strip() for i in its['chapter_name'].split(';')]
-    cts=[float(i)*elong+delay for i in its['chapter_time'].split(';')]
+  chap = its['chapters']
+  if not chap: return
+  delay=chap['delay'] or 0.0
+  elong=chap['elongation'] or 1.0
 
-    with open(chapterfile,'wt', encoding='utf-8') as f:
-      for (ct,cn) in zip(cts,cns):
-        if ct<0: continue
-        f.write(f'{unparse_time(ct)} {cn} ({int (ct/60.0):d}m {int (ct)%60:d}s)\n')
-    try:
-      os.rename(outfile, tempfile)
-      subprocess.run(['mp4chaps', '--import', tempfile], check=True, capture_output=True)
-    except subprocess.CalledProcessError as cpe:
-      with open(tempfile, 'w') as f: f.truncate(0)
-      log.error(f'Error code for {cpe.cmd}: {cpe.returncode}')
-    finally:
-      os.rename(tempfile, outfile)
-      os.remove(chapterfile)
-      return
+  tfile = tempfile.mktemp(suffix='.mp4', prefix='tmp')
+  chapterfile = os.path.splitext(tfile)[0] + '.chapters.txt'
+  with open(chapterfile,'wt', encoding='utf-8') as f:
+    for (ct,cn) in zip(chap['time'], chap['name']):
+      ct = ct*elong + delay
+      if ct<0: continue
+      f.write(f'{unparse_time(ct)} {cn} ({int (ct/60.0):d}m {int (ct)%60:d}s)\n')
+  try:
+    os.rename(outfile, tfile)
+    subprocess.run(['mp4chaps', '--import', tfile], check=True, capture_output=True)
+  except subprocess.CalledProcessError as cpe:
+    with open(tfile, 'w') as f: f.truncate(0)
+    log.error(f'Error code for {cpe.cmd}: {cpe.returncode}')
+  finally:
+    os.rename(tfile, outfile)
+    os.remove(chapterfile)
+    return
 
 @export
 def make_filename(its):
