@@ -100,7 +100,7 @@ def sanitize_filename(s):
   return s.translate(trans)
 
 def unparse_time(t):
-  return f'{"-" if t<0 else ""}{int(abs(t)/3600.0):02d}:{int(abs(t)/60.0)%60:02d}:{int(abs(t))%60:02d}:{int(abs(t)*1000.0)%1000:03d}'
+  return f'{"-" if t<0 else ""}{int(abs(t)/3600.0):02d}:{int(abs(t)/60.0)%60:02d}:{int(abs(t))%60:02d}.{int(abs(t)*1000.0)%1000:03d}'
 
 def add_to_list(l, v):
   if v is None: return l
@@ -151,7 +151,7 @@ def sleep_change_directories(dirs,state=None):
   '''Sleep until any of the files in any of the dirs has changed.'''
 
   while True:
-    nstate = { os.path.join(d,f): os.stat(os.path.join(d,f)) for d in dirs for f in os.listdir(d) }
+    nstate = { os.path.join(d,f): os.stat(os.path.join(d,f)).st_mtime for d in dirs for f in os.listdir(d) }
     if nstate != state: return nstate
 
     if os.name == 'nt':
