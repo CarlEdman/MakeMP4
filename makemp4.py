@@ -849,7 +849,7 @@ def build_meta(cfg):
   title  = cfg['title'] or cfg['show'] or cfg['base']
   season = cfg['season']
   fn = f'{cfg["show"] or ""}{" S" + str(season) if season else ""}'
-  ufn = [ c.upper() for c in fn if c.isalnum() ]
+  ufn = ''.join( c.upper() for c in fn if c.isalnum() )
 
   descpath = os.path.join(args.descdir, f'{fn}.txt')
   artfn = os.path.join(args.artdir, f'{fn}.jpg')

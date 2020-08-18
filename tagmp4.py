@@ -208,7 +208,7 @@ def get_meta_local_movie(ls):
 @export
 def get_meta_local(title, year, season, episode, descpath):
   try:
-    with open(os.path.join(descpath),'rt', encoding='utf-8') as f:
+    with open(descpath,'rt', encoding='utf-8') as f:
       ls = []
       for l in f:
         l=re.sub(r'\s*\[(\d+|[a-z])\]\s*','',l) # Strip footnotes
@@ -413,7 +413,7 @@ def get_meta_mutagen(f):
   except mutagen.MutagenError:
     log.error(f'Opening "{f}" metadata with mutagen failed.')
 
-  if mutmp4.tags is None: return its
+  if 'tags' not in mutmp4: return its
   t = mutmp4.tags
 
   mp2its = { '©too': 'tool'
@@ -492,8 +492,7 @@ def set_meta_mutagen(outfile, its):
     mutmp4 = MP4(outfile)
   except mutagen.MutagenError:
     log.error(f'Opening "{outfile}" metadata with mutagen failed.')
-
-  if mutmp4.tags is None: mutmp4.add_tags()
+  if 'tags' not in mutmp4: mutmp4.add_tags()
   t = mutmp4.tags
 
   if test_str(p := its['tool']): t['©too'] = [ p ]
@@ -569,12 +568,11 @@ def set_chapters_mutagen(outfile, its):
   if 'chapter_time' in its and 'chapter_name' in its:
     delay = its['chapter_delay'] or 0.0
     elong = its['chapter_elongation'] or 1.0
-
     cts = its['chapter_time']
     if isinstance(cts, float):
       cts = [cts*elong+delay]
     elif test_str(cts):
-      cts = [float(i)*elong+delay for i in cts.split(';')]
+      cts = cts.split(';')
     else:
       log.error(f'Chapter times "{cts}" for "{outfile}" are invalid')
 
