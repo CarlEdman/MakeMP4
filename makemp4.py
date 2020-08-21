@@ -88,10 +88,9 @@ def maketrack(cfg, tid = None):
     for tid in range(sys.maxsize):
       n = f'track{tid:02d}'
       if n not in cfg:
-        break
-  track['id'] = tid
-  cfg[n] = track
-  return track
+        track['id'] = tid
+        cfg[n] = track
+        return track
 
 def tracks(cfg, typ = None):
   if not isinstance(cfg, dict): return
