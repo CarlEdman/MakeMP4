@@ -34,27 +34,20 @@ stik2type = dict_inverse(type2stik)
 rating2rtng = { }
 rtng2rating = dict_inverse(rating2rtng)
 
-def test_str(s):
-  if not isinstance(s, str): return None
-  if s.startswith('_') and s.endswith('_'): return None
-  return s
-
-def test_int(s):
-  if isinstance(s, int):
-    return s
-
+def toint(s):
+  if isinstance(s, int): return s
   if isinstance(s, str):
     try:
       return int(s)
     except ValueError:
-      return None
-
+      pass
   return None
+
 
 def get_meta_local_tv(episode, ls):
   its = defdict()
 
-  if not test_int(episode): return its
+  if not toint(episode): return its
 
   header = ls.pop(0).split('\t')
 
@@ -337,7 +330,7 @@ def get_meta_imdb(title, year, season, episode, artpath,
                 , 'Poster'
                 }
 
-  description = []
+  description = list()
   its['comment'] = list()
 
   for k,v in j.items():
@@ -408,11 +401,7 @@ def get_meta_imdb(title, year, season, episode, artpath,
 def get_meta_mutagen(f):
   its = defdict()
 
-  try:
-    mutmp4 = MP4(f)
-  except mutagen.MutagenError:
-    log.error(f'Opening "{f}" metadata with mutagen failed.')
-
+  mutmp4 = MP4(f)
   if 'tags' not in mutmp4: return its
   t = mutmp4.tags
 
@@ -456,83 +445,58 @@ def get_meta_filename(f):
   filename = os.path.split(f)[1]
   name = os.path.splitext(filename)[0]
 
-  if m := re.fullmatch(r'(.*)\s+(\([12]\d\d\d\))',name):
+  if m := re.fullmatch(r'(.*\s)\(([12]\d\d\d)?\)(\s.*)?',name):
     its['type'] = "movie"
-    its['title'] = m[1]
-    its['year'] = m[2]
+    its['title'] = m[1].strip()
+    if m[2]: its['year'] = m[2]
+    if m[3]: its['song'] = m[3].strip()
     return its
 
-  if m := re.fullmatch(r'(.*)\s+(\([12]\d\d\d\))\s+(.*)',name):
-    its['type'] = "movie"
-    its['title'] = m[1]
-    its['year'] = int(m[2])
-    its['song'] = m[3]
-    return its
-
-  if m := re.fullmatch(r'(.*)\s+S0*([1-9]\d*)E(\d+)(\s+(.*))?',name):
+  if m := re.fullmatch(r'(.*\s)S0*([1-9]\d*)(E\d+)?(\s.*)?',name):
     its['type'] = "tvshow"
-    its['show'] = m[1]
+    its['show'] = m[1].strip()
     its['season'] = int(m[2])
-    its['episode'] = int(m[3])
-    if m[4]: its['song'] = m[4]
-    return its
-
-  if m := re.fullmatch(r'(.*)\s+S0*([1-9]\d*)\s+(.*)',name):
-    its['type'] = "tvshow"
-    its['show'] = m[1]
-    its['season'] = int(m[2])
-    its['song'] = m[3]
+    if m[3]: its['episode'] = int(m[3][1:])
+    if m[4]: its['song'] = m[4].strip()
     return its
 
   return None
 
 @export
 def set_meta_mutagen(outfile, its):
-  try:
-    mutmp4 = MP4(outfile)
-  except mutagen.MutagenError:
-    log.error(f'Opening "{outfile}" metadata with mutagen failed.')
+  mutmp4 = MP4(outfile)
   if 'tags' not in mutmp4: mutmp4.add_tags()
   t = mutmp4.tags
 
-  if test_str(p := its['tool']): t['©too'] = [ p ]
+  if p := its['tool']: t['©too'] = [ p ]
   else: log.warning(f'"{outfile}" has no tool')
-
   if (p := its['type']) in type2stik: t['stik'] = [ type2stik[p] ]
   else: log.warning(f'"{outfile}" has no type')
+  if p := its['genre']: t['©gen'] = p.split(';')
+  else: log.warning(f'"{outfile}" has no genre')
+  if p := toint(its['year']): t['©day'] = [ str(p) ]
+  else: log.warning(f'"{outfile}" has no year')
+  if p := toint(its['season']): t['tvsn'] = [ p ]
+  if p := toint(its['episode']): t['tves'] = [ p ]
+  if p := its['episodeid']: t['tven'] = [ p ]
+  if p := its['artist']: t['©ART'] = [ p ]
+  if p := its['writer']: t['©wrt'] = [ p ]
+  if p := its['network']: t['tvnn'] = [ p ]
+  if its['hdvideo']: t['hdvd'] = [ 1 ]
+  if its['comment']: t['©cmt'] = ';'.join(its['comment'])
 
   rating2rtng = { }
-  if (p := its['rating']):
-    t['rtng'] = (rating2rtng[q] for q in p.split(';') if q in rating2rtng)
+  if p := its['rating']: t['rtng'] = [rating2rtng[q] for q in p.split(';') if q in rating2rtng]
 
-  if test_str(p := its['genre']): t['©gen'] = p.split(';')
-  else: log.warning(f'"{outfile}" has no genre')
-
-  if its['comment']: t['©cmt'] = its['comment']
-
-  if test_int(p := its['year']): t['©day'] = [ str(p) ]
-  else: log.warning(f'"{outfile}" has no year')
-
-  if test_str(p := its['description']):
-    if len(p)>255:
-      t['desc'] = [ p[:255] ]
-      t['ldes'] = [ p ]
-    elif len(p)>0:
-      t['desc'] = [ p ]
+  if p := its['description']:
+    t['desc'] = [ p[:255] ]
+    if len(p)>255: t['ldes'] = [ p ]
   else:
     log.warning(f'"{outfile}" has no description')
 
-  if p := test_int(p := its['season']): t['tvsn'] = [ p ]
-  if p := test_int(its['episode']): t['tves'] = [ p ]
-  if test_str(p := its['episodeid']): t['tven'] = [ p ]
-  if test_str(p := its['artist']): t['©ART'] = [ p ]
-  if test_str(p := its['writer']): t['©wrt'] = [ p ]
-  if test_str(p := its['network']): t['tvnn'] = [ p ]
-  if its['hdvideo']: t['hdvd'] = [ 1 ]
-
-  title = test_str(its['title'])
-  song  = test_str(its['song'])
-  show  = test_str(its['show'])
+  title = its['title']
+  song  = its['song']
+  show  = its['show']
 
   if title: t['tvsh'] = [ title ]
   elif show: t['tvsh'] = [ show ]
@@ -542,19 +506,15 @@ def set_meta_mutagen(outfile, its):
   elif title: t['©nam'] = [ title ]
   elif song: t['©nam'] = [ song ]
 
-  ext2format = { '.jpg':MP4Cover.FORMAT_JPEG
-               , '.jpeg':MP4Cover.FORMAT_JPEG
-               , '.png':MP4Cover.FORMAT_PNG }
-  if 'coverart' in its:
-    cvrs = []
-    ca = its['coverart']
-    if isinstance(ca, str): ca = ca.split(";")
-    for fn in ca:
-      if (ext := os.path.splitext(fn)[1].casefold()) not in ext2format:
+  ext2format = { '.jpg':MP4Cover.FORMAT_JPEG, '.jpeg':MP4Cover.FORMAT_JPEG, '.png':MP4Cover.FORMAT_PNG }
+  if (ca := its['coverart']):
+    t['covr'] = []
+    for fn in (ca if isinstance(ca, list) else ca.split(";")):
+      ext = os.path.splitext(fn)[1].casefold()
+      if ext in ext2format:
+        with open(fn, 'rb') as f: t['covr'].append(MP4Cover(f.read(), ext2format[ext]))
+      else:
         log.warning(f'Cover "{fn}" for {outfile}" has invalid extension')
-        continue
-      with open(fn, 'rb') as f: cvrs.append(MP4Cover(f.read(), ext2format[ext]))
-    t['covr'] = cvrs
   else:
     log.warning(f'"{outfile}" has no cover art')
 
@@ -565,66 +525,66 @@ def set_meta_mutagen(outfile, its):
 
 @export
 def set_chapters_mutagen(outfile, its):
-  if 'chapter_time' in its and 'chapter_name' in its:
-    delay = its['chapter_delay'] or 0.0
-    elong = its['chapter_elongation'] or 1.0
-    cts = its['chapter_time']
-    if isinstance(cts, float):
-      cts = [cts*elong+delay]
-    elif test_str(cts):
-      cts = cts.split(';')
-    else:
-      log.error(f'Chapter times "{cts}" for "{outfile}" are invalid')
+  cts = its['chapter_time']
+  if not cts:
+    return
+  elif isinstance(cts, list):
+    pass
+  elif isinstance(cts, float):
+    cts = [cts]
+  else:
+    return
 
-    cns = its['chapter_name']
-    if test_str(cns):
-      cns = cns.split(';')
-    else:
-      log.error(f'Chapter names "{cns}" for "{outfile}" are invalid')
-
-    #MP4Chapters(Chapter(start, title) for (start,title) in zip (cts, cns))
-    log.warning(f'Chapter import for "{outfile}" not yet supported.')
+  cns = its['chapter_name']
+  if isinstance(cns, list):
+    pass
+  elif isinstance(cns, str):
+    cns = cns.split(';')
+  else:
+    return
+  
+  #MP4Chapters(Chapter(start, title) for (start,title) in zip (cts, cns))
+  log.warning(f'Chapter import for "{outfile}" not yet supported.')
 
 @export
 def set_meta_cmd(outfile, its):
   call=[ 'mp4tags', outfile ]
 
-  if test_str(p := its['tool']): call += [ '-tool' , p ]
+  if p := its['tool']: call += [ '-tool' , p ]
   else: log.warning(f'"{outfile}" has no tool')
 
-  if test_str(p := its['type']): call += [ '-type' , p ]
+  if p := its['type']: call += [ '-type' , p ]
   else: log.warning(f'"{outfile}" has no type')
-
-  if test_str(p := its['genre']): call += [ '-genre' , p ]
+  
+  if p := its['genre']: call += [ '-genre' , p ]
   else: log.warning(f'"{outfile}" has no genre')
-
-  if its['comment']: call += [ '-comment' , ';'.join(its['comment']) ]
-
-  if test_int(p := its['year']): call += [ '-year' , str(p) ]
+  
+  if p := toint(its['year']): call += [ '-year' , str(p) ]
   else: log.warning(f'"{outfile}" has no year')
-
-  if test_str(p := its['description']):
-    if len(p)>255: call += [ '-desc', p[:255], '-longdesc', p ]
-    elif len(p)>0: call += [ '-desc' , p ]
+  
+  if p := its['comment']: call += [ '-comment' , ';'.join(p) ]
+  if p := toint(its['season']): call += [ '-season' , str(p) ]
+  if p := toint(its['episode']): call += [ '-episode' , str(p) ]
+  if p := its['episodeid']: call += [ '-episodeid' , p ]
+  if p := its['artist']: call += [ '-artist' , p ]
+  if p := its['writer']: call += [ '-writer' , p ]
+  if p := its['network']: call += [ '-network' , p ]
+  # if (p := its['rating']): call += [ '-rating' , p ]
+  if its['hdvideo']: call += [ '-hdvideo' , '1']
+  if p := its['description']:
+    call += [ '-desc', p[:255]]
+    if len(p)>255: call += [ '-longdesc', p ]
   else: log.warning(f'"{outfile}" has no description')
 
-  if test_int(p := its['season']): call += [ '-season' , str(p) ]
-  if test_int(p := its['episode']): call += [ '-episode' , str(p) ]
-  if test_str(p := its['episodeid']): call += [ '-episodeid' , p ]
-  if test_str(p := its['artist']): call += [ '-artist' , p ]
-  if test_str(p := its['writer']): call += [ '-writer' , p ]
-  if test_str(p := its['network']): call += [ '-network' , p ]
-  # if test_str(p := its['rating']): call += [ '-rating' , p ]
-  if its['hdvideo']: call += [ '-hdvideo' , '1']
 
-  if not test_str(title := its['title']): title = None
-  if not test_str(song := its['song']): song = None
-  if not test_str(show := its['show']): show = None
+  if not (title := its['title']): title = None
+  if not (song := its['song']): song = None
+  if not (show := its['show']): show = None
 
   if title: call += [ '-show' , title]
   elif show: call += [ '-show' , show]
 
-  if its['type'] == 'tvshow' and song: call += ['-song', song]
+  if its['type'] == 'tvshow' and song: call += [ '-song', song]
   elif title and song: call += ['-song', f'{title}: {song}']
   elif title: call += ['-song', title]
   elif song: call += ['-song', song]
@@ -635,11 +595,10 @@ def set_meta_cmd(outfile, its):
     with open(outfile, 'w') as f: f.truncate(0)
     log.error(f'Error code for {cpe.cmd}: {cpe.returncode} : {cpe.stdout} : {cpe.stderr}')
 
-  if 'coverart' in its:
+
+  if ca := its['coverart']:
     call = [ 'mp4art', outfile ]
-    ca = its['coverart']
-    if isinstance(ca, str): ca = ca.split(";")
-    for i in ca:
+    for i in (ca if isinstance(ca, list) else ca.split(";")):
       call += [ '--add', i ]
     call += [ outfile ]
     try:
@@ -652,56 +611,50 @@ def set_meta_cmd(outfile, its):
 
 @export
 def set_chapters_cmd(outfile, its):
-  chapterfile = os.path.splitext(outfile)[0]+'.chapters.txt'
-  if os.path.exists(chapterfile):
-    if os.path.getsize(chapterfile)==0: return
-    log.warning(f'Adding chapters from existing config file "{chapterfile}"')
-    try:
-      subprocess.run(['mp4chaps', '--import', outfile], check=True, capture_output=True)
-    except subprocess.CalledProcessError as cpe:
-      with open(outfile, 'w') as f: f.truncate(0)
-      log.error(f'Error code for {cpe.cmd}: {cpe.returncode} : {cpe.stdout} : {cpe.stderr}')
-    finally:
-      return
-
-  chap = its['chapters']
-  if not chap: return
-  delay=chap['delay'] or 0.0
-  elong=chap['elongation'] or 1.0
-
-  tfile = tempfile.mktemp(suffix='.mp4', prefix='tmp')
-  chapterfile = os.path.splitext(tfile)[0] + '.chapters.txt'
-  with open(chapterfile,'wt', encoding='utf-8') as f:
-    for (ct,cn) in zip(chap['time'], chap['name']):
-      ct = ct*elong + delay
-      if ct<0: continue
-      f.write(f'{unparse_time(ct)} {cn} ({int (ct/60.0):d}m {int (ct)%60:d}s)\n')
-  try:
-    os.rename(outfile, tfile)
-    subprocess.run(['mp4chaps', '--import', tfile], check=True, capture_output=True)
-  except subprocess.CalledProcessError as cpe:
-    with open(tfile, 'w') as f: f.truncate(0)
-    log.error(f'Error code for {cpe.cmd}: {cpe.returncode}')
-  finally:
-    os.rename(tfile, outfile)
-    os.remove(chapterfile)
+  tmpfile = tempfile.mktemp(suffix='.mp4', prefix='tmp')
+  tmpchapterfile = os.path.splitext(tmpfile)[0] + '.chapters.txt'
+  
+  if os.path.exists(chapterfile := os.path.splitext(outfile)[0]+'.chapters.txt'):
+    log.info(f'Adding chapters from existing config file "{chapterfile}"')
+    shutil.copyfile(chapterfile, tmpchapterfile)
+  elif chap := its['chapters']:
+    delay = chap['delay'] or 0.0
+    elong = chap['elongation'] or 1.0
+    with open(tmpchapterfile,'wt', encoding='utf-8') as f:
+      for (ct,cn) in zip(chap['time'], chap['name']):
+        ct = ct*elong + delay
+        if ct<0: continue
+        f.write(f'{unparse_time(ct)} {cn} ({int (ct/60.0):d}m {int (ct)%60:d}s)\n')
+  else:
     return
+
+  if os.path.getsize(tmpchapterfile)==0: return
+
+  try:
+    os.rename(outfile, tmpfile)
+    subprocess.run(['mp4chaps', '--import', tmpfile], check=True, capture_output=True)
+  except subprocess.CalledProcessError as cpe:
+    with open(outfile, 'w') as f: f.truncate(0)
+    log.error(f'Error code for {cpe.cmd}: {cpe.returncode} : {cpe.stdout} : {cpe.stderr}')
+  finally:
+    os.remove(tmpchapterfile)
+    os.rename(tmpfile, outfile)
 
 @export
 def make_filename(its):
   title = its['title'] or its['show']
   title = alphabetize(title) if title else None
   if its['type']=='movie':
-    if i := test_int(its['episode']):
+    if i := toint(its['episode']):
       episode = f'- pt{i:d}'
     else:
       episode = ""
-    year = f' ({i:04d})' if (i := test_int(its['year'])) else ""
+    year = f' ({i:04d})' if (i := toint(its['year'])) else ""
     song = " " + alphabetize(i) if (i := its['song']) else ""
     plexname = sanitize_filename(f'{title}{episode}{year}{song}.mp4')
   elif its['type']=='tvshow':
-    season = test_int(its['season'])
-    episode = test_int(its['episode'])
+    season = toint(its['season'])
+    episode = toint(its['episode'])
     if season and episode:
       seaepi = f' S{season:d}E{episode:02d}'
     elif season:
