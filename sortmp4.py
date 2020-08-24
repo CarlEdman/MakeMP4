@@ -30,7 +30,7 @@ def optAndMove(opath,dir,nname=None):
   if args.dryrun: return
 
   if not os.path.exists(dir): os.mkdir(dir)
-  if os.path.exists(npath):
+  if not args.overwrite and os.path.exists(npath):
     log.warning(f'{nname} already in {dir}, skipping.')
     return
 
@@ -115,6 +115,7 @@ if __name__ == '__main__':
 
   parser.set_defaults(loglevel=logging.WARN)
   parser.add_argument('--dryrun', action='store_true', default=False, help='only print moves, but do not execute them.')
+  parser.add_argument('--overwrite', action='store_true', default=False, help='overwrite existing target file.')
   parser.add_argument('--version', action='version', version='%(prog)s '+version)
   parser.add_argument('--target', action='store', default= 'Y:\\')
   parser.add_argument('files', nargs='*', metavar='FILES', help='files to sort')
