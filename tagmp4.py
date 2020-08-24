@@ -402,7 +402,7 @@ def get_meta_mutagen(f):
   its = defdict()
 
   mutmp4 = MP4(f)
-  if 'tags' not in mutmp4: return its
+  if not mutmp4.tags: return its
   t = mutmp4.tags
 
   mp2its = { '©too': 'tool'
@@ -465,7 +465,7 @@ def get_meta_filename(f):
 @export
 def set_meta_mutagen(outfile, its):
   mutmp4 = MP4(outfile)
-  if 'tags' not in mutmp4: mutmp4.add_tags()
+  if not mutmp4.tags: mutmp4.add_tags()
   t = mutmp4.tags
 
   if p := its['tool']: t['©too'] = [ p ]
@@ -494,12 +494,9 @@ def set_meta_mutagen(outfile, its):
   else:
     log.warning(f'"{outfile}" has no description')
 
-  title = its['title']
+  title = its['title'] or its['show']
+  t['tvsh'] = [ title ]
   song  = its['song']
-  show  = its['show']
-
-  if title: t['tvsh'] = [ title ]
-  elif show: t['tvsh'] = [ show ]
 
   if its['type']=='tvshow' and song: t['©nam'] = [ song ]
   elif title and song: t['©nam'] = [ f'{title}: {song}' ]
@@ -542,7 +539,7 @@ def set_chapters_mutagen(outfile, its):
     cns = cns.split(';')
   else:
     return
-  
+
   #MP4Chapters(Chapter(start, title) for (start,title) in zip (cts, cns))
   log.warning(f'Chapter import for "{outfile}" not yet supported.')
 
@@ -555,13 +552,13 @@ def set_meta_cmd(outfile, its):
 
   if p := its['type']: call += [ '-type' , p ]
   else: log.warning(f'"{outfile}" has no type')
-  
+
   if p := its['genre']: call += [ '-genre' , p ]
   else: log.warning(f'"{outfile}" has no genre')
-  
+
   if p := toint(its['year']): call += [ '-year' , str(p) ]
   else: log.warning(f'"{outfile}" has no year')
-  
+
   if p := its['comment']: call += [ '-comment' , ';'.join(p) ]
   if p := toint(its['season']): call += [ '-season' , str(p) ]
   if p := toint(its['episode']): call += [ '-episode' , str(p) ]
@@ -613,7 +610,7 @@ def set_meta_cmd(outfile, its):
 def set_chapters_cmd(outfile, its):
   tmpfile = tempfile.mktemp(suffix='.mp4', prefix='tmp')
   tmpchapterfile = os.path.splitext(tmpfile)[0] + '.chapters.txt'
-  
+
   if os.path.exists(chapterfile := os.path.splitext(outfile)[0]+'.chapters.txt'):
     log.info(f'Adding chapters from existing config file "{chapterfile}"')
     shutil.copyfile(chapterfile, tmpchapterfile)
