@@ -15,7 +15,7 @@ import shutil
 import subprocess
 
 from tagmp4 import get_meta_mutagen
-from cetools import *
+from cetools import * # pylint: disable=unused-wildcard-import
 
 parser = None
 args = None
@@ -37,7 +37,7 @@ def optAndMove(opath,dir,nname=None):
   t = os.path.join(odir, f'temp{os.path.splitext(oname)[1]}')
   try:
     os.rename(opath, t)
-    cp = subprocess.run(['mp4file', '--optimize', t], check=True, capture_output=True)
+    cpe = subprocess.run(['mp4file', '--optimize', t], check=True, capture_output=True)
   except subprocess.CalledProcessError as cpe:
     log.error(f'Error code for {cpe.cmd}: {cpe.returncode} : {cpe.stdout} : {cpe.stderr}')
     raise
