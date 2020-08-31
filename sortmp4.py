@@ -13,6 +13,7 @@ import os.path
 import re
 import shutil
 import subprocess
+import tempfile
 
 from tagmp4 import get_meta_mutagen
 from cetools import * # pylint: disable=unused-wildcard-import
@@ -34,7 +35,7 @@ def optAndMove(opath,dir,nname=None):
     log.warning(f'{nname} already in {dir}, skipping.')
     return
 
-  t = os.path.join(odir, f'temp{os.path.splitext(oname)[1]}')
+  t = os.path.join(odir, tempfile.mktemp(suffix=os.path.splitext(oname)[1], prefix='tmp'))
   try:
     os.rename(opath, t)
     cpe = subprocess.run(['mp4file', '--optimize', t], check=True, capture_output=True)
