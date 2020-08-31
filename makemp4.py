@@ -212,11 +212,31 @@ def config_from_base(cfg, base):
     cfg['show'] = m['show']
     cfg['season'] = int(m['season'])
 
+def prepare_avi(cfg, avifile):
+  try:
+    xmlroot = ET.fromstring(subprocess.check_output(['mediainfo','--output=XML', avifile]).decode(errors='replace'))
+    for avitrack in xmlroot.iter('track'):
+      avittype = avitrack.get('type')
+      if avittype == "General":
+        for k in avitrack.iter():
+          cfg['avi' + ''.join(l for l in k.tag.casefold() if l.isalnum())] = k.text
+        pass
+      elif avittype == 'Video' or avittype == 'Audio':
+        track = maketrack(cfg)
+        track['type'] = avittype.casefold()
+        for k in avitrack.iter():
+          track['avi' + ''.join(l for l in k.tag.casefold() if l.isalnum())] = k.text
+      else:
+        log.warning(f"Unrecognized avi track type {avittype} in {avifile}")
+  except ET.ParseError:
+    return
+
 def prepare_mkv(cfg, mkvfile):
   try:
     cs = cfg['chapters'] = defdict({ 'uid':[], 'time':[], 'hidden':[], 'enabled':[],
       'name':[], 'lang':[], 'delay': 0.0, 'elongation': 1.0 })
-    for chap in ET.fromstring(subprocess.check_output(['mkvextract','chapters',mkvfile]).decode(errors='replace')).iter('ChapterAtom'):
+    xmlroot = ET.fromstring(subprocess.check_output(['mkvextract','chapters',mkvfile]).decode(errors='replace'))
+    for chap in xmlroot.iter('ChapterAtom'):
       cs['uid'].append(chap.find('ChapterUID').text)
       cs['time'].append(to_float(chap.find('ChapterTimeStart').text))
       cs['hidden'].append(chap.find('ChapterFlagHidden').text)
@@ -868,10 +888,10 @@ def main():
 #      exec(compile(open(sys.argv[0]).read(), sys.argv[0], 'exec')) # execfile(sys.argv[0])
 
   preparers = {
-       '.mkv': prepare_mkv
-#    , '.tivo': prepare_tivo
-#    , '.mpg': prepare_mpg
-#    , '.avi': prepare_avi
+      '.mkv': prepare_mkv
+    , '.avi': prepare_avi
+    # , '.tivo': prepare_tivo
+    # , '.mpg': prepare_mpg
     }
   for d in sources:
     for f in sorted(os.listdir(d)):
