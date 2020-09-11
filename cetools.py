@@ -21,6 +21,8 @@ if os.name == 'nt':
 log = logging.getLogger()
 
 def export(func):
+  '''Decorator that causes function to be included in __all__.'''
+
   if '__all__' not in func.__globals__:
     func.__globals__['__all__'] = []
   func.__globals__['__all__'].append(func.__name__)
@@ -43,7 +45,8 @@ class TitleHandler(logging.Handler):
       ctypes.windll.kernel32.SetConsoleTitleA(self.format(record).encode(encoding='cp1252', errors='ignore'))
 
 def nice(niceness):
-  '''Nice for Windows Processes.  Nice is a value between -3-2 where 0 is normal priority.'''
+  '''Multi-platform nice.  Nice is a value between -3-2 where 0 is normal priority.'''
+
   if hasattr(os, 'nice'):
     return os.nice(niceness) # pylint: disable=no-member
   elif os.name == 'nt':
@@ -62,6 +65,8 @@ def dict_inverse(d):
   return { v:k for k,v in d.items() }
 
 def alphabetize(s):
+  '''Strip leading articles from string.'''
+
   s=s.strip().rstrip('.')
   if s.startswith("The "): s=s[4:]
   elif s.startswith("A "): s=s[2:]
@@ -69,6 +74,8 @@ def alphabetize(s):
   return s
 
 def romanize(s):
+  '''Interpret (loosely) string as roman numeral.'''
+
   rom = { "M": 1000, "CM": 900, "D": 500, "CD": 400, "C": 100, "XC": 90,
           "L": 50, "XL": 40, "X": 10, "IX": 9, "V": 5, "IV": 4, "I": 1 }
   t = s
@@ -90,16 +97,21 @@ def sortkey(s):
 
 def reglob(filepat, dir = None):
   '''A replacement for glob.glob which uses regular expressions and sorts numbers up to 10 digits correctly.'''
+
   if dir is None: dir = '.'
   if os.name == 'nt': filepat = r'(?i)' + filepat
   files = (os.path.join(dir,f) for f in os.listdir(dir) if re.fullmatch(filepat, f))
   return sorted(files, key=sortkey)
 
 def sanitize_filename(s):
+  '''Remove all characters disallowed in NTFS file name.'''
+
   trans = str.maketrans('','',r':"/\:*?<>|'+r"'")
   return s.translate(trans)
 
 def unparse_time(t):
+  '''Return float argument as a time in "hours:minutes:seconds" string format.'''
+
   return f'{"-" if t<0 else ""}{int(abs(t)/3600.0):02d}:{int(abs(t)/60.0)%60:02d}:{int(abs(t))%60:02d}.{int(abs(t)*1000.0)%1000:03d}'
 
 def add_to_list(l, v):
@@ -110,10 +122,14 @@ def add_to_list(l, v):
   return sorted(l)
 
 def to_ratio_string(f, sep="/"):
+  '''Return float argument as a fraction.'''
+
   (n,d) = Fraction(f).limit_denominator(10000).as_integer_ratio()
   return f'{n}{sep}{d}'
 
 def to_float(s):
+  '''Interpret argument as float in a variety of formats.'''
+
   try:
     return float(s)
   except ValueError:
@@ -166,6 +182,8 @@ def sleep_change_directories(dirs,state=None):
       time.sleep(10)
 
 class defdict(dict):
+  '''Dictionary with None default value which tracks modified status.'''
+
   def __init__(self, *args, **kwargs):
     super().__init__(*args, **kwargs)
     self._modified=False
@@ -174,6 +192,8 @@ class defdict(dict):
     return super().__getitem__(key) if key in self else None
 
   def __setitem__(self, key, value):
+    '''n.b. Assigning None to a non-None value deletes it.'''
+
     if value is None:
       if key not in self or self[key] is None: return
       del self[key]
@@ -183,12 +203,18 @@ class defdict(dict):
     self._modified = True
 
   def modified(self):
-    # Note: generator, not list, to enable short-circuiting
+    '''Check whether defdict (or any of its value defdicts) has been modified.'''
+
     if self._modified: return True
+
+    # Note: generator, not list, to enable short-circuiting
     m = any(s.modified() for s in self.values() if isinstance(s, defdict))
     return m
 
   def modclear(self):
+    '''Check whether defdict (or any of its value defdicts) has been modified
+    and clear modification status.'''
+
     # Note: list, not generator, to prevent short-circuiting
     m = any([s.modclear() for s in self.values() if isinstance(s, defdict)])
     m = m or self._modified
