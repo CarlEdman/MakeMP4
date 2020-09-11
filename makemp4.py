@@ -873,8 +873,9 @@ def build_meta(cfg):
   descpath = os.path.join(args.descdir, f'{fn}.txt')
   artfn = os.path.join(args.artdir, f'{fn}.jpg')
   upd(get_meta_local(title, cfg['year'], cfg['season'], cfg['episode'], descpath))
-  upd(get_meta_imdb(title, cfg['year'], cfg['season'], cfg['episode'], artfn,
-      cfg['imdb_id'], cfg['omdb_status'], args.omdbkey))
+  upd(get_meta_imdb(title, None if args.ignore_year_imdb else cfg['year'],
+                    cfg['season'], cfg['episode'], artfn,
+                    cfg['imdb_id'], cfg['omdb_status'], args.omdbkey))
 
   upd({ 'year': f'_{ufn}YEAR_'
       , 'genre': f'_{ufn}GENRE_'
@@ -951,6 +952,7 @@ if __name__ == "__main__":
   parser.add_argument('--delete-source',action='store_true', default=False, help='delete source file after successful extraction')
   parser.add_argument('--keep-video-in-mkv',action='store_true', default=False, help='do not attempt to extract video tracks from MKV source, but instead use MKV file directly')
   parser.add_argument('--keep-audio-in-mkv',action='store_true', default=False, help='do not attempt to extract audio tracks from MKV source, but instead use MKV file directly')
+  parser.add_argument('--ignore-year-imdb',action='store_true', default=False, help='do not use year information, if any, in omdb queries')
 
   for inifile in [ f'{os.path.splitext(sys.argv[0])[0]}.ini', prog + '.ini', '..\\' + prog + '.ini' ]:
     if os.path.exists(inifile): sys.argv.insert(1,'@'+inifile)
