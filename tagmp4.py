@@ -250,7 +250,7 @@ def get_meta_imdb(title, year, season, episode, artpath,
     q['t'] = title
     if year: q['y'] = str(year)
     q['type'] = 'movie'
-
+  
   u = urlunparse(['http','www.omdbapi.com', '/', '', urlencode(q), ''])
   try:
     with urlopen(u) as f:
