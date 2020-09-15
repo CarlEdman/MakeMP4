@@ -100,7 +100,7 @@ def get_meta_local_tv(episode, ls):
         ld[int(cur['Episode'])] = cur
         del cur['Episode']
     elif cur:
-      cur['Description'] = f'cur["Description"]  l' if 'Description' in cur else l
+      cur['Description'] = f'{cur["Description"]}  {l}' if 'Description' in cur else l
     else:
       log.warning(f'TV series file does not start with a valid data line.')
       return its
@@ -204,7 +204,7 @@ def get_meta_local(title, year, season, episode, descpath):
     with open(descpath,'rt', encoding='utf-8') as f:
       ls = []
       for l in f:
-        l=re.sub(r'\s*\[(\d+|[a-z])\]\s*','',l) # Strip footnotes
+        l=re.sub(r'\[(\d+|[a-z])\]','',l) # Strip footnotes
         l=re.sub(r'\s+-+\s+',r'—',l) # insert proper em-dashes
         l=re.sub(r'Add to Google Calendar','',l) # Google calendar links
         l=re.sub(r'[\u200A]','',l) # Remove hair space, ...
@@ -237,20 +237,20 @@ def get_meta_imdb(title, year, season, episode, artpath,
     q['i'] = imdb_id
   elif season and episode:
     q['t'] = title
-    if year: q['y'] = str(year)
+    if year: q['y'] = str(year - season + 1)
     q['type'] = 'episode'
     q['Season'] = str(season)
     q['Episode'] = str(episode)
   elif season:
     q['t'] = title
-    if year: q['y'] = str(year)
+    if year: q['y'] = str(year - season + 1)
     q['type'] = 'series'
     q['Season'] = str(season)
   else:
     q['t'] = title
     if year: q['y'] = str(year)
     q['type'] = 'movie'
-  
+
   u = urlunparse(['http','www.omdbapi.com', '/', '', urlencode(q), ''])
   try:
     with urlopen(u) as f:
