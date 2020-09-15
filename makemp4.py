@@ -4,8 +4,8 @@ prog='MakeMP4'
 version='7.0'
 author='Carl Edman (CarlEdman@gmail.com)'
 desc='''
-Extract all tracks from .mkv, .mpg, .TiVo files;
-convert video tracks to h264, audio tracks to aac;
+Extract all tracks from .mkv files;
+convert video tracks to h264/265, audio tracks to aac;
 then recombine all tracks into properly tagged .mp4
 '''
 
