@@ -237,13 +237,19 @@ def get_meta_imdb(title, year, season, episode, artpath,
     q['i'] = imdb_id
   elif season and episode:
     q['t'] = title
-    if year: q['y'] = str(year - season + 1)
+    if year:
+      log.warning("Guessing IMDB series year by subtracing one for every\
+season year above 1; if this fails --ignore-year-imdb""")
+      q['y'] = str(year - season + 1)
     q['type'] = 'episode'
     q['Season'] = str(season)
     q['Episode'] = str(episode)
   elif season:
     q['t'] = title
-    if year: q['y'] = str(year - season + 1)
+    if year:
+      log.warning("Guessing IMDB series year by subtracing one for every\
+season year above 1; if this fails --ignore-year-imdb")
+      q['y'] = str(year - season + 1)
     q['type'] = 'series'
     q['Season'] = str(season)
   else:
