@@ -211,12 +211,11 @@ def get_meta_local(title, year, season, episode, descpath):
         l=l.strip() # Strip leading and trailing whitespace
         if l=="": continue
         if re.fullmatch(r'^(Rate [12345] stars)+(Rate not interested)?(Clear)?',l): continue
-        if re.fullmatch(r'[0-5]\.[0-9]',l): continue
+        if re.fullmatch(r'[0-4]\.[0-9]|5\.0',l): continue
         if re.fullmatch(r'Movie Details',l): continue
         if re.fullmatch(r'Overview\s*Details(\s*Series)?',l): continue
         if re.fullmatch(r'At Home',l): continue
         if re.fullmatch(r'In Queue',l): continue
-        if re.fullmatch(r'',l): continue
         ls.append(l)
   except OSError:
     ls = []
@@ -227,35 +226,25 @@ def get_meta_local(title, year, season, episode, descpath):
 @export
 def get_meta_imdb(title, year, season, episode, artpath,
                   imdb_id, omdb_status, omdb_key):
+
+  LOG_YEAR_GUESS_WARNING = "Guessing IMDB series year by subtracing one for every\
+ season year above 1; if this fails --ignore-year-imdb"
   its = defdict()
   if not omdb_key: return its
   if omdb_status and (200<=omdb_status<300 or 400<=omdb_status<500): return its
 
   q = { 'plot':'full', 'apikey': omdb_key }
-
   if imdb_id:
-    q['i'] = imdb_id
-  elif season and episode:
-    q['t'] = title
-    if year:
-      log.warning("Guessing IMDB series year by subtracing one for every\
-season year above 1; if this fails --ignore-year-imdb""")
-      q['y'] = str(year - season + 1)
-    q['type'] = 'episode'
-    q['Season'] = str(season)
-    q['Episode'] = str(episode)
+    q.update({ 'i': imdb_id })
   elif season:
-    q['t'] = title
+    q.update({ 't':title, 'type':'series', 'Season':str(season) })
     if year:
-      log.warning("Guessing IMDB series year by subtracing one for every\
-season year above 1; if this fails --ignore-year-imdb")
-      q['y'] = str(year - season + 1)
-    q['type'] = 'series'
-    q['Season'] = str(season)
+      log.warning(LOG_YEAR_GUESS_WARNING)
+      q['y'] = str(year - season + 1), 
+    if episode: 
+      q.update({ 'type':'episode', 'Episode':str(episode) })
   else:
-    q['t'] = title
-    if year: q['y'] = str(year)
-    q['type'] = 'movie'
+    q.update({ 't':title, 'y':str(year), 'type':'movie' })
 
   u = urlunparse(['http','www.omdbapi.com', '/', '', urlencode(q), ''])
   try:
@@ -290,11 +279,11 @@ season year above 1; if this fails --ignore-year-imdb")
                 , 'Sitcom':'Comedy'
                 , 'Comedy':'Comedy'
                 , 'Film-Noir':'Thriller'
-                # , 'Game-Show':'XXX'
-                # , 'News':'XXX'
-                # , 'Reality-TV':'XXX'
-                # , 'Sport':'XXX'
-                # , 'Talk-Show':'XXX'
+                , 'Game-Show':'Reality'
+                , 'News':'Reality'
+                , 'Reality-TV':'Reality'
+                , 'Sport':'Reality'
+                , 'Talk-Show':'Reality'
                 }
 
   int_trans = { 'Year':'year'
@@ -345,17 +334,17 @@ season year above 1; if this fails --ignore-year-imdb")
     elif k=='Error':
       log.warning(f'{title}: IMDB Error "{v}"')
     elif k=='Type': # "movie" or "episode"
-      its['type']= 'movie' if v=='movie' else 'tvshow'
+      its['type']='movie' if v=='movie' else 'tvshow'
     elif k=='Title':
       if season and episode:
         if v==f"Episode #{season}.{episode}": continue
-        its['song']=v
-      else:
-        its['show']=v
+      its['song']=v
     elif k=='Genre':
-      genres = [ genre_trans[w.strip()] for w in v.split(',') if w.strip() in genre_trans ]
-      if genres:
-        its['genre']=genres[0]
+      genres = set(genre_trans[w.strip()] for w in v.split(',') if w.strip() in genre_trans)
+      if len(genres)==1:
+        its['genre']=genres.pop()
+      elif len(genres)>0:
+        log.warning(f'{title}: Too many genres recognized in IMDB "{",".join(genres)}')
       else:
         log.warning(f'{title}: No genres recognized in IMDB "{v}"')
     elif k in skip_trans:
@@ -365,15 +354,14 @@ season year above 1; if this fails --ignore-year-imdb")
     elif k in str_trans:
       its[str_trans[k]]=str(v)
     elif k in desc_trans:
-      if (d := desc_trans[k]+re.sub(r'\s+-+\s+',r'—',v)) in description:
+      if d := desc_trans[k]+re.sub(r'\s+-+\s+',r'—',v) in description:
         continue
       if desc_trans[k]:
         description.append(d)
       else:
         description.insert(0, d)
     elif k in comment_trans:
-      v = v.rstrip('.')
-      its['comment'] = add_to_list(its['comment'], comment_trans[k] + v)
+      its['comment'] = add_to_list(its['comment'], comment_trans[k] + v.rstrip('.'))
     elif k=='Ratings':
       for r in v:
         its['comment'] = add_to_list(its['comment'], f'{r["Source"]} Rating: {r["Value"]}')
@@ -382,7 +370,7 @@ season year above 1; if this fails --ignore-year-imdb")
     else:
       log.warning(f'{title}: Unrecognized IMDB "{k}" = "{v}"')
 
-  its['description']=';'.join(description)
+  its['description']='.  '.join(d.rstrip(' .') for d in description)
 
   if not artpath or os.path.exists(artpath): return its
 
