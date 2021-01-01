@@ -561,25 +561,8 @@ def build_subtitle(cfg, track):
   delay = track['delay'] or 0.0
   elong = track['elongation'] or 1.0
 
-  if os.path.getsize(infile)==0:
+  if os.path.getsize(infile)<1024:
     return False
-  elif inext=='srt':
-    track['outfile'] = outfile = os.path.splitext(infile)[0]+'.ttxt'
-    if os.path.exists(outfile): return False # Should be not readytomake(outfile,)
-    with open(infile, 'rt', encoding='utf-8', errors='replace') as i, open('temp.srt', 'wt', encoding='utf-8', errors='replace') as o:
-      for l in i.read().split('\n\n'):
-        if not l.strip():
-          continue
-        elif (m := re.fullmatch(r'(?s)(?P<beg>\s*\d*\s*)(?P<time1>.*)(?P<mid> --> )(?P<time2>.*)',l)) and (t1 := to_float(m['time1'])) and (t2 := to_float(m['time2'])) and (s1 := t1*elong+delay)>=0 and (s2 := t2*elong+delay)>=0:
-          o.write(f'{m["beg"]}{unparse_time(s1)}{m["mid"]}{unparse_time(s2)}{m["end"]}\n\n')
-        else:
-          log.warning(f'Unrecognized line in {infile}: {repr(l)}')
-
-    do_call(['mp4box','-ttxt','temp.srt'],outfile)
-    if os.path.exists('temp.ttxt'): os.rename('temp.ttxt',outfile)
-    if os.path.exists('temp.srt'): os.remove('temp.srt')
-  elif inext=='sup' and os.path.getsize(infile)<1024:
-    outfile = os.path.splitext(infile)[0]+'.idx'
   elif inext=='sup':
     track['outfile'] = outfile = os.path.splitext(infile)[0]+'.idx'
     if os.path.exists(outfile): return  # Should be not readytomake(outfile,)
@@ -594,7 +577,24 @@ def build_subtitle(cfg, track):
 
     call += ['--output', outfile, infile]
     do_call(call,outfile) # '--fix-invisible',
-  elif (delay!=0.0 or elong!=1.0) and inext=='idx':
+  elif inext=='srt':
+    track['outfile'] = outfile = os.path.splitext(infile)[0]+'.ttxt'
+    if os.path.exists(outfile): return False # Should be not readytomake(outfile,)
+    with open(infile, 'rt', encoding='utf-8', errors='replace') as i, open('temp.srt', 'wt', encoding='utf-8', errors='replace') as o:
+      for l in i.read().split('\n\n'):
+        if l.startswith('\ufeff'):
+          l=l[1:]
+        if not l.strip():
+          continue
+        elif (m := re.fullmatch(r'(?s)(?P<beg>\s*\d*\s*)(?P<time1>[0-9,.:]*)(?P<mid> --> )(?P<time2>[0-9,.:]*)(?P<end>.*)',l)) and (t1 := to_float(m['time1'])) and (t2 := to_float(m['time2'])) and (s1 := t1*elong+delay)>=0 and (s2 := t2*elong+delay)>=0:
+          o.write(f'{m["beg"]}{unparse_time(s1)}{m["mid"]}{unparse_time(s2)}{m["end"]}\n\n')
+        else:
+          log.warning(f'Unrecognized line in {infile}: {repr(l)}')
+
+    do_call(['mp4box','-ttxt','temp.srt'],outfile)
+    if os.path.exists('temp.ttxt'): os.rename('temp.ttxt',outfile)
+    if os.path.exists('temp.srt'): os.remove('temp.srt')
+  elif inext=='idx':
     track['outfile'] = outfile = os.path.splitext(infile)[0]+'.adj.idx'
     subfile = os.path.splitext(infile)[0]+'.adj.sub'
     if not os.path.exists(subfile):
@@ -603,18 +603,17 @@ def build_subtitle(cfg, track):
     with open(infile, 'rt', encoding='utf-8', errors='replace') as i, \
          open(outfile, 'wt', encoding='utf-8', errors='replace') as o:
       for l in i:
+        print(l)
         if (m := re.fullmatch(r'(?s)(?P<beg>\s*timestamp:\s*)\b(?P<time>.*\d)\b(?P<end>.*)',l)) \
            and (t := to_float(m['time'])) \
            and ((s := t*elong+delay) >= 0):
            l = f'{m["beg"]}{unparse_time(s)}{m["end"]}'
         o.write(l)
-  elif (delay!=0.0 or elong!=1.0):
-    track['outfile'] = outfile = infile
-    log.warning(f'Delay and elongation not implemented for subtitles type "{infile}"')
   else:
     track['outfile'] = outfile = infile
+    log.warning(f'Delay and elongation not implemented for subtitles type "{infile}"')
 
-  if os.path.getsize(infile)==0 or not os.path.exists(outfile):
+  if not os.path.exists(track['outfile']):
     track['disable'] =True
     return False
   return True
@@ -805,7 +804,7 @@ def build_result(cfg):
 
   infiles=[ cfg['cfgname'] ]
   coverfiles=[]
-  for c in cfg['coverart']:
+  for c in (cfg['coverart'] or []):
     if os.path.dirname(c)==None and args.artdir:
       c = os.path.join(args.artdir, c)
     if os.path.exists(c):
@@ -857,7 +856,7 @@ def build_result(cfg):
 def build_meta(cfg):
   def upd(i):
     if not i: return
-    for k,v in i.items():
+    for k, v in i.items():
       if not v:
         continue
       elif k == 'comment':
@@ -873,9 +872,14 @@ def build_meta(cfg):
   descpath = os.path.join(args.descdir, f'{fn}.txt')
   artfn = os.path.join(args.artdir, f'{fn}.jpg')
   upd(get_meta_local(title, cfg['year'], cfg['season'], cfg['episode'], descpath))
-  upd(get_meta_imdb(title, None if args.ignore_year_imdb else cfg['year'],
-                    cfg['season'], cfg['episode'], artfn,
-                    cfg['imdb_id'], cfg['omdb_status'], args.omdbkey))
+
+  imdb_info = get_meta_imdb(title, None if args.ignore_year_imdb else cfg['year'],
+                      cfg['season'], cfg['episode'], artfn,
+                      cfg['imdb_id'],
+                      None if args.reset_imdb else cfg['omdb_status'], args.omdbkey)
+  if args.reset_imdb:
+    for i in imdb_info: del cfg[i]
+  upd(imdb_info)
 
   upd({ 'year': f'_{ufn}YEAR_'
       , 'genre': f'_{ufn}GENRE_'
@@ -953,6 +957,7 @@ if __name__ == "__main__":
   parser.add_argument('--keep-video-in-mkv',action='store_true', default=False, help='do not attempt to extract video tracks from MKV source, but instead use MKV file directly')
   parser.add_argument('--keep-audio-in-mkv',action='store_true', default=False, help='do not attempt to extract audio tracks from MKV source, but instead use MKV file directly')
   parser.add_argument('--ignore-year-imdb',action='store_true', default=False, help='do not use year information, if any, in omdb queries')
+  parser.add_argument('--reset-imdb',action='store_true', default=False, help='overwrite information with new IMDB data')
 
   for inifile in [ f'{os.path.splitext(sys.argv[0])[0]}.ini', prog + '.ini', '..\\' + prog + '.ini' ]:
     if os.path.exists(inifile): sys.argv.insert(1,'@'+inifile)

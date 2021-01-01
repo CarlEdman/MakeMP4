@@ -130,17 +130,20 @@ def to_ratio_string(f, sep="/"):
 def to_float(s):
   '''Interpret argument as float in a variety of formats.'''
 
+  print(s)
   try:
     return float(s)
   except ValueError:
     pass
 
   if isinstance(s, str):
-    if m := re.fullmatch(r'(?P<neg>-)?(?P<hrs>\d+):(?P<mins>\d+):(?P<secs>\d+(\.\d*)?)', s):
-      t = float(m['secs'])
-      if m['mins']: t += 60.0*float(m['mins'])
-      if m['hrs']: t += 3600.0*float(m['hrs'])
+    if m := re.fullmatch(r'(?P<neg>-)?(?P<hrs>\d+):(?P<mins>\d+):(?P<secs>\d+)([.,:](?P<msecs>\d*))?', s):
+      t = int(m['secs'])
+      if m['msecs']: t += int(m['msecs'])/(10.0**len(m['msecs']))
+      if m['mins']: t += 60.0*int(m['mins'])
+      if m['hrs']: t += 3600.0*int(m['hrs'])
       if m['neg']: t = -t
+      print(s,t,m.groups())
       return t
 
     if s.endswith('%'):

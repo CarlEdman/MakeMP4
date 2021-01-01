@@ -240,8 +240,8 @@ def get_meta_imdb(title, year, season, episode, artpath,
     q.update({ 't':title, 'type':'series', 'Season':str(season) })
     if year:
       log.warning(LOG_YEAR_GUESS_WARNING)
-      q['y'] = str(year - season + 1), 
-    if episode: 
+      q['y'] = str(year - season + 1),
+    if episode:
       q.update({ 'type':'episode', 'Episode':str(episode) })
   else:
     q.update({ 't':title, 'y':str(year), 'type':'movie' })
@@ -341,10 +341,10 @@ def get_meta_imdb(title, year, season, episode, artpath,
       its['song']=v
     elif k=='Genre':
       genres = set(genre_trans[w.strip()] for w in v.split(',') if w.strip() in genre_trans)
-      if len(genres)==1:
+      if len(genres)>0:
         its['genre']=genres.pop()
-      elif len(genres)>0:
-        log.warning(f'{title}: Too many genres recognized in IMDB "{",".join(genres)}')
+        if len(genres)>1:
+          log.warning(f'{title}: Too many genres recognized in IMDB "{",".join(genres)}"')
       else:
         log.warning(f'{title}: No genres recognized in IMDB "{v}"')
     elif k in skip_trans:
@@ -354,7 +354,7 @@ def get_meta_imdb(title, year, season, episode, artpath,
     elif k in str_trans:
       its[str_trans[k]]=str(v)
     elif k in desc_trans:
-      if d := desc_trans[k]+re.sub(r'\s+-+\s+',r'—',v) in description:
+      if (d := desc_trans[k]+re.sub(r'\s+-+\s+',r'—',v)) in description:
         continue
       if desc_trans[k]:
         description.append(d)
