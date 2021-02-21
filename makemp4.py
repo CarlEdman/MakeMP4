@@ -109,7 +109,7 @@ def work_lock_delete():
     f = l[:-len(".working")]
     if os.path.exists(f): os.remove(f)
 
-def do_call(args,outfile=None,infile=None):
+def do_call(cargs,outfile=None,infile=None):
   def cookout(s):
     s=re.sub(r'\s*\n\s*',r'\n',s)
     s=re.sub(r'[^\n]*',r'',s)
@@ -118,7 +118,7 @@ def do_call(args,outfile=None,infile=None):
     return s.strip()
 
   cs=[[]]
-  for a in args:
+  for a in cargs:
     if a=='|':
       cs.append([])
     else:
@@ -152,8 +152,11 @@ def do_call(args,outfile=None,infile=None):
   if errstr: log.debug('Error: '+repr(errstr))
   errcode = ps[-1].poll()
   if errcode!=0:
-    log.error('Error code for ' + repr(cstr) + ': ' + str(errcode))
-    if outfile: open(outfile,'w').truncate(0)
+    if args.ignore_error:
+      log.warning('Error code (ignored) for ' + repr(cstr) + ': ' + str(errcode))
+    else:
+      log.error('Error code for ' + repr(cstr) + ': ' + str(errcode))
+      if outfile: open(outfile,'w').truncate(0)
 
   if lockfile:
     os.remove(lockfile)
@@ -863,6 +866,8 @@ def build_meta(cfg):
         for c in v: cfg['comment'] = add_to_list(cfg['comment'], c)
       elif cfg[k] is None:
         cfg[k] = v
+      elif type(cfg[k]) is str and len(cfg[k])>0 and cfg[k][0]=='_' and cfg[k][-1]=='_':
+        cfg[k] = v
 
   title  = cfg['title'] or cfg['show'] or cfg['base']
   season = cfg['season']
@@ -958,6 +963,7 @@ if __name__ == "__main__":
   parser.add_argument('--keep-audio-in-mkv',action='store_true', default=False, help='do not attempt to extract audio tracks from MKV source, but instead use MKV file directly')
   parser.add_argument('--ignore-year-imdb',action='store_true', default=False, help='do not use year information, if any, in omdb queries')
   parser.add_argument('--reset-imdb',action='store_true', default=False, help='overwrite information with new IMDB data')
+  parser.add_argument('--ignore-error',action='store_true', default=False, help='ignore errors in external utilities')
 
   for inifile in [ f'{os.path.splitext(sys.argv[0])[0]}.ini', prog + '.ini', '..\\' + prog + '.ini' ]:
     if os.path.exists(inifile): sys.argv.insert(1,'@'+inifile)

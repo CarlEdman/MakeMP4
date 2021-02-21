@@ -130,7 +130,6 @@ def to_ratio_string(f, sep="/"):
 def to_float(s):
   '''Interpret argument as float in a variety of formats.'''
 
-  print(s)
   try:
     return float(s)
   except ValueError:
@@ -143,7 +142,6 @@ def to_float(s):
       if m['mins']: t += 60.0*int(m['mins'])
       if m['hrs']: t += 3600.0*int(m['hrs'])
       if m['neg']: t = -t
-      print(s,t,m.groups())
       return t
 
     if s.endswith('%'):

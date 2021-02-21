@@ -227,8 +227,8 @@ def get_meta_local(title, year, season, episode, descpath):
 def get_meta_imdb(title, year, season, episode, artpath,
                   imdb_id, omdb_status, omdb_key):
 
-  LOG_YEAR_GUESS_WARNING = "Guessing IMDB series year by subtracing one for every\
- season year above 1; if this fails --ignore-year-imdb"
+  LOG_YEAR_GUESS_WARNING = None # "Guessing IMDB series year by subtracing one for every\
+# season year above 1; if this fails --ignore-year-imdb"
   its = defdict()
   if not omdb_key: return its
   if omdb_status and (200<=omdb_status<300 or 400<=omdb_status<500): return its
@@ -239,7 +239,8 @@ def get_meta_imdb(title, year, season, episode, artpath,
   elif season:
     q.update({ 't':title, 'type':'series', 'Season':str(season) })
     if year:
-      log.warning(LOG_YEAR_GUESS_WARNING)
+      if LOG_YEAR_GUESS_WARNING is not None:
+        log.warning(LOG_YEAR_GUESS_WARNING)
       q['y'] = str(year - season + 1),
     if episode:
       q.update({ 'type':'episode', 'Episode':str(episode) })
