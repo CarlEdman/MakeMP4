@@ -597,7 +597,7 @@ def build_subtitle(cfg, track):
     do_call(['mp4box','-ttxt','temp.srt'],outfile)
     if os.path.exists('temp.ttxt'): os.rename('temp.ttxt',outfile)
     if os.path.exists('temp.srt'): os.remove('temp.srt')
-  elif inext=='idx':
+  elif False: # inext=='idx':
     track['outfile'] = outfile = os.path.splitext(infile)[0]+'.adj.idx'
     subfile = os.path.splitext(infile)[0]+'.adj.sub'
     if not os.path.exists(subfile):
@@ -613,8 +613,9 @@ def build_subtitle(cfg, track):
            l = f'{m["beg"]}{unparse_time(s)}{m["end"]}'
         o.write(l)
   else:
+    if elong!=1.0 or delay!=0.0:
+      log.warning(f'Delay and elongation not implemented for subtitles type "{infile}"')
     track['outfile'] = outfile = infile
-    log.warning(f'Delay and elongation not implemented for subtitles type "{infile}"')
 
   if not os.path.exists(track['outfile']):
     track['disable'] =True
