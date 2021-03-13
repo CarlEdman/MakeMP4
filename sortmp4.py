@@ -27,7 +27,11 @@ def optAndMove(opath,dir,nname=None):
   if nname==None: nname=oname
   npath = os.path.join(dir,nname)
 
-  log.info(f'Optimizing and moving {opath} to {npath}')
+  if args.optimize:
+    log.info(f'Optimizing and moving {opath} to {npath}')
+  else:
+    log.info(f'Moving {opath} to {npath}')
+
   if args.dryrun: return
 
   if not os.path.exists(dir): os.mkdir(dir)
@@ -35,13 +39,16 @@ def optAndMove(opath,dir,nname=None):
     log.warning(f'{nname} already in {dir}, skipping.')
     return
 
-  t = os.path.join(odir, tempfile.mktemp(suffix=os.path.splitext(oname)[1], prefix='tmp'))
-  try:
-    os.rename(opath, t)
-    cpe = subprocess.run(['mp4file', '--optimize', t], check=True, capture_output=True)
-  except subprocess.CalledProcessError as cpe:
-    log.error(f'Error code for {cpe.cmd}: {cpe.returncode} : {cpe.stdout} : {cpe.stderr}')
-    raise
+  if args.optimize:
+    t = os.path.join(odir, tempfile.mktemp(suffix=os.path.splitext(oname)[1], prefix='tmp'))
+    try:
+      os.rename(opath, t)
+      cpe = subprocess.run(['mp4file', '--optimize', t], check=True, capture_output=True)
+    except subprocess.CalledProcessError as cpe:
+      log.error(f'Error code for {cpe.cmd}: {cpe.returncode} : {cpe.stdout} : {cpe.stderr}')
+      raise
+  else:
+    opath = t
 
   try:
     shutil.move(t, npath)
@@ -117,6 +124,7 @@ if __name__ == '__main__':
   parser.set_defaults(loglevel=logging.WARN)
   parser.add_argument('--dryrun', action='store_true', default=False, help='only print moves, but do not execute them.')
   parser.add_argument('--overwrite', action='store_true', default=False, help='overwrite existing target file.')
+  parser.add_argument('--optimize', action='store_true', default=False, help='optimize target file.')
   parser.add_argument('--version', action='version', version='%(prog)s '+version)
   parser.add_argument('--target', action='store', default= 'Y:\\')
   parser.add_argument('files', nargs='*', metavar='FILES', help='files to sort')
