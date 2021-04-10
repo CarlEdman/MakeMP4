@@ -44,14 +44,13 @@ def optAndMove(opath,dir,nname=None):
     try:
       os.rename(opath, t)
       cpe = subprocess.run(['mp4file', '--optimize', t], check=True, capture_output=True)
+      os.rename(t, opath)
     except subprocess.CalledProcessError as cpe:
       log.error(f'Error code for {cpe.cmd}: {cpe.returncode} : {cpe.stdout} : {cpe.stderr}')
       raise
-  else:
-    opath = t
 
   try:
-    shutil.move(t, npath)
+    shutil.move(opath, npath)
   except:
     os.remove(npath)
     raise
@@ -124,7 +123,7 @@ if __name__ == '__main__':
   parser.set_defaults(loglevel=logging.WARN)
   parser.add_argument('--dryrun', action='store_true', default=False, help='only print moves, but do not execute them.')
   parser.add_argument('--overwrite', action='store_true', default=False, help='overwrite existing target file.')
-  parser.add_argument('--optimize', action='store_true', default=False, help='optimize target file.')
+  parser.add_argument('--optimize', action='store_true', default=True, help='optimize target file.')
   parser.add_argument('--version', action='version', version='%(prog)s '+version)
   parser.add_argument('--target', action='store', default= 'Y:\\')
   parser.add_argument('files', nargs='*', metavar='FILES', help='files to sort')

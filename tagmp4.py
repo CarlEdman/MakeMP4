@@ -389,6 +389,8 @@ def get_meta_imdb(title, year, season, episode, artpath,
       shutil.copyfileobj(f, g)
   except HTTPError as e:
     its['omdb_status']=e.code
+  except ValueError as e:
+    its['omdb_status']=400
 
   return its
 
