@@ -186,31 +186,31 @@ def config_from_base(cfg, base):
   cfg['show'] = base
 
   # cfg['languages'] = ['eng'] # Set if we want to keep only some languages
-  if m := re.fullmatch(r'(?P<show>.*?) (pt\.? *(?P<episode>\d+) *)?\((?P<year>\d*)\) *(?P<song>.*?)',base):
+  if m := re.fullmatch(r'(?P<show>.*?)\s+(pt\.? *(?P<episode>\d+) *)?\((?P<year>\d*)\) *(?P<song>.*?)',base):
     cfg['type'] = 'movie'
     cfg['show'] = m['show']
     if m['episode']: cfg['episode'] = int(m['episode'])
     if m['year']: cfg['year'] = int(m['year'])
     cfg['song'] = m['song']
-  elif (m := re.fullmatch(r'(?P<show>.*?) S(?P<season>\d+)E(?P<episode>\d+)$', base)) \
+  elif (m := re.fullmatch(r'(?P<show>.*?)\s+S(?P<season>\d+)E(?P<episode>\d+)$', base)) \
        or (m := re.fullmatch(r'(.*?) (Se\.\s*(?P<season>\d+)\s*)?Ep\.\s*(?P<episode>\d+)$', base)):
     cfg['type'] = 'tvshow'
     cfg['show'] = m['show']
     if m['season'] and m['season']!='0':
       cfg['season'] = int(m['season'])
     cfg['episode'] = int(m['episode'])
-  elif (m := re.fullmatch(r'(?P<show>.*) S(?P<season>\d+) +(?P<song>.*?)', base)) \
+  elif (m := re.fullmatch(r'(?P<show>.*?)\s+S(?P<season>\d+) +(?P<song>.*?)', base)) \
        or (m := re.fullmatch(r'(.*) Se\. *(?P<season>\d+) *(?P<song>.*?)', base)):
     cfg['type'] = 'tvshow'
     cfg['show'] = m['show']
     cfg['season'] = int(m['season'])
     cfg['song'] = m['song']
-  elif m := re.fullmatch(r'(?P<show>.*) (S(?P<season>\d+))?(V|Vol\. )(?P<episode>\d+)', base):
+  elif m := re.fullmatch(r'(?P<show>.*?)\s+(S(?P<season>\d+))?(V|Vol\. )(?P<episode>\d+)', base):
     cfg['type'] = 'tvshow'
     cfg['show'] = m['show']
     cfg['season'] = int(m['season'])
     cfg['episode'] = int(m['episode'])
-  elif m := re.fullmatch(r'(?P<show>.*) S(?P<season>\d+)D\d+', base):
+  elif m := re.fullmatch(r'(?P<show>.*?)\s+S(?P<season>\d+)D\d+', base):
     cfg['type'] = 'tvshow'
     cfg['show'] = m['show']
     cfg['season'] = int(m['season'])
@@ -273,7 +273,7 @@ def prepare_mkv(cfg, mkvfile):
       track['extension'] = 'mpg'
       track['file'] = f'{base} T{tid:02d}.mpg'
       track['dgifile'] = f'{base} T{tid:02d}.dgi'
-    elif track['format'] in {'V_MPEG4/ISO/AVC','MPEG-4p10/AVC/h.264',}:
+    elif track['format'] in {'V_MPEG4/ISO/AVC','MPEG-4p10/AVC/h.264','AVC/H.264/MPEG-4p10',}:
       track['extension'] = '264'
       track['file'] = f'{base} T{tid:02d}.264'
 #        track['t2cfile'] = f'{base} T{tid:02d}.t2c'
