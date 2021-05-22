@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 prog='mp4plexname'
-version='0.3'
+version='0.4'
 author='Carl Edman (CarlEdman@gmail.com)'
 desc='Rename TV show extras Plex perferred format.'
 
