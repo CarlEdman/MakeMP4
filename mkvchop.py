@@ -66,9 +66,16 @@ def main():
   chaptimes=list(chaptimes.values())
   chapnames=list(chapnames.values())
 
-  log.debug(subprocess.check_output(['mkvmerge','--split','timecodes:'+timecodes,'-o','Temp-%06d.mkv',args.infile]))
+  ffs = [args.outfiles.format(i) for i in range(args.start,args.start+len(splits))]
+  tfs = [f'Temp-{t:06d}.mkv' for t in range(1,1+len(splits))]
+  brks = ', '.join(f + "@" + unparse_time(s) for (f,s) in zip(ffs, splits))
+  log.info(f'Spliting {args.infile} into {brks}')
+  if args.dryrun:
+    return
+  else:
+    log.debug(subprocess.check_output(['mkvmerge','--split','timecodes:'+timecodes,'-o','Temp-%06d.mkv',args.infile]))
 
-  for tf, ff in zip(reglob(r'Temp-\d{6}\.mkv'),(args.outfiles.format(i) for i in range(args.start,sys.maxsize))):
+  for tf, ff in zip(tfs,ffs):
     chapchange=False
     for l in subprocess.check_output(['mkvextract', 'chapters', '--simple', tf], universal_newlines = True).splitlines():
       if (m := re.fullmatch(r'CHAPTER(\d+)=(.*)',l)) and \
@@ -91,6 +98,8 @@ def main():
       chapchange=True
 
     if chapchange:
+      for no,cn,ct in zip(range(sys.maxsize),chapnames,chaptimes):
+        log.info(f'Creating {ff} chapter {no} {cn}={unparse_time(ct)}')
       chapfile=tf+'.chap.txt'
       with open(chapfile,'w') as cf:
         for no,cn,ct in zip(range(sys.maxsize),chapnames,chaptimes):
@@ -101,11 +110,13 @@ def main():
       os.remove(tf+'.chap.txt')
       os.remove(tf)
     else:
+      log.info(f'Not modifying {ff} chapters')
       os.rename(tf,ff)
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser(fromfile_prefix_chars='@',prog=prog,epilog='Written by: '+author)
   parser.add_argument('--version', action='version', version='%(prog)s '+version)
+  parser.add_argument('--dryrun', dest='dryrun', action='store_const', const=True, default=False, help='dryrun only; do not modify file')
   parser.add_argument('-s', '--start', type=int, default=1, help='initial value of index for outfiles (default: %(default)d)')
   parser.add_argument('infile', type=str, help='mkv file to be chopped up')
   parser.add_argument('outfiles', type=str, help='mkv files to be created with decimal {} formatter')
@@ -115,6 +126,7 @@ if __name__ == '__main__':
   parser.set_defaults(loglevel=logging.WARN)
 
   args = parser.parse_args()
+  if args.dryrun: args.loglevel = min(args.loglevel,logging.INFO)
 
   log.setLevel(0)
   slogger=logging.StreamHandler()
