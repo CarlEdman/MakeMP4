@@ -563,9 +563,7 @@ def build_subtitle(cfg, track):
   delay = track['delay'] or 0.0
   elong = track['elongation'] or 1.0
 
-  if os.path.getsize(infile)<1024:
-    return False
-  elif inext=='sup':
+  if inext=='sup':
     track['outfile'] = outfile = os.path.splitext(infile)[0]+'.idx'
     if os.path.exists(outfile): return  # Should be not readytomake(outfile,)
     call = ['bdsup2sub++', '--resolution','keep']
@@ -794,9 +792,10 @@ def build_video(cfg, track):
 
 def build_result(cfg):
   for track in tracks(cfg):
-    if not track['outfile']: return False
-    if not os.path.exists(track['outfile']): return False
-    if os.path.getsize(track['outfile'])==0: return False
+    outfile = track['outfile']
+    if not outfile: return False
+    if not os.path.exists(outfile): return False
+    if os.path.getsize(outfile)==0: return False
 
   base=cfg['base']
   outfile = make_filename(cfg)
@@ -836,6 +835,9 @@ def build_result(cfg):
     if fps := track['frame_rate_ratio_out']:
       call[-1] += ':fps=' + str(fps)
     if mdur or dur: call[-1] += ':dur=' + str(mdur or dur)
+    # if sar := track['sample_aspect_ratio']:
+    #   (n,d) = Fraction.from_float(sar).limit_denominator(1000).as_integer_ratio()
+    #   call[-1] += f':par={n}:{d}'
 
     if track['type'] in trcnt:
       trcnt[track['type']] += 1
