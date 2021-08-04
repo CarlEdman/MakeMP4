@@ -63,12 +63,12 @@ def readytomake(file, *comps):
 
 def syncconfig(cfg):
   if not cfg.modclear(): return
-  with open(cfg['cfgname'], 'w') as f:
+  with open(cfg['cfgname'], 'w', encoding='utf-8') as f:
     json.dump(cfg, f, ensure_ascii = False, indent = 2, sort_keys = True)
 
 def serveconfig(fn):
   try:
-    with open(fn, 'r') as f:
+    with open(fn, 'r', encoding='utf-8') as f:
       j = json.load(f, object_hook = defdict)
     yield j
     syncconfig(j)
@@ -913,7 +913,7 @@ def main():
       fn = base+'.cfg'
       if args.outdir: fn = os.path.join(args.outdir, fn)
       if os.path.exists(fn): continue
-      with open(fn, 'w') as f:
+      with open(fn, 'w', encoding='utf-8') as f:
         json.dump({ 'cfgname': fn }, f)
       if ext.casefold() not in preparers:
         log.warning(f'Source file type not recognized {qf}')
