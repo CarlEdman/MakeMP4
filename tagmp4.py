@@ -175,7 +175,7 @@ def get_meta_local_movie(ls):
       if m.group('format'):
         its['comment'] = add_to_list(its['comment'], f'Format: {m.group("format")}')
     elif (m := re.fullmatch(r'This movie is\s.*',l)):
-      desc += l
+      its['description'] += l
     elif (m := re.fullmatch(r'Genres?\s*:*\s*(.*)',l)):
       genres = [ genre_trans[w.strip()] for w in m[1].split(',') if w.strip() in genre_trans ]
       if genres:

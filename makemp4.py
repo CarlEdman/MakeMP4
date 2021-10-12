@@ -577,6 +577,9 @@ def build_subtitle(cfg, track):
 
     call += ['--output', outfile, infile]
     do_call(call,outfile) # '--fix-invisible',
+    if not os.path.exists(outfile) or not os.path.isfile(outfile) or os.path.getsize(outfile)==0:
+      log.error(f'Subtitle {outfile} empty and disabled.')
+      track['disable'] = True
   elif inext=='srt':
     track['outfile'] = outfile = os.path.splitext(infile)[0]+'.ttxt'
     if os.path.exists(outfile): return False # Should be not readytomake(outfile,)
@@ -791,13 +794,20 @@ def build_video(cfg, track):
   return True
 
 def build_result(cfg):
+  base=cfg['base']
   for track in tracks(cfg):
     outfile = track['outfile']
-    if not outfile: return False
-    if not os.path.exists(outfile): return False
-    if os.path.getsize(outfile)==0: return False
+    trackid = track['id']
+    if not outfile:
+      log.warning(f'Unable to build {base} because {trackid}:outfile not defined')
+      return False
+    if not os.path.exists(outfile):
+      log.warning(f'Unable to build {base} because {trackid}:{outfile} does not exist')
+      return False
+    if os.path.getsize(outfile)==0:
+      log.warning(f'Unable to build {base} because {trackid}:{outfile} is empty')
+      return False
 
-  base=cfg['base']
   outfile = make_filename(cfg)
   if not outfile:
     log.error(f"Unable to generate filename for {cfg}.")
@@ -813,7 +823,7 @@ def build_result(cfg):
       coverfiles.append(c)
   infiles+=coverfiles
 
-  call=['mp4box', '-new', outfile]
+  call= ['mp4box', '-new', outfile]
   trcnt = { }
   mdur=cfg['duration']
 
