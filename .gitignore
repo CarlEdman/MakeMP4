@@ -2,6 +2,7 @@
 MakeMP4.sublime-project
 MakeMP4.sublime-workspace
 MakeMP4.code-workspace
+workspace.code-workspace
 *.ini
 __pycache__/
 *.vscode
