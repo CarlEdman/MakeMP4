@@ -387,7 +387,7 @@ def prepare_mkv(cfg, mkvfile):
       with open(track["t2cfile"],'rt', encoding='utf-8') as fp:
         t2cl = [to_float(l) for l in fp]
     except ValueError:
-      log.warning(f'Unrecognized line "{l}" in {track["t2cfile"]}, skipping.')
+      log.warning(f'Unrecognized line in {track["t2cfile"]}, skipping.')
     if len(t2cl)==0: continue
 #    oframes = track['frames']
 #    frames = len(t2cl)-1
