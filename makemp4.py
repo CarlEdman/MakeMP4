@@ -114,7 +114,7 @@ def serveconfig(fn):
       if ext in (".yaml", ".yml"):
         j = yaml.load(f)
       elif ext in (".json", ".cfg"):
-        j = json.load(f)
+        j = json.load(f, object_hook = defdict)
       else:
         log.error(f"{fn} is not a config file, skipping.")
     yield j
@@ -129,7 +129,7 @@ def serveconfig(fn):
 
 def configs(path="."):
   # TODO: Read all cfg file extensions
-  for fn in glob.iglob(os.path.join(path, "*.yaml")):
+  for fn in glob.iglob(os.path.join(path, "*.json")):
     yield from serveconfig(fn)
 
 
@@ -1277,13 +1277,13 @@ def main():
       if not os.path.isfile(qf):
         continue
       (base, ext) = os.path.splitext(f)
-      fn = base + ".cfg"
+      fn = base + ".json"
       if args.outdir:
         fn = os.path.join(args.outdir, fn)
       if os.path.exists(fn):
         continue
       with open(fn, "w", encoding="utf-8") as f:
-        yaml.dump(fn, f)
+        json.dump(defdict(), f, ensure_ascii=False, indent=2, sort_keys=True)
       if ext.casefold() not in preparers:
         log.warning(f"Source file type not recognized {qf}")
         continue
