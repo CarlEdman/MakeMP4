@@ -21,7 +21,6 @@ import subprocess
 import sys
 import time
 import xml.etree.ElementTree as ET
-
 import yaml
 
 try:
@@ -71,52 +70,35 @@ iso6392BtoT = {
 }
 
 
-def readytomake(file, *comps):
-  for f in comps:
-    if not os.path.exists(f) or not os.path.isfile(f) or os.path.getsize(f) == 0:
-      return False
-    fd = os.open(f, os.O_RDONLY | os.O_EXCL)
-    if fd < 0:
-      return False
-    os.close(fd)
-  if not os.path.exists(file):
-    return True
-  if os.path.getsize(file) == 0:
-    return False
-  #  fd=os.open(file,os.O_WRONLY|os.O_EXCL)
-  #  if fd<0: return False
-  #  os.close(fd)
-  for f in comps:
-    if f and os.path.getmtime(f) > os.path.getmtime(file):
-      os.remove(file)
-      return True
-  return False
+def cfgload(fn):
+  (_, ext) = os.path.splitext(fn)
+  with open(fn, "r", encoding="utf-8") as f:
+    if ext in (".yaml", ".yml"):
+      return yaml.load(f)
+    elif ext in (".json", ".cfg"):
+      return json.load(f, object_hook=defdict)
+    else:
+      log.error(f"{fn} is not a config file, skipping.")
 
 
-def syncconfig(cfg):
-  if not cfg.modclear():
-    return
-  fn = cfg["cfgname"]
+def cfgdump(cfg, fn):
   (_, ext) = os.path.splitext(fn)
   with open(fn, "w", encoding="utf-8") as f:
     if ext in (".yaml", ".yml"):
-      yaml.dump(cfg, f, indent=2, allow_unicode=True)
+      yaml.dump(cfg, f, indent=2, allow_unicode=True, encoding="utf-8")
     elif ext in (".json", ".cfg"):
       json.dump(cfg, f, ensure_ascii=False, indent=2, sort_keys=True)
     else:
       log.error(f"{fn} is not a config file, skipping.")
 
 
+def syncconfig(cfg):
+  if cfg.modclear():
+    cfgdump(cfg, cfg["cfgname"])
+
 def serveconfig(fn):
-  (_, ext) = os.path.splitext(fn)
   try:
-    with open(fn, "r", encoding="utf-8") as f:
-      if ext in (".yaml", ".yml"):
-        j = yaml.load(f)
-      elif ext in (".json", ".cfg"):
-        j = json.load(f, object_hook = defdict)
-      else:
-        log.error(f"{fn} is not a config file, skipping.")
+    j = cfgload(fn)
     yield j
     syncconfig(j)
   except yaml.YAMLError:
@@ -164,6 +146,28 @@ def tracks(cfg, typ=None):
     yield track
 
 
+def readytomake(file, *comps):
+  for f in comps:
+    if not os.path.exists(f) or not os.path.isfile(f) or os.path.getsize(f) == 0:
+      return False
+    fd = os.open(f, os.O_RDONLY | os.O_EXCL)
+    if fd < 0:
+      return False
+    os.close(fd)
+  if not os.path.exists(file):
+    return True
+  if os.path.getsize(file) == 0:
+    return False
+  #  fd=os.open(file,os.O_WRONLY|os.O_EXCL)
+  #  if fd<0: return False
+  #  os.close(fd)
+  for f in comps:
+    if f and os.path.getmtime(f) > os.path.getmtime(file):
+      os.remove(file)
+      return True
+  return False
+
+
 def work_lock_delete():
   for l in glob.iglob("*.working"):
     log.debug(f"Deleting worklock {l} and associated file.")
@@ -189,6 +193,7 @@ def do_call(cargs, outfile=None, infile=None):
       cs[-1].append(str(a))
   cstr = " | ".join([subprocess.list2cmdline(c) for c in cs])
   log.debug("Executing: " + cstr)
+
 
   lockfile = None
   if outfile:
@@ -1277,13 +1282,14 @@ def main():
       if not os.path.isfile(qf):
         continue
       (base, ext) = os.path.splitext(f)
-      fn = base + ".json"
+      fn = f"{base}.{args.config_format}"
       if args.outdir:
         fn = os.path.join(args.outdir, fn)
       if os.path.exists(fn):
         continue
-      with open(fn, "w", encoding="utf-8") as f:
-        json.dump(defdict(), f, ensure_ascii=False, indent=2, sort_keys=True)
+
+      cfgdump(defdict({"cfgname": fn}), fn)
+
       if ext.casefold() not in preparers:
         log.warning(f"Source file type not recognized {qf}")
         continue
@@ -1407,6 +1413,13 @@ if __name__ == "__main__":
     action="store_true",
     default=False,
     help="ignore errors in external utilities",
+  )
+
+  parser.add_argument(
+    "--config-format",
+    choices=["json", "yaml"],
+    default="json",
+    help="format for new config files",
   )
 
   for inifile in [

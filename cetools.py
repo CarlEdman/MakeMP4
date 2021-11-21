@@ -106,7 +106,7 @@ def reglob(filepat, dir = None):
 def sanitize_filename(s):
   '''Remove all characters disallowed in NTFS file name.'''
 
-  trans = str.maketrans('','',r':"/\:*?<>|'+r"'")
+  trans = str.maketrans('','',r':"/\:*?<>|')
   return s.translate(trans)
 
 def unparse_time(t):
