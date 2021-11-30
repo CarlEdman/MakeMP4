@@ -81,10 +81,10 @@ def main():
       if (m := re.fullmatch(r'CHAPTER(\d+)=(.*)',l)) and \
         (i := int(m[1])) is not None and \
         (t := to_float(m[2])) is not None:
-        chaptimes[i]=t
+        chaptimes[i-1]=t
       elif (m := re.fullmatch(r'CHAPTER(\d+)NAME=(.*)',l)) and \
         (i := int(m[1])) is not None:
-        chapnames[i]=m[2]
+        chapnames[i-1]=m[2]
 
     if len(chaptimes)>=2 and chaptimes[1]-chaptimes[0]<1.0:
       chaptimes[1]=chaptimes[0]
