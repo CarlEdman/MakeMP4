@@ -89,8 +89,10 @@ def sortmp4(f):
       return
     shyr = alphabetize(sanitize_filename(f'{its["show"]} ({its["year"]})'))
     tdir = os.path.join(d, shyr)
-    if its["name"].startswith(its["show"] + ':'):
-      sub = its["name"][len(its["show"])+1:].strip()
+    name = str(its["name"])
+    show = str(its["show"])
+    if name.startswith(show + ':'):
+      sub = name[len(show)+1:].strip()
       if 'interview' in sub.casefold():
         suffix = '-interview'
       elif 'scene' in sub.casefold():
