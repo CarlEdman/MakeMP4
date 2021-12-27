@@ -87,10 +87,10 @@ def sortmp4(f):
     if 'name' not in its:
       log.warning(f'No name for {f}, skipping.')
       return
-    shyr = alphabetize(sanitize_filename(f'{its["show"]} ({its["year"]})'))
-    tdir = os.path.join(d, shyr)
     name = str(its["name"])
     show = str(its["show"])
+    shyr = alphabetize(sanitize_filename(f'{show} ({its["year"]})'))
+    tdir = os.path.join(d, shyr)
     if name.startswith(show + ':'):
       sub = name[len(show)+1:].strip()
       if 'interview' in sub.casefold():
