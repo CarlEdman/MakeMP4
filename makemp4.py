@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 prog = "MakeMP4"
-version = "7.1"
+version = "7.2"
 author = "Carl Edman (CarlEdman@gmail.com)"
 desc = """
 Extract all tracks from .mkv files;
