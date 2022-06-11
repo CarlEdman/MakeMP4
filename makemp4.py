@@ -420,6 +420,7 @@ def prepare_mkv(cfg, mkvfile):
       "AC-3/E-AC-3",
       "AC-3",
       "E-AC-3",
+      "AC-3 Dolby Surround EX",
     }:
       track["extension"] = "ac3"
       track["file"] = f"{base} T{tid:02d}.ac3"
@@ -1133,7 +1134,7 @@ def build_result(cfg):
     outfile = track["outfile"]
     trackid = track["id"]
     if not outfile:
-      log.warning(f"Unable to build {base} because {trackid}:outfile not defined")
+      # log.warning(f"Unable to build {base} because {trackid}:outfile not defined")
       return False
     if not os.path.exists(outfile):
       log.warning(
