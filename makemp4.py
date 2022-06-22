@@ -1128,7 +1128,7 @@ def build_video(cfg, track):
   return True
 
 
-def build_result(cfg):
+def build_mp4(cfg):
   base = cfg["base"]
   for track in tracks(cfg):
     outfile = track["outfile"]
@@ -1209,6 +1209,108 @@ def build_result(cfg):
   do_call(call, outfile)
   set_meta_mutagen(outfile, cfg)
   set_chapters_cmd(outfile, cfg)
+  return True
+
+def build_mkv(cfg):
+  base = cfg["base"]
+  for track in tracks(cfg):
+    outfile = track["outfile"]
+    trackid = track["id"]
+    if not outfile:
+      # log.warning(f"Unable to build {base} because {trackid}:outfile not defined")
+      return False
+    if not os.path.exists(outfile):
+      log.warning(
+        f"Unable to build {base} because {trackid}:{outfile} does not exist"
+      )
+      return False
+    if os.path.getsize(outfile) == 0:
+      log.warning(f"Unable to build {base} because {trackid}:{outfile} is empty")
+      return False
+
+  outfile = make_filename(cfg)
+  if not outfile:
+    log.error(f"Unable to generate filename for {cfg}.")
+    return False
+  if args.outdir:
+    outfile = os.path.join(args.outdir, outfile)
+
+  infiles = [cfg["cfgname"]]
+  coverfiles = []
+  for c in cfg["coverart"] or []:
+    if os.path.dirname(c) == None and args.artdir:
+      c = os.path.join(args.artdir, c)
+    if os.path.exists(c):
+      coverfiles.append(c)
+  infiles += coverfiles
+
+  call = ["mkvmerge", "--output", outfile, '=']
+  # trcnt = {}
+  # mdur = cfg["duration"]
+
+# --default-track TID[:bool]
+# Sets the 'default' flag for the given track (see section track IDs) if the optional argument bool is not present. If the user does not explicitly select a track himself then the player should prefer the track that has his 'default' flag set. Only one track of each kind (audio, video, subtitles, buttons) can have his 'default' flag set. If the user wants no track to have the default track flag set then he has to set bool to 0 for all tracks.
+# --track-name TID:name
+# Sets the track name for the given track (see section track IDs) to name.
+# --language TID:language
+# Sets the language for the given track (see section track IDs). Both ISO639-2 language codes and ISO639-1 country codes are allowed. The country codes will be converted to language codes automatically. All languages including their ISO639-2 codes can be listed with the --list-languages option.
+# This option can be used multiple times for an input file applying to several tracks by selecting different track IDs each time.
+# --aspect-ratio TID:ratio|width/height
+# Matroska(TM) files contain two values that set the display properties that a player should scale the image on playback to: display width and display height. With this option mkvmerge(1) will automatically calculate the display width and display height based on the image's original width and height and the aspect ratio given with this option. The ratio can be given either as a floating point number ratio or as a fraction 'width/height', e.g. '16/9'.
+# Another way to specify the values is to use the --aspect-ratio-factor or --display-dimensions options (see above and below). These options are mutually exclusive.
+# --aspect-ratio-factor TID:factor|n/d
+# Another way to set the aspect ratio is to specify a factor. The original aspect ratio is first multiplied with this factor and used as the target aspect ratio afterwards.
+# Another way to specify the values is to use the --aspect-ratio or --display-dimensions options (see above). These options are mutually exclusive.
+# --command-line-charset character-set
+# Sets the character set to convert strings given on the command line from. It defaults to the character set given by system's current locale. This settings applies to arguments of the following options: --title, --track-name and --attachment-description.
+# --output-charset character-set
+# Sets the character set to which strings are converted that are to be output. It defaults to the character set given by system's current locale.
+
+
+
+
+
+  # for track in tracks(cfg):
+  #   of = track["outfile"]
+  #   dur = track["duration"]
+  #   if mdur and dur:
+  #     if abs(mdur - dur) > 0.5 and abs(mdur - dur) * 200 > mdur:
+  #       log.warning(
+  #         f'Duration of "{base}" ({mdur:f}s) deviates from track {of} duration({dur:f}s).'
+  #       )
+
+  #   call += ["-add", of]
+  #   infiles.append(of)
+
+  #   if name := track["name"] or track["trackname"]:
+  #     call[-1] += ":name=" + name
+
+  #   if lang := track["language"]:
+  #     call[-1] += ":lang=" + lang
+  #   if fps := track["frame_rate_ratio_out"]:
+  #     call[-1] += ":fps=" + str(fps)
+  #   if mdur or dur:
+  #     call[-1] += ":dur=" + str(mdur or dur)
+  #   # if sar := track['sample_aspect_ratio']:
+  #   #   (n,d) = Fraction.from_float(sar).limit_denominator(1000).as_integer_ratio()
+  #   #   call[-1] += f':par={n}:{d}'
+
+  #   if track["type"] in trcnt:
+  #     trcnt[track["type"]] += 1
+  #   else:
+  #     trcnt[track["type"]] = 1
+
+  #   if track["type"] == "audio" and not track["default_track"]:
+  #     call[-1] += ":disable"
+
+  if not readytomake(outfile, *infiles):
+    return False
+
+  cfg["tool"] = f'{prog} {version} on {time.strftime("%A, %B %d, %Y, at %X")}'
+  syncconfig(cfg)
+  # do_call(call, outfile)
+  # set_meta_mutagen(outfile, cfg)
+  # set_chapters_cmd(outfile, cfg)
   return True
 
 
@@ -1303,7 +1405,12 @@ def main():
     build_meta(cfg)
 
   for cfg in configs():
-    build_result(cfg)
+    if args.output_type == "mp4":
+      build_mp4(cfg)
+    elif args.output_type == "mkv":
+      build_mkv(cfg)
+    else:
+      log.error(f"Output type {args.output_type} not yet supported")
 
   for cfg in configs():
     for track in tracks(cfg, "video"):
@@ -1416,10 +1523,15 @@ if __name__ == "__main__":
     default=False,
     help="ignore errors in external utilities",
   )
-
+  parser.add_argument(
+    "--output-type",
+    choices = set(["mp4", "mkv"]),
+    default="mp4",
+    help="container type for final result",
+  )
   parser.add_argument(
     "--config-format",
-    choices=["json", "yaml"],
+    choices=set(["json", "yaml"]),
     default="json",
     help="format for new config files",
   )
