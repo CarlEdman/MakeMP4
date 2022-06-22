@@ -3,7 +3,7 @@
 prog='mp4plexname'
 version='0.4'
 author='Carl Edman (CarlEdman@gmail.com)'
-desc='Rename TV show extras Plex perferred format.'
+desc='Rename TV show extras to Plex perferred names.'
 
 import argparse
 import glob
@@ -67,7 +67,7 @@ if __name__ == '__main__':
   parser = argparse.ArgumentParser(fromfile_prefix_chars='@',prog=prog,epilog='Written by: '+author)
   parser.add_argument('--version', action='version', version='%(prog)s ' + version)
   parser.add_argument('--dryrun', dest='dryrun', action='store_true', help='do not perform operations, but only print them.')
-  parser.add_argument('dirs', nargs='+', help='directories to be operated on')
+  parser.add_argument('dirs', nargs='+', help='directories to be operated on; may include wildcards')
   parser.add_argument('-v','--verbose',dest='loglevel',action='store_const', const=logging.INFO)
   parser.add_argument('-d','--debug',dest='loglevel',action='store_const', const=logging.DEBUG)
   parser.add_argument('-l','--log',dest='logfile',action='store')
