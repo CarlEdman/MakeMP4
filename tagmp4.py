@@ -395,6 +395,32 @@ def get_meta_imdb(title, year, season, episode, artpath,
   return its
 
 @export
+def get_meta_mp4info(f):
+  its = defdict()
+
+  compproc = subprocess.run(['mp4info',f], text=True, capture_output=True)
+  if not isinstance(compproc.stdout, str):
+    log.warning(f'mp4info "{f}" produced no output.')
+    return its
+  for l in compproc.stdout.splitlines():
+    if m := re.fullmatch(r'\s+(.+?)\s*:\s*(.+?)\s*',l):
+      its[m[1]] = m[2]
+    elif m := re.fullmatch(r'(\d+)\s+(\w+)\s*(.*)',l):
+      its['TrackType'+m[1]]=m[2]
+      its['TrackInfo'+m[1]]=m[3]
+    elif re.fullmatch('mp4info version .*', l):
+      continue
+    elif re.fullmatch(re.escape(f) + ':', l):
+      continue
+    elif re.fullmatch('Track\s+Type\s+Info', l):
+      continue
+    else:
+      log.warning(f'mp4info "{f}" has invalid line "{l}"')
+
+  return its
+
+
+@export
 def get_meta_mutagen(f):
   its = defdict()
 
@@ -645,7 +671,7 @@ def make_filename(its):
       episode = ""
     year = f' ({i:04d})' if (i := toint(its['year'])) else ""
     song = " " + alphabetize(i) if (i := its['song']) else ""
-    plexname = sanitize_filename(f'{title}{episode}{year}{song}.mp4')
+    plexname = sanitize_filename(f'{title}{episode}{year}{song}.{args.output_type}')
   elif its['type']=='tvshow':
     season = toint(its['season'])
     episode = toint(its['episode'])
@@ -658,7 +684,7 @@ def make_filename(its):
     else:
       seaepi = ""
     song = ' ' + alphabetize(i) if (i := its['song']) else ""
-    plexname = sanitize_filename(f'{title}{seaepi}{song}.mp4')
+    plexname = sanitize_filename(f'{title}{seaepi}{song}.{args.output_type}')
   else:
     return None
   return sanitize_filename(plexname)
@@ -727,7 +753,8 @@ if __name__ == "__main__":
   parser.add_argument('--descdir',dest='descdir',action='store',help='directory for .txt files with descriptive data')
   parser.add_argument('--artdir',dest='artdir',action='store',help='directory for .jpg and .png cover art')
   parser.add_argument('--omdbkey',dest='omdbkey',action='store',help='your OMDB key to automatically retrieve IMDb metadata and posters')
-  parser.add_argument('--dryrun', action='store_true', default=False, help='only print updates, but do not execute them.')
+  parser.add_argument("--output-type", choices = set(["mp4", "mkv"]), default="mp4", help="container type for final result")
+  parser.add_argument('--dryrun', action='store_true', default=False, help='only print updates, but do not execute them')
 
   for inifile in [ f'{os.path.splitext(sys.argv[0])[0]}.ini', prog + '.ini', '..\\' + prog + '.ini' ]:
     if os.path.exists(inifile): sys.argv.insert(1,'@'+inifile)
