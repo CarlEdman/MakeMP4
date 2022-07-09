@@ -1,14 +1,15 @@
 #!/usr/bin/python
 # Various utility functions
 
-import collections
+import argparse
+import json
 import logging
 import logging.handlers
 import os
-import os.path
+import pathlib
 import re
 import time
-import weakref
+import yaml
 
 from fractions import Fraction
 
@@ -65,9 +66,9 @@ def dict_inverse(d):
   return { v:k for k,v in d.items() }
 
 def alphabetize(s):
-  '''Strip leading articles from string.'''
+  '''Strip leading articles from string or filename.'''
 
-  s=s.strip().rstrip('.')
+  s=str(s)
   if s.startswith("The "): s=s[4:]
   elif s.startswith("A "): s=s[2:]
   elif s.startswith("An "): s=s[3:]
@@ -98,16 +99,9 @@ def sortkey(s):
 def reglob(filepat, dir = None):
   '''A replacement for glob.glob which uses regular expressions and sorts numbers up to 10 digits correctly.'''
 
-  if dir is None: dir = '.'
+  dir = pathlib.Path(dir) if dir else pathlib.Path.cwd()
   if os.name == 'nt': filepat = r'(?i)' + filepat
-  files = (os.path.join(dir,f) for f in os.listdir(dir) if re.fullmatch(filepat, f))
-  return sorted(files, key=sortkey)
-
-def sanitize_filename(s):
-  '''Remove all characters disallowed in NTFS file name.'''
-
-  trans = str.maketrans('','',r':"/\:*?<>|')
-  return s.translate(trans)
+  return sorted((f for f in dir.iterdir() if re.fullmatch(filepat, f.name)), key=sortkey)
 
 def unparse_time(t):
   '''Return float argument as a time in "hours:minutes:seconds" string format.'''
@@ -168,7 +162,7 @@ def sleep_change_directories(dirs,state=None):
   '''Sleep until any of the files in any of the dirs has changed.'''
 
   while True:
-    nstate = { os.path.join(d,f): os.stat(os.path.join(d,f)).st_mtime for d in dirs for f in os.listdir(d) }
+    nstate = { f: f.stat().st_mtime for d in dirs for f in d.iterdir() }
     if nstate != state: return nstate
 
     if os.name == 'nt':
@@ -182,25 +176,50 @@ def sleep_change_directories(dirs,state=None):
     else:
       time.sleep(10)
 
+def dirpath(p):
+  p = pathlib.Path(p)
+  if not p.exists():
+    raise argparse.ArgumentTypeError(FileNotFoundError(p))
+  if not p.is_dir():
+    raise argparse.ArgumentTypeError(NotADirectoryError(p))
+  return p
+
+class DefDictEncoder(json.JSONEncoder):
+  def default(self, obj):
+    if isinstance(obj, pathlib.PurePath):
+      return str(obj)
+    # Let the base class default method raise the TypeError
+    return super().default(self, obj)
+
 class defdict(dict):
-  '''Dictionary with None default value which tracks modified status.'''
+  '''A Dictionary which returns None on non-existing keys and tracks modified status.'''
 
   def __init__(self, *args, **kwargs):
     super().__init__(*args, **kwargs)
     self._modified=False
 
   def __getitem__(self, key):
-    return super().__getitem__(key) if key in self else None
+    if key not in self: return None
+    value = super().__getitem__(key)
+    if isinstance(value, str) and value !="" and (p:=pathlib.Path(value)).exists():
+      value = p
+    return value
 
   def __setitem__(self, key, value):
     '''n.b. Assigning None to a non-None value deletes it.'''
 
     if value is None:
-      if key not in self or self[key] is None: return
-      del self[key]
-    else:
-      if key in self and self[key] == value: return
-      super().__setitem__(key, value)
+      try:
+        del self[key]
+        self._modified = True
+      except KeyError: pass
+      return
+    
+    if isinstance(value, pathlib.PurePath):
+      value = str(value)
+
+    if key in self and self[key] == value: return
+    super().__setitem__(key, value)
     self._modified = True
 
   def modified(self):
@@ -221,4 +240,3 @@ class defdict(dict):
     m = m or self._modified
     self._modified = False
     return m
-

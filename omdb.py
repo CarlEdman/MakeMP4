@@ -6,10 +6,9 @@ author='Carl Edman (CarlEdman@gmail.com)'
 
 import argparse
 import json
-import sys
 
 from urllib.request import urlopen
-from urllib.parse import urlparse, urlunparse, urlencode
+from urllib.parse import urlunparse, urlencode
 
 
 parser = argparse.ArgumentParser(description='Request IMDB data through OMDB API.')
@@ -47,4 +46,4 @@ with urlopen(u) as f:
   j={k:v for k,v in json.loads(f.read().decode('utf-8')).items() if v!="N/A"}
   print(f.getcode())
 
-print(json.dumps(j,sort_keys=True,indent=3))
+print(json.dumps(j,sort_keys=True,indent=2))

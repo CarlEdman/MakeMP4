@@ -1,59 +1,27 @@
 #!/usr/bin/python
 
 prog='SortMP4'
-version='0.5'
+version='1.0'
 author='Carl Edman (CarlEdman@gmail.com)'
 desc='Sort mp4s from current directory to target subdirectories'
 
 import argparse
-import glob
 import logging
-import os
-import os.path
-import re
+import pathlib
 import shutil
 import subprocess
 import tempfile
 
-from tagmp4 import get_meta_mutagen
+from tagmp4 import get_meta_mutagen, get_meta_enzyme
 from cetools import * # pylint: disable=unused-wildcard-import
+from sanitize_filename import sanitize
 
 parser = None
 args = None
 log = logging.getLogger()
 
-def optAndMove(opath,dir,nname=None):
-  (odir, oname) = os.path.split(opath)
-  if nname==None: nname=oname
-  npath = os.path.join(dir,nname)
-
-  if args.optimize:
-    log.info(f'Optimizing and moving {opath} to {npath}')
-  else:
-    log.info(f'Moving {opath} to {npath}')
-
-  if args.dryrun: return
-
-  if not os.path.exists(dir): os.mkdir(dir)
-  if not args.overwrite and os.path.exists(npath):
-    log.warning(f'{nname} already in {dir}, skipping.')
-    return
-
-  if args.optimize:
-    t = os.path.join(odir, tempfile.mktemp(suffix=os.path.splitext(oname)[1], prefix='tmp'))
-    try:
-      os.rename(opath, t)
-      cpe = subprocess.run(['mp4file', '--optimize', t], check=True, capture_output=True)
-      os.rename(t, opath)
-    except subprocess.CalledProcessError as cpe:
-      log.error(f'Error code for {cpe.cmd}: {cpe.returncode} : {cpe.stdout} : {cpe.stderr}')
-      raise
-
-  try:
-    shutil.move(opath, npath)
-  except:
-    os.remove(npath)
-    raise
+mp4_exts = set([".mp4", ".m4r", "m4b"])
+mkv_exts = set([".mkv"])
 
 def sortmp4(f):
   its = get_meta_mutagen(f)
@@ -66,19 +34,21 @@ def sortmp4(f):
     log.warning(f'{f} has no type, skipping.')
     return
 
-  if 'show' not in its:
+  if its['type'] == "audiobook":
+    n = args.target / 'Audiobooks' / f.name
+  elif its['type'] == "ringtone":
+    n = args.target / 'Music' / 'Ringtones' / f.name
+  elif 'show' not in its:
     log.warning(f'No show title in {f}, skipping.')
     return
-
-  if its['type'] == "tvshow":
-    optAndMove(f,os.path.join(args.target,'TV',sanitize_filename(alphabetize(its['show']))))
-    return
-
-  if its['type'] == "movie":
+  elif its['type'] == "tvshow":
+    n = args.target / 'TV' / sanitize(alphabetize(its['show'])) / f.name
+  elif its['type'] == "movie":
     if 'genre' not in its:
       log.warning(f'No Genre in {f}, skipping.')
       return
-    if not os.path.isdir(d:=os.path.join(args.target,'Movies',its['genre'])):
+    d = args.target / 'Movies' / its['genre']
+    if not d.is_dir():
       log.warning(f'Genre "{its["genre"]}" in {f} not recognized, skipping.')
       return
     if 'year' not in its:
@@ -89,8 +59,8 @@ def sortmp4(f):
       return
     name = str(its["name"])
     show = str(its["show"])
-    shyr = alphabetize(sanitize_filename(f'{show} ({its["year"]})'))
-    tdir = os.path.join(d, shyr)
+    shyr = f'{show} ({its["year"]})'
+    tfile = shyr + ".mp4"
     if name.startswith(show + ':'):
       sub = name[len(show)+1:].strip()
       if 'interview' in sub.casefold():
@@ -101,21 +71,42 @@ def sortmp4(f):
         suffix = '-trailer'
       else:
         suffix = '-behindthescenes'
-      optAndMove(f, tdir, sanitize_filename(alphabetize(f'{sub}{suffix}.mp4')))
-    else:
-      optAndMove(f, tdir, shyr + ".mp4")
+      tfile = f'{sub}{suffix}.mp4'
+    n = d / sanitize(alphabetize(shyr)) / sanitize(alphabetize(tfile))
+    log.warning(f'Media Type "{its["type"]}" in {f} not recognized, skipping.')
     return
 
-  if its['type'] == "audiobook":
-    optAndMove(f, os.path.join(args.target,'Audiobooks'))
+  if not args.overwrite and n.exists():
+    log.warning(f'{n} already exists, skipping.')
     return
 
-  if its['type'] == "ringtone":
-    optAndMove(f, os.path.join(args.target,'Music','Ringtones'))
-    return
+  if args.optimize:
+    log.info(f'Optimizing and moving {f} to {n}')
+  else:
+    log.info(f'Moving {f} to {n}')
 
-  log.warning(f'Media Type "{its["type"]}" in {f} not recognized, skipping.')
-  return
+  if args.dryrun: return
+
+  n.parent.mkdir(parents=True, exist_ok=True)
+
+  if args.optimize:
+    try:
+      t = f.parent / tempfile.mktemp(suffix=f.suffix, prefix='tmp')
+      f.rename(t)
+      subprocess.run(['mp4file', '--optimize', t], check=True, capture_output=True)
+      t.rename(f)
+    except subprocess.CalledProcessError as cpe:
+      log.error(f'Error code for {cpe.cmd}: {cpe.returncode} : {cpe.stdout} : {cpe.stderr}')
+      raise
+
+  try:
+    shutil.move(f, n)
+  except:
+    n.unlink()
+    raise
+
+def sortmkv(f):
+  its = get_meta_enzyme(f)
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser(description=desc,fromfile_prefix_chars='@',prog=prog,epilog='Written by: '+author)
@@ -127,8 +118,8 @@ if __name__ == '__main__':
   parser.add_argument('--overwrite', action='store_true', default=False, help='overwrite existing target file.')
   parser.add_argument('--optimize', action='store_true', default=True, help='optimize target file.')
   parser.add_argument('--version', action='version', version='%(prog)s '+version)
-  parser.add_argument('--target', action='store', default= 'Y:\\')
-  parser.add_argument('files', nargs='*', metavar='FILES', help='files to sort')
+  parser.add_argument('--target', type=dirpath, action='store', default= 'Y:\\')
+  parser.add_argument('globs', nargs='*', default = [ '*' + e for e in mp4_exts | mkv_exts ], help='glob pattern of files to sort')
 
   args = parser.parse_args()
   if args.dryrun and args.loglevel > logging.INFO: args.loglevel = logging.INFO
@@ -141,11 +132,15 @@ if __name__ == '__main__':
   slogger.setFormatter(logformat)
   log.addHandler(slogger)
 
-  if not args.files: args.files = ['*.mp4', '*.m4r', '*.m4b']
-  infiles = []
-  for f in args.files: infiles.extend(glob.glob(f))
+  infiles = [f for e in args.globs for f in pathlib.Path.cwd().glob(e)]
   if not infiles:
-    log.error(f'No input files.')
+    log.error(f'No matching input files.')
     exit(1)
 
-  for f in infiles: sortmp4(f)
+  for f in infiles:
+    if f.suffix in mp4_exts:
+      sortmp4(f)
+    elif f.suffix in mkv_exts:
+      sortmkv(f)
+    else:
+      log.warning(f"File extension {f.suffix} for {f} not recognized, skipping.")

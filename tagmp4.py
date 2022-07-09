@@ -3,10 +3,11 @@
 prog='TagMP4'
 version='0.4'
 author='Carl Edman (CarlEdman@gmail.com)'
-desc='Update Metadata in MP4 files based on filenames and external sources'
+desc='''Update Metadata in MP4 files based on filenames and external sources'''
 
 import argparse
 import collections
+import enzyme
 import glob
 import json
 import logging
@@ -17,12 +18,15 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import xml.etree.ElementTree as ET
+import xml.sax.saxutils as saxutils
 
 from cetools import * # pylint: disable=unused-wildcard-import
-from mutagen.mp4    import MP4, MP4Cover, MP4Tags, MP4Chapters
+from mutagen.mp4    import MP4, MP4Cover
 from urllib.error   import HTTPError
-from urllib.parse   import urlparse, urlunparse, urlencode
+from urllib.parse   import urlunparse, urlencode
 from urllib.request import urlopen
+from sanitize_filename import sanitize
 
 parser = None
 args = None
@@ -451,13 +455,22 @@ def get_meta_mutagen(f):
       try:
         its[v] = int(w)
       except ValueError:
-        its[v] = w
+        if v not in its or len(w) > len(its[v]):
+          its[v] = w
 
   if 'hdvd' in t and t['hdvd']: its['hdvideo'] = True
   if 'stik' in t and (w:=t['stik']):
     its['type'] = ";".join(stik2type[x] for x in w if x in stik2type)
   if 'rtng' in t and (w:=t['rtng']):
     its['rating'] = ";".join(rtng2rating[x] for x in w if x in rtng2rating)
+
+  return its
+
+@export
+def get_meta_enzyme(f):
+  its = defdict()
+  with open(f, 'rb') as file:
+    mkv = enzyme.MKV(file)
 
   return its
 
@@ -660,6 +673,114 @@ def set_chapters_cmd(outfile, its):
     os.remove(tmpchapterfile)
     os.rename(tmpfile, outfile)
 
+@export 
+def set_meta_mkvxml(its):
+  """Generate and return an xml corresponding to the metadata in the argument."""
+
+  xmlprologue = '''<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE Tags SYSTEM "matroskatags.dtd">
+''' 
+  xml = ET.XML(xmlprologue + '''
+<Tags>
+  <Tag>
+  </Tag>
+</Tags>
+''')
+  tag = xml.find("Tag")
+
+  def addkeyval(key, val):
+    val = str(val).strip()
+    t = ET.fromstring(f'<Simple><Name>{key}</Name><String>{saxutils.escape(val)}</String></Simple>\n')
+    if (len(val) > 50 and (sval := alphabetize(val)) != val):
+      t[0].append(f'<Simple><Name>SORT_WITH</Name><String>{saxutils.escape(sval)}</String>')
+    tag.append(t)
+
+  comments = its['comment']
+  its['comment'] = None
+  if isinstance(comments, str):
+    comments = comments.split(';')
+  if isinstance(comments, list):
+    for c in comments:
+      if ':' in c:
+        k, v = c.split(':', 1)
+      else:
+        k, v = c, ""
+      k = k.strip()
+      v = v.strip()
+      if k in its and its[k]:
+        its[k] = its[k] + ", " + v
+      else:
+        its[k] = v
+
+  beg = r"(?P<beg>.*)\b"
+  end = r"(  |\.+|\Z)\s*(?P<end>.*)"
+  if (d := its['description']) and d:
+    if m := re.fullmatch(beg + r"This movie is:\s+(?P<moods>[^.]*?)" + end, d):
+      d = m.group('beg') + m.group('end')
+      its['This movie is'] = m.group('moods')
+    if m := re.fullmatch(beg + r"Format:\s+(?P<formats>[^.]*?)" + end, d):
+      d = m.group('beg') + m.group('end')
+      its['Format'] = m.group('formats')
+    if m := re.fullmatch(beg + r"Our best guess for you: (?P<stars>[0-9.]+ stars)" + end, d):
+      d = m.group('beg') + m.group('end')
+      its['Our best guess for you'] = m.group('stars')
+    if m := re.fullmatch(beg + r"Average of (?P<count>\d+) ratings: (?P<stars>[0-9.]+ stars)" + end, d):
+      d = m.group('beg') + m.group('end')
+      its[f'Average of {m.group("count")} ratings'] = f'{m.group("stars")}'
+    if m := re.fullmatch(beg + r"Average rating: (?P<stars>[0-9.]+)"+ end, d):
+      d = m.group('beg') + m.group('end')
+      its['Average rating'] = m.group("stars")
+    if m := re.fullmatch(beg + r"Report a problem" + end, d):
+      d = m.group('beg') + m.group('end')
+    if m := re.fullmatch(beg + r"\+ Add to Queue" + end, d):
+      d = m.group('beg') + m.group('end')
+    if m := re.fullmatch(beg + r"(Blu-ray disc|DVD) shipped to you on (?P<date>[0-9/]+)" + end, d):
+      d = m.group('beg') + m.group('end')
+      its['shipped'] = m.group('date')
+    while m := re.fullmatch(beg + r"(Cast|Actors?):\s+(?P<actors>[^.]*?)" + end, d):
+      d = m.group('beg') + m.group('end')
+      if 'Actors' in its and its['Actors']:
+        its['Actors'] += ', ' + m.group('actors')
+      else:
+        its['Actors'] = m.group('actors')
+    if m := re.fullmatch(beg + r"Director:\s+(?P<director>[^.]*?)" + end, d):
+      d = m.group('beg') + m.group('end')
+      its['Director'] = m.group('director')
+    if m := re.fullmatch(beg + r"Genres?:\s+(?P<genres>[^.]*?)" + end, d):
+      d = m.group('beg') + m.group('end')
+      its['Genres'] = m.group('genres')
+    its['description'] = d
+
+  for key, val in its.items():
+    addkeyval(key, val)
+
+  return xmlprologue + ET.canonicalize(ET.tostring(xml, encoding='unicode', xml_declaration=True))
+
+# COLLECTION
+# SEASON
+# MOVIE
+# EPISODE
+# TOTAL_PARTS Total number of parts defined at the first lower level. (e.g., if TargetType is ALBUM, the total number of tracks of an audio CD)
+# PART_NUMBER Number of the current part of the current level. (e.g., if TargetType is TRACK, the track number of an audio CD)
+# PART_OFFSET A number to add to PART_NUMBER, when the parts at that level don’t start at 1. (e.g., if TargetType is TRACK, the track number of the second audio CD)
+# TITLE The title of this item. For example, for music you might label this “Canon in D”, or for video’s audio track you might use “English 5.1” This is akin to the “TIT2” tag in [@!ID3v2].
+# SUBTITLE Sub Title of the entity.
+# DIRECTOR
+# ACTOR
+# WRITTEN_BY
+# SCREENPLAY_BY
+# PUBLISHER
+# GENRE
+# CONTENT_TYPE The type of the item. e.g., Documentary, Feature Film, Cartoon, Music Video, Music, Sound FX, …
+# DESCRIPTION A short description of the content, such as “Two birds flying.”
+# KEYWORDS Keywords to the item separated by a comma, used for searching.
+# SYNOPSIS A description of the story line of the item.
+# LAW_RATING Depending on the COUNTRY it’s the format of the rating of a movie (P, R, X in the USA, an age in other countries or a URI defining a logo).
+# DATE_RELEASED The time that the item was originally released. This is akin to the “TDRL” tag in [@!ID3v2].
+# COMMENT Any comment related to the content.
+# ENCODER The software or hardware used to encode this item. (“LAME” or “XviD”)
+# IMDB Internet Movie Database [@!IMDb] identifier. “tt” followed by at least 7 digits for Movies, TV Shows, and Episodes.
+
 @export
 def make_filename(its):
   title = its['title'] or its['show']
@@ -671,7 +792,7 @@ def make_filename(its):
       episode = ""
     year = f' ({i:04d})' if (i := toint(its['year'])) else ""
     song = " " + alphabetize(i) if (i := its['song']) else ""
-    plexname = sanitize_filename(f'{title}{episode}{year}{song}.{args.output_type}')
+    plexname = f'{title}{episode}{year}{song}.{args.output_type if args else "notype"}'
   elif its['type']=='tvshow':
     season = toint(its['season'])
     episode = toint(its['episode'])
@@ -684,10 +805,10 @@ def make_filename(its):
     else:
       seaepi = ""
     song = ' ' + alphabetize(i) if (i := its['song']) else ""
-    plexname = sanitize_filename(f'{title}{seaepi}{song}.{args.output_type}')
+    plexname = f'{title}{seaepi}{song}.{args.output_type if args else "notype"}'
   else:
     return None
-  return sanitize_filename(plexname)
+  return pathlib.Path(sanitize(plexname))
 
 def retag(f):
   def upd(i):

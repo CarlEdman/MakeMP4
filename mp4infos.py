@@ -35,7 +35,7 @@ def main():
   if len(cats)==0:
     log.warning('No valid mp4info produced.')
     return
-  writer = csv.DictWriter(sys.stdout, fieldnames=cats)
+  writer = csv.DictWriter(sys.stdout, fieldnames=cats, lineterminator='\n')
   writer.writeheader()
   writer.writerows(vals)
 

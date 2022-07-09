@@ -1,12 +1,11 @@
 #!/usr/bin/python
 # A subclass of ConfigParser with advanced features
 
-import collections
 import os.path
 
 from fractions import Fraction
 from weakref import WeakValueDictionary, finalize
-from configparser import ConfigParser, RawConfigParser
+from configparser import RawConfigParser, NoSectionError
 
 from cetools import *
 
@@ -40,7 +39,7 @@ class AdvConfig(RawConfigParser):
       with open(self.filename, 'wt', encoding='utf-8') as fp: self.write(fp)
     elif self.modified:
       if self.mtime<os.path.getmtime(self.filename):
-        warning('Overwriting external edits in "{}"'.format(self.filename))
+        log.warning('Overwriting external edits in "{}"'.format(self.filename))
       with open(self.filename, 'wt', encoding='utf-8') as fp: self.write(fp)
     elif self.mtime<os.path.getmtime(self.filename):
       with open(self.filename, 'rt', encoding='utf-8') as fp: self.read_file(fp)
@@ -85,7 +84,7 @@ class AdvConfig(RawConfigParser):
 
   def set(self,opt,nval=None,section=None):
     if not section: section=self.currentsection
-    if not section: raise configparser.NoSectionError('No Current Section Set')
+    if not section: raise NoSectionError('No Current Section Set')
     if RawConfigParser.has_option(self, section, opt):
       sval = RawConfigParser.get(self,section,opt)
       if nval == sval: return
@@ -104,12 +103,12 @@ class AdvConfig(RawConfigParser):
 
   def items(self,section=None):
     if not section: section=self.currentsection
-    if not section: raise configparser.NoSectionError('No Current Section Set')
+    if not section: raise NoSectionError('No Current Section Set')
     return dict(RawConfigParser.items(self,section))
 
   def item_defs(self, defs, section=None):
     if not section: section=self.currentsection
-    if not section: raise configparser.NoSectionError('No Current Section Set')
+    if not section: raise NoSectionError('No Current Section Set')
     for opt, nval in defs.items():
       oval = self.get(opt, section = section)
       if oval == nval: continue
@@ -120,13 +119,13 @@ class AdvConfig(RawConfigParser):
 
   def get(self, opt, default=None, section=None):
     if not section: section=self.currentsection
-    if not section: raise configparser.NoSectionError('No Current Section Set')
+    if not section: raise NoSectionError('No Current Section Set')
     if self.hasno(opt, section): return default
     return self.strtoval(RawConfigParser.get(self, section, opt))
 
   def has(self,opt,section=None):
     if not section: section=self.currentsection
-    if not section: raise configparser.NoSectionError('No Current Section Set')
+    if not section: raise NoSectionError('No Current Section Set')
     if not self.has_option(section,opt): return False
     i = RawConfigParser.get(self,section,opt)
     if i == None: return False

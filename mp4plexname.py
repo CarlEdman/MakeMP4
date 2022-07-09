@@ -3,14 +3,12 @@
 prog='mp4plexname'
 version='0.4'
 author='Carl Edman (CarlEdman@gmail.com)'
-desc='Rename TV show extras to Plex perferred names.'
+desc='Rename TV show extras to Plex preferred names.'
 
 import argparse
 import glob
 import logging
 import logging.handlers
-import os
-import os.path
 import re
 
 from cetools import *
@@ -20,15 +18,15 @@ args = None
 log = logging.getLogger()
 
 def plexRename(dir):
-  base = os.path.basename(dir)
-  pat = re.compile(r'^' + re.escape(base) + r'\s+S(?P<season>\d+)(E(?P<episode>\d+(-\d+)?))?(V(?P<volume>\d+))?\s*(?P<name>.*\.(mkv|mp4|avi))$')
+  base = dir.name
+  pat = re.compile(re.escape(base) + r'\s+S(?P<season>\d+)(E(?P<episode>\d+(-E?\d+)?))?(V(?P<volume>\d+))?\s*(?P<name>.*\.(mkv|mp4|avi))')
 
   nr = {}
   nrany = False
-  for fn in os.listdir(dir):
-    file = os.path.join(dir, fn)
-    mat = pat.fullmatch(fn)
-    if not(os.path.isfile(file)) or mat is None: continue
+  for file in dir.iterdir():
+    if not file.is_file(): continue
+    mat = pat.fullmatch(file.name)
+    if mat is None: continue
     nrany = True
     d = mat.groupdict()
     season = int(d['season'])
@@ -39,29 +37,22 @@ def plexRename(dir):
     if season>0:
       pre = f'Season {season:d} '
       if not name.startswith(pre): name = pre + name
-    nr[base + ' S0E{:02d} ' + name] = fn
+    nr[base + ' S0E{:02d} ' + name] = file.name
 
   if not nrany:
      log.warning(f'No appropriate files in {dir}, skipping.')
      return
 
   for (nfn, ep) in zip(sorted(nr.keys()),range(1,len(nr)+1)):
-    ofile = os.path.join(dir, nr[nfn])
-    nfile = os.path.join(dir, nfn.format(ep))
+    ofile = dir / nr[nfn]
+    nfile = dir / nfn.format(ep)
     if ofile==nfile: continue
-    if os.path.exists(nfile):
+    if nfile.exists():
       log.warning(f'{nfile} already exists, skipping.')
+      continue
     log.info(f'mv "{ofile}" "{nfile}"')
     if args.dryrun: continue
-    os.rename(ofile, nfile)
-
-def main():
-  for gd in args.dirs:
-    ig = [d for d in glob.iglob(gd) if os.path.isdir(d)]
-    if len(ig)==0:
-      log.warning(f'No directories matching {gd}, skipping.')
-      continue
-    for d in ig: plexRename(d)
+    ofile.rename(nfile)
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser(fromfile_prefix_chars='@',prog=prog,epilog='Written by: '+author)
@@ -90,4 +81,8 @@ if __name__ == '__main__':
   slogger.setFormatter(logformat)
   log.addHandler(slogger)
 
-  main()
+  ig = [pathlib.Path(d).resolve() for gd in args.dirs for d in glob.iglob(gd) if pathlib.Path(d).is_dir()]
+  if len(ig)==0:
+    log.warning(f'No directories matching {args.dirs}, skipping.')
+  else:
+    for d in ig: plexRename(d)
