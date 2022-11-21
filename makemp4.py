@@ -529,7 +529,8 @@ def prepare_mkv(cfg, mkvfile):
 
   extract = []
   for track in tracks(cfg):
-    file = pathlib.Path(track["file"])
+    file = track["file"]
+    print(type(file), repr(file))
     mkvtrack = track["mkvtrack"]
     if (args.keep_video_in_mkv and track["type"] == "video") or (
       args.keep_audio_in_mkv and track["type"] == "audio"
@@ -548,7 +549,7 @@ def prepare_mkv(cfg, mkvfile):
   for track in tracks(cfg):
     if "t2cfile" not in track or "mkvtrack" not in track:
       continue
-    tc = pathlib.Path(track["t2cfile"])
+    tc = track["t2cfile"]
     if not tc.exists() and track["mkvtrack"]:
       tcs.append(f'{track["mkvtrack"]}:{track["t2cfile"]}')
   if tcs:
@@ -579,7 +580,7 @@ def prepare_mkv(cfg, mkvfile):
   for track in tracks(cfg, "subtitle"):
     if track["extension"] != ".sub":
       continue
-    idxfile = pathlib.Path(track["file"]).with_suffix(".idx")
+    idxfile = track["file"].with_suffix(".idx")
     track["timestamp"] = []
     with open(idxfile, "rt", encoding="utf-8", errors="replace").read() as fp:
       for l in fp:
@@ -612,21 +613,21 @@ def prepare_mkv(cfg, mkvfile):
 
 
 def build_indices(cfg, track):
-  file = pathlib.Path(track["file"])
-  dgifile = pathlib.Path(track["dgifile"])
+  file = track["file"]
+  dgifile = track["dgifile"]
   logfile = file.with_suffix(".log")
 
   if not dgifile or dgifile.exists(): return False
   if dgifile.suffix == ".dgi":
-    do_call(["DGIndexNV", "-i", file, "-o", dgifile, "-h", "-e"], dgifile)
+    do_call(["DGIndexNV", "-i", file, "-o", dgifile.resolve(), "-h", "-e"], dgifile)
   elif dgifile.suffix == ".d2v":
     do_call(
       [
         "dgindex",
         "-i",
-        file,
+        file.resolve(),
         "-o",
-        dgifile.with_suffix(""),
+        dgifile.with_suffix("").resolve(),
         "-fo",
         "0",
         "-ia",
@@ -938,18 +939,22 @@ def build_audio(cfg, track):
 
 
 def build_video(cfg, track):
-  infile = pathlib.Path(track["file"])
+  infile = track["file"]
   dgifile = pathlib.Path(track["dgifile"])
-  outfile = pathlib.Path(track["outfile"])
   fmt2ext = {"h264": ".264", "h265": ".265"}
-  avsfile = track["avsfile"] = pathlib.Path(track["avsfile"]) or infile.with_suffix(".avs")
-  if outfile == None:
+  avsfile = track["avsfile"]
+  if avsfile is None:
+    avsfile = track["avsfile"] = args.outdir / infile.with_suffix(".avs").name
+  else:
+    avsfile = track["avsfile"] = pathlib.Path(avsfile)
+  outfile = track["outfile"]
+  if outfile is None:
     if track["outformat"] not in fmt2ext:
       log.error(f'{infile}: Unrecognized output format: {track["outformat"]}')
       return False
     track["outfile"] = outfile = pathlib.Path(f'{cfg["base"]} T{track["id"]:02d}{fmt2ext[track["outformat"]]}')
-
-
+  else:
+    track["outfile"] = outfile = pathlib.Path(outfile)
   if not readytomake(outfile, infile, dgifile):
     return False
 
@@ -957,11 +962,10 @@ def build_video(cfg, track):
   avs = [
     f"SetMTMode(5,{procs:d})" if procs != 1 else None,
     "SetMemoryMax(1024)",
-    f'DGDecode_mpeg2source("{dgifile.resolve()}", info=3, idct=4, cpu=3)'
-    if dgifile.endswith(".d2v")
-    else None,
-    f'DGSource("{dgifile.resolve()}", deinterlace={1 if track["interlace_type"] in ["VIDEO", "INTERLACE"] else 0:d})\n'
-    if dgifile.endswith(".dgi")
+    f'DGDecode_mpeg2source("{dgifile}", info=3, idct=4, cpu=3)'
+    if dgifile.suffix == ".d2v" else None,
+    f'DGSource("{dgifile}", deinterlace={1 if track["interlace_type"] in ["VIDEO", "INTERLACE"] else 0:d})\n'
+    if dgifile.suffix == ".dgi"
     else None
     #    , 'ColorMatrix(hints = true, interlaced=false)'
     ,
@@ -982,7 +986,7 @@ def build_video(cfg, track):
   if track["interlace_type"] in {"FILM"}:
     track["frame_rate_ratio_out"] = track["frame_rate_ratio"] * 0.8
   #    track['frames']=math.ceil(track['frames']*5.0/4.0))
-  #    avs+=f'tfm().tdecimate(hybrid=1,d2v="{dgifile.resolve()}")\n'
+  #    avs+=f'tfm().tdecimate(hybrid=1,d2v="{dgifile}")\n'
   #    avs+=f'Telecide(post={0 if lp>0.99 else 2:d},guide=0,blend=True)'
   #    avs+=f'Decimate(mode={0 if lp>0.99 else 3:d},cycle=5)'
   #  elif track['interlace_type'] in ['VIDEO', 'INTERLACE']:
@@ -1044,7 +1048,7 @@ def build_video(cfg, track):
       fp.write("\n".join(a for a in avs if a))
     log.debug(f"Created AVS file: {repr(avs)}")
 
-  call = ["avs2pipemod", "-y4mp", track["avsfile"], "|"]
+  call = ["avs2pipemod", "-y4mp", avsfile, "|"]
 
   if track["outformat"] == "h264":
     call += [
@@ -1167,7 +1171,7 @@ def build_mp4(cfg):
   mdur = cfg["duration"]
 
   for track in tracks(cfg):
-    of = pathlib.Path(track["outfile"])
+    of = track["outfile"]
     dur = track["duration"]
     if mdur and dur:
       if abs(mdur - dur) > 0.5 and abs(mdur - dur) * 200 > mdur:
@@ -1217,9 +1221,10 @@ def build_mkv(cfg):
   for track in tracks(cfg):
     outfile = track["outfile"]
     trackid = track["id"]
-    if not outfile:
+    if outfile is None:
       # log.warning(f"Unable to build {base} because {trackid}:outfile not defined")
       return False
+    outfile = pathlib.Path(outfile)
     if not outfile.exists():
       log.warning(
         f"Unable to build {base} because {trackid}:{outfile} does not exist"
@@ -1241,11 +1246,11 @@ def build_mkv(cfg):
   mdur = cfg["duration"]
 
   call = [ 'mkvmerge',
-   '--output', outfile,
-   '--global-tags', 'temp.xml',
-   '--command-line-charset', 'utf-8'
-   '--output-charset', 'utf-8'
-   '=' ]
+#    '--command-line-charset', 'utf-8',
+    '--output-charset', 'utf-8',
+    '--output', outfile,
+    '--global-tags', 'temp.xml',
+   ]
 
   for track in tracks(cfg):
     of = track["outfile"]
@@ -1297,6 +1302,7 @@ def build_mkv(cfg):
   cfg["tool"] = f'{prog} {version} on {time.strftime("%A, %B %d, %Y, at %X")}'
   syncconfig(cfg)
   xml = set_meta_mkvxml(cfg)
+  log.debug(xml)
   xf = pathlib.Path("temp.xml")
   try:
     with open(xf, mode='wt', encoding="utf-8") as tf: tf.write(xml)
@@ -1440,7 +1446,7 @@ if __name__ == "__main__":
   parser.add_argument("--config-format", choices=yaml_exts | json_exts, default="json", help="format for new config files")
   parser.add_argument("--prog", type=pathlib.Path, default=sys.argv[0], help="location of the program")
 
-  inifile = pathlib.Path(sys.argv[0]).with_suffix("ini")
+  inifile = pathlib.Path(sys.argv[0]).with_suffix(".ini")
   if inifile.exists(): sys.argv.insert(1, f"@{inifile}")
 
   args = parser.parse_args()
@@ -1470,5 +1476,7 @@ if __name__ == "__main__":
   progmodtime = args.prog.stat().st_mtime
   while True:
     sleep_state = sleep_change_directories(args.sourcedirs, sleep_state)
+    sleep_inhibit()
     main()
     log.debug("Sleeping.")
+    sleep_uninhibit()

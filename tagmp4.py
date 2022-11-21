@@ -688,12 +688,8 @@ def set_meta_mkvxml(its):
 ''')
   tag = xml.find("Tag")
 
-  def addkeyval(key, val):
-    val = str(val).strip()
-    t = ET.fromstring(f'<Simple><Name>{key}</Name><String>{saxutils.escape(val)}</String></Simple>\n')
-    if (len(val) > 50 and (sval := alphabetize(val)) != val):
-      t[0].append(f'<Simple><Name>SORT_WITH</Name><String>{saxutils.escape(sval)}</String>')
-    tag.append(t)
+  def keyvaltoxml(key, val):
+    return ET.fromstring(f'<Simple><Name>{saxutils.escape(key)}</Name><String>{saxutils.escape(val)}</String></Simple>\n')
 
   comments = its['comment']
   its['comment'] = None
@@ -752,7 +748,10 @@ def set_meta_mkvxml(its):
     its['description'] = d
 
   for key, val in its.items():
-    addkeyval(key, val)
+    val = str(val).strip()
+    tag.append(keyvaltoxml(key, val))
+    if len(val) < 50 and (sval := alphabetize(val)) != val:
+      tag[-1][0].append(keyvaltoxml('SORT_WITH', sval))
 
   return xmlprologue + ET.canonicalize(ET.tostring(xml, encoding='unicode', xml_declaration=True))
 

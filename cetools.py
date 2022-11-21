@@ -74,25 +74,42 @@ def alphabetize(s):
   elif s.startswith("An "): s=s[3:]
   return s
 
-def romanize(s):
-  '''Interpret (loosely) string as roman numeral.'''
+def romanize(inp, strict=False):
+  '''Interpret string as roman numeral.'''
 
-  rom = { "M": 1000, "CM": 900, "D": 500, "CD": 400, "C": 100, "XC": 90,
-          "L": 50, "XL": 40, "X": 10, "IX": 9, "V": 5, "IV": 4, "I": 1 }
-  t = s
-  r = 0
-  for k, v in rom.items():
-    while t.startswith(k):
-      t = t[len(k):]
-      r += v
-  return s if t else r
+  rom = [
+    ("M", 1000, 1000),
+    ("CM", 900, 1),
+    ("D", 500, 1),
+    ("CD", 400, 1),
+    ("C", 100, 3),
+    ("XC", 90, 1),
+    ("L", 50, 1),
+    ("XL", 40, 1),
+    ("X", 10, 3),
+    ("IX", 9, 1),
+    ("V", 5, 1),
+    ("IV", 4, 1),
+    ("I", 1, 3),
+    ]
+  restinp = inp
+  totvalue = 0
+  for symbol, value, maxrep in rom:
+    rep = 0
+    while restinp.startswith(symbol):
+      rep += 1
+      if strict and rep > maxrep: return inp
+      restinp = restinp[len(symbol):]
+      totvalue += value
+    if len(restinp) == 0: return totvalue
+  return inp
 
 def sortkey(s):
   '''A sorting key for strings that alphabetizes and orders numbers correctly.'''
 
   s = alphabetize(s)
   # TODO: Sort Spelled-out numerals correctly?
-  s=re.sub(r'\b[IVXLCDM]+\b',lambda m: str(romanize(m[0])) if m[0]!="I" else s,s)
+  s=re.sub(r'\b[IVXLCDM]+\b',lambda m: str(romanize(m[0])) if m[0]!="I" else m[0],s)
   s=re.sub(r'\d+',lambda m: m[0].zfill(10),s)
   return s.casefold()
 
@@ -169,12 +186,23 @@ def sleep_change_directories(dirs,state=None):
       import win32file, win32event, win32con
       watches = win32con.FILE_NOTIFY_CHANGE_FILE_NAME | win32con.FILE_NOTIFY_CHANGE_ATTRIBUTES | win32con.FILE_NOTIFY_CHANGE_LAST_WRITE
       try:
-        chs = [ win32file.FindFirstChangeNotification(d, 0, watches) for d in dirs ]
+        chs = [ win32file.FindFirstChangeNotification(str(d), 0, watches) for d in dirs ]
         while win32event.WaitForMultipleObjects(chs, 0, 1000) == win32con.WAIT_TIMEOUT: pass
       finally:
         for ch in chs: win32file.FindCloseChangeNotification(ch)
     else:
       time.sleep(10)
+
+def sleep_inhibit():
+  if os.name == 'nt':
+    ES_CONTINUOUS = 0x80000000
+    ES_SYSTEM_REQUIRED = 0x00000001
+    ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED)
+
+def sleep_uninhibit():
+  if os.name == 'nt':
+    ES_CONTINUOUS = 0x80000000
+    ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS)
 
 def dirpath(p):
   p = pathlib.Path(p)
@@ -240,3 +268,4 @@ class defdict(dict):
     m = m or self._modified
     self._modified = False
     return m
+
