@@ -62,6 +62,7 @@ class AdvConfig(RawConfigParser):
     if isinstance(v,int): return str(v)
     if isinstance(v,float): return str(v)
     if isinstance(v,Fraction): return str(v.numerator)+'/'+str(v.denominator)
+    if isinstance(v,pathlib.PurePath): return v.as_posix()
     if isinstance(v,str):
       if v.strip('-0123456789./: ')=='':
         return f'"{v}"'
