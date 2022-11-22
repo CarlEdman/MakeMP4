@@ -49,9 +49,7 @@ if __name__ == "__main__":
 
   args = parser.parse_args()
 
-  log = logging.getLogger()
   log.setLevel(0)
-
   slogger=logging.StreamHandler()
   slogger.setLevel(args.loglevel)
   slogger.setFormatter(logging.Formatter('[%(levelname)s] %(asctime)s: %(message)s'))
