@@ -23,7 +23,7 @@ def addSubs(dir: pathlib.Path):
     integrated = False
     if not subfile.is_file():
       continue
-    if subfile.suffix not in ('.srt'):
+    if subfile.suffix not in ('.srt', '.idx'):
       continue
 
     vidfile = (subfile.parent / subfile.stem).with_suffix('.mkv')
@@ -46,15 +46,21 @@ def addSubs(dir: pathlib.Path):
       log.info(f'adding "{subfile}" to "{vidfile}"')
       if args.dryrun:
         continue
-      #integrated = True
+      integrated = True
 
-    if integrated:
-      log.info(f'rm "{subfile}"')
-      if args.dryrun:
-        continue
-      subfile.unlink()
-    else:
+    if not integrated:
       log.info(f'No video file found for "{subfile}"')
+      continue
+
+    if subfile.suffix in ('.idx'):
+      subfiles = [subfile, subfile.with_suffix('.sub')]
+    else:
+      subfiles = [subfile]
+    
+    log.info('rm "' + '" "'.join(str(subfiles)) + '"')
+    if not args.dryrun:
+      for s in subfiles:
+        s.unlink()
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser(fromfile_prefix_chars='@',prog=prog,epilog='Written by: '+author)
