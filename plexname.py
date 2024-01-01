@@ -1,17 +1,18 @@
 #!/usr/bin/python
 
-prog='mp4plexname'
-version='0.4'
-author='Carl Edman (CarlEdman@gmail.com)'
-desc='Rename TV show extras to Plex preferred names.'
-
 import argparse
 import glob
 import logging
 import logging.handlers
+import pathlib
 import re
 
-from cetools import *
+from .cetools import *  # noqa: F403
+
+prog='plexname'
+version='0.4'
+author='Carl Edman (CarlEdman@gmail.com)'
+desc='Rename TV show extras to Plex preferred names.'
 
 parser = None
 args = None
@@ -24,19 +25,23 @@ def plexRename(dir):
   nr = {}
   nrany = False
   for file in dir.iterdir():
-    if not file.is_file(): continue
+    if not file.is_file():
+      continue
     mat = pat.fullmatch(file.name)
-    if mat is None: continue
+    if mat is None:
+      continue
     nrany = True
     d = mat.groupdict()
     season = int(d['season'])
     episode = d['episode']
     volume = d['volume']
     name = d['name']
-    if season>0 and (episode or volume): continue
+    if season>0 and (episode or volume):
+      continue
     if season>0:
       pre = f'Season {season:d} '
-      if not name.startswith(pre): name = pre + name
+      if not name.startswith(pre):
+        name = pre + name
     nr[base + ' S0E{:02d} ' + name] = file.name
 
   if not nrany:
@@ -46,12 +51,14 @@ def plexRename(dir):
   for (nfn, ep) in zip(sorted(nr.keys()),range(1,len(nr)+1)):
     ofile = dir / nr[nfn]
     nfile = dir / nfn.format(ep)
-    if ofile==nfile: continue
+    if ofile==nfile:
+      continue
     if nfile.exists():
       log.warning(f'{nfile} already exists, skipping.')
       continue
     log.info(f'mv "{ofile}" "{nfile}"')
-    if args.dryrun: continue
+    if args.dryrun:
+      continue
     ofile.rename(nfile)
 
 if __name__ == '__main__':
@@ -65,7 +72,8 @@ if __name__ == '__main__':
   parser.set_defaults(loglevel=logging.WARN)
 
   args = parser.parse_args()
-  if args.dryrun and args.loglevel > logging.INFO: args.loglevel = logging.INFO
+  if args.dryrun and args.loglevel > logging.INFO:
+    args.loglevel = logging.INFO
 
   log.setLevel(0)
   logformat = logging.Formatter('%(asctime)s [%(levelname)s]: %(message)s')
@@ -85,4 +93,5 @@ if __name__ == '__main__':
   if len(ig)==0:
     log.warning(f'No directories matching {args.dirs}, skipping.')
   else:
-    for d in ig: plexRename(d)
+    for d in ig:
+      plexRename(d)

@@ -7,7 +7,7 @@ import logging.handlers
 import subprocess
 import pathlib
 
-from cetools import *  # noqa: F403
+from cetools import basestem
 
 prog='addsub'
 version='0.1'
@@ -26,7 +26,7 @@ def addSubs(dir: pathlib.Path):
     if subfile.suffix not in ('.srt', '.idx'):
       continue
 
-    vidfile = (subfile.parent / subfile.stem).with_suffix('.mkv')
+    vidfile = basestem(subfile).with_suffix('.mkv')
     if vidfile.is_file():
       log.info(f'adding "{subfile}" to "{vidfile}"')
       if args.dryrun:
@@ -41,7 +41,7 @@ def addSubs(dir: pathlib.Path):
       else:
         integrated = True
 
-    vidfile = (subfile.parent / subfile.stem).with_suffix('.mp4')
+    vidfile = basestem(subfile).with_suffix('.mp4')
     if vidfile.is_file():
       log.info(f'adding "{subfile}" to "{vidfile}"')
       if args.dryrun:

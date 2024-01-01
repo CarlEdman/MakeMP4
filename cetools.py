@@ -10,6 +10,7 @@ import pathlib
 import re
 import time
 import yaml
+import pathlib
 
 from fractions import Fraction
 
@@ -268,4 +269,11 @@ class defdict(dict):
     m = m or self._modified
     self._modified = False
     return m
+
+def basestem(p : pathlib.Path) -> pathlib.Path:
+  while True:
+    o = p.with_suffix('')
+    if o == p:
+      return o
+    p = o
 
