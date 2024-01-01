@@ -12,7 +12,7 @@ import time
 
 from fractions import Fraction
 
-iso6392 = {
+lang2iso6392 = {
   "Abkhazian":"abk",
   "Afar":"aar",
   "Afrikaans":"afr",
@@ -199,6 +199,8 @@ iso6392 = {
   "Zhuang":"zha",
   "Zulu":"zul",
   }
+
+iso6392 = set(lang2iso6392.values())
 
 if os.name == 'nt':
   import ctypes

@@ -7,7 +7,7 @@ import logging.handlers
 import subprocess
 import pathlib
 
-from cetools import basestem, iso6392
+from cetools import basestem, lang2iso6392, iso6392
 
 prog='addsub'
 version='0.1'
@@ -34,18 +34,23 @@ def addSubs(dir: pathlib.Path):
       tempfile = vidfile.with_stem(vidfile.stem + "-temp")
       try:
         cl = ["mkvmerge", "-o", str(tempfile), str(vidfile), str(subfile)]
-        if (suf := subfile.suffixes[0]) in iso6392:
-          lang = iso6392[suf]
-        elif (suf := suf.lstrip('.')) in iso6392:
-          lang = iso6392[suf]
-        elif (suf := suf.lstrip('0123456789')) in iso6392:
-          lang = iso6392[suf]
-        elif (suf := suf.lstrip('_')) in iso6392:
-          lang = iso6392[suf]
+        if (suf := subfile.suffixes[0]) in lang2iso6392:
+          lang = lang2iso6392[suf]
+        elif (suf := suf.lstrip('.')) in lang2iso6392:
+          lang = lang2iso6392[suf]
+        elif (suf := suf.lstrip('0123456789')) in lang2iso6392:
+          lang = lang2iso6392[suf]
+        elif (suf := suf.lstrip('_')) in lang2iso6392:
+          lang = lang2iso6392[suf]
+        elif (suf := suf.lstrip('_')) in lang2iso6392:
+          lang = lang2iso6392[suf]
+        elif suf in iso6392:
+          lang = suf
         else:
           lang = None
         if lang:
-          cl += ["--language", f"0:{lang}", str(subfile)]
+          cl += ["--language", f"0:{lang}"]
+        cl.append(str(subfile))
         log.info(" ".join(f'"{a}"' if ' ' in a else a for a in cl))
         if args.dryrun:
           return

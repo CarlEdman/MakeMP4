@@ -7,7 +7,7 @@ import logging.handlers
 import pathlib
 import subprocess
 
-from cetools import basestem, iso6392
+from cetools import basestem, lang2iso6392, iso6392
 
 prog='mp4tomkv'
 version='0.1'
@@ -37,27 +37,33 @@ def mp4tomkv(mp4file: pathlib.Path):
     subfiles.append(subfile)
   cl = ["mkvmerge", "-o", str(mkvfile), str(mp4file)]
   for s in subfiles:
-    if (suf := s.suffixes[0]) in iso6392:
-      lang = iso6392[suf]
-    elif (suf := suf.lstrip('.')) in iso6392:
-      lang = iso6392[suf]
-    elif (suf := suf.lstrip('0123456789')) in iso6392:
-      lang = iso6392[suf]
-    elif (suf := suf.lstrip('_')) in iso6392:
-      lang = iso6392[suf]
+    if (suf := s.suffixes[0]) in lang2iso6392:
+      lang = lang2iso6392[suf]
+    elif (suf := suf.lstrip('.')) in lang2iso6392:
+      lang = lang2iso6392[suf]
+    elif (suf := suf.lstrip('0123456789')) in lang2iso6392:
+      lang = lang2iso6392[suf]
+    elif (suf := suf.lstrip('_')) in lang2iso6392:
+      lang = lang2iso6392[suf]
+    elif (suf := suf.lstrip('_')) in lang2iso6392:
+      lang = lang2iso6392[suf]
+    elif suf in iso6392:
+      lang = suf
     else:
       lang = None
     if lang:
-      cl += ["--language", f"0:{lang}", str(s)]
+      cl += ["--language", f"0:{lang}"]
+    cl.append(str(s))
   log.info(" ".join(f'"{a}"' if ' ' in a else a for a in cl))
-  if args.dryrun:
-    return
-  subprocess.run(cl, check=True, capture_output=True)
+  if not args.dryrun:
+    subprocess.run(cl, check=True, capture_output=True)
   log.info(f'rm "{mp4file}"')
-  mp4file.unlink()
+  if not args.dryrun:
+    mp4file.unlink()
   for s in subfiles:
     log.info(f'rm "{s}"')
-    s.unlink()
+    if not args.dryrun:
+      s.unlink()
   
 
 if __name__ == '__main__':
