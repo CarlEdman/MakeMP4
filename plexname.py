@@ -7,8 +7,6 @@ import logging.handlers
 import pathlib
 import re
 
-from .cetools import *  # noqa: F403
-
 prog='plexname'
 version='0.4'
 author='Carl Edman (CarlEdman@gmail.com)'
@@ -18,7 +16,7 @@ parser = None
 args = None
 log = logging.getLogger()
 
-def plexRename(dir):
+def plexRename(dir : pathlib.Path) -> ():
   base = dir.name
   pat = re.compile(re.escape(base) + r'\s+S(?P<season>\d+)(E(?P<episode>\d+(-E?\d+)?))?(V(?P<volume>\d+))?\s*(?P<name>.*\.(mkv|mp4|avi))')
 
@@ -42,7 +40,7 @@ def plexRename(dir):
       pre = f'Season {season:d} '
       if not name.startswith(pre):
         name = pre + name
-    nr[base + ' S0E{:02d} ' + name] = file.name
+    nr[base + ' S00E{:02d} ' + name] = file.name
 
   if not nrany:
      log.warning(f'No appropriate files in {dir}, skipping.')
@@ -92,6 +90,7 @@ if __name__ == '__main__':
   ig = [pathlib.Path(d).resolve() for gd in args.dirs for d in glob.iglob(gd) if pathlib.Path(d).is_dir()]
   if len(ig)==0:
     log.warning(f'No directories matching {args.dirs}, skipping.')
-  else:
-    for d in ig:
-      plexRename(d)
+    exit()
+
+  for d in ig:
+    plexRename(d)

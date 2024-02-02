@@ -372,7 +372,7 @@ def sleep_change_directories(dirs,state=None):
     if nstate != state: return nstate
 
     if os.name == 'nt':
-      import win32file, win32event, win32con
+      import win32file, win32event, win32con  # noqa: E401
       watches = win32con.FILE_NOTIFY_CHANGE_FILE_NAME | win32con.FILE_NOTIFY_CHANGE_ATTRIBUTES | win32con.FILE_NOTIFY_CHANGE_LAST_WRITE
       try:
         chs = [ win32file.FindFirstChangeNotification(str(d), 0, watches) for d in dirs ]
@@ -465,3 +465,5 @@ def basestem(p : pathlib.Path) -> pathlib.Path:
       return o
     p = o
 
+def files2quotedstring(s : list) -> str:
+   return " ".join(f'"{t}"' if ' ' in t else t for t in [str(a) for a in s])

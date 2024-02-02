@@ -6,6 +6,7 @@ import logging
 import logging.handlers
 import subprocess
 import pathlib
+from time import sleep
 
 from cetools import basestem, lang2iso6392, iso6392
 
@@ -116,3 +117,4 @@ if __name__ == '__main__':
   else:
     for d in ig: 
       addSubs(d)
+  
