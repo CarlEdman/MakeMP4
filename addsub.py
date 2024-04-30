@@ -6,7 +6,6 @@ import logging
 import logging.handlers
 import subprocess
 import pathlib
-from time import sleep
 
 from cetools import basestem, lang2iso6392, iso6392
 

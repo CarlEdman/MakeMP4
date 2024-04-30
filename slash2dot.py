@@ -34,10 +34,13 @@ def slash2dot(p: pathlib.Path):
   log.info(f'mv "{r}" "{s}"')
   if not args.dryrun:
     r.rename(s)
-  if args.empty and all(False for _ in r.parent.iterdir()):
-    log.info(f'rmdir {r.parent}')
-    if not args.dryrun:
-      r.parent.rmdir()
+  if args.empty:
+    t = r.parent
+    while all(False for _ in t.iterdir()):
+      log.info(f'rmdir {t}')
+      if not args.dryrun:
+        t.rmdir()
+      t = t.parent
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser(fromfile_prefix_chars='@',prog=prog,epilog='Written by: '+author)
