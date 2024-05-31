@@ -7,7 +7,7 @@ import logging.handlers
 import pathlib
 import subprocess
 
-from cetools import basestem, lang2iso6392, iso6392, files2quotedstring
+from cetools import basestem, lang2iso6392, iso6392, files2quotedstring, sortkey
 
 prog='tomkv'
 version='0.1'
@@ -19,64 +19,75 @@ args = None
 log = logging.getLogger()
 
 def tomkv(vidfile: pathlib.Path):
-  if vidfile.suffix not in ('.mp4', '.mkv', '.avi', '.mpg', '.m4v', '.mp3') or not vidfile.is_file():
-    log.warning(f'"{vidfile}" is not recognized video file, skipping')
-    return
-  mkvfile = vidfile.with_suffix('.mkv')
-  if vidfile != mkvfile and mkvfile.exists():
-    log.warning(f'"{mkvfile}" exists')
-    return
-  subfiles = []
-  for subfile in vidfile.parent.iterdir():
-    if not subfile.is_file():
-      continue
-    if subfile.suffix not in ('.srt', '.idx', '.ass'):
-      continue
-    if basestem(subfile) != basestem(vidfile):
-      continue
-    subfiles.append(subfile)
-  
-  tempfile = mkvfile.with_stem(mkvfile.stem + "-temp") if vidfile == mkvfile else None
-  cl = ["mkvmerge", "-o", str(tempfile) if tempfile else str(mkvfile), str(vidfile)]
-  for s in subfiles:
-    if (suf := s.suffixes[0]) in lang2iso6392:
-      lang = lang2iso6392[suf]
-    elif (suf := suf.lstrip('.')) in lang2iso6392:
-      lang = lang2iso6392[suf]
-    elif (suf := suf.lstrip('0123456789')) in lang2iso6392:
-      lang = lang2iso6392[suf]
-    elif (suf := suf.lstrip('_')) in lang2iso6392:
-      lang = lang2iso6392[suf]
-    elif (suf := suf.lstrip('_')) in lang2iso6392:
-      lang = lang2iso6392[suf]
-    elif suf in iso6392:
-      lang = suf
-    else:
-      lang = None
-    if lang:
-      cl += ["--language", f"0:{lang}"]
-    cl.append(str(s))
-  log.info(files2quotedstring(cl))
-  if not args.dryrun:
-    try:
-      subprocess.run(cl, check=True, capture_output=True)
-#      log.info(f"{ret}")
-    except subprocess.CalledProcessError as e:
-      log.error(f"{e} Moving on ...")
-      return
-  if tempfile:
-    log.info(f'mv {files2quotedstring([tempfile, vidfile])}')
-    if not args.dryrun:
-      tempfile.replace(vidfile)
-  else:
-    log.info(f'rm {files2quotedstring([vidfile])}')
-    if not args.dryrun:
-      vidfile.unlink()
-  if subfiles:
-    log.info(f'rm {files2quotedstring(subfiles)}')
+    if (
+        vidfile.suffix not in (".mp4", ".mkv", ".avi", ".mpg", ".m4v", ".mp3")
+        or not vidfile.is_file()
+    ):
+        log.warning(f'"{vidfile}" is not recognized video file, skipping')
+        return
+    mkvfile = vidfile.with_suffix(".mkv")
+    if vidfile != mkvfile and mkvfile.exists():
+        log.warning(f'"{mkvfile}" exists')
+        return
+    subfiles = []
+    for subfile in vidfile.parent.iterdir():
+        if not subfile.is_file():
+            continue
+        if subfile.suffix not in (".srt", ".idx", ".ass"):
+            continue
+        if basestem(subfile) != basestem(vidfile):
+            continue
+        subfiles.append(subfile)
+    subfiles.sort(key=sortkey)
+
+    tempfile = mkvfile.with_stem(mkvfile.stem + "-temp") if vidfile == mkvfile else None
+    cl = ["mkvmerge", "-o", str(tempfile) if tempfile else str(mkvfile), str(vidfile)]
     for s in subfiles:
-      if not args.dryrun:
-        s.unlink()
+        if (suf := s.suffixes[0]) in lang2iso6392:
+            lang = lang2iso6392[suf]
+        elif (suf := suf.lstrip(".")) in lang2iso6392:
+            lang = lang2iso6392[suf]
+        elif (suf := suf.lstrip("0123456789")) in lang2iso6392:
+            lang = lang2iso6392[suf]
+        elif (suf := suf.lstrip("_")) in lang2iso6392:
+            lang = lang2iso6392[suf]
+        elif (suf := suf.lstrip("_")) in lang2iso6392:
+            lang = lang2iso6392[suf]
+        elif suf in iso6392:
+            lang = suf
+        else:
+            lang = None
+        if lang:
+            cl += ["--language", f"0:{lang}"]
+        cl.append(str(s))
+    log.info(files2quotedstring(cl))
+    if not args.dryrun:
+        try:
+            subprocess.run(cl, check=True, capture_output=True)
+        #      log.info(f"{ret}")
+        except KeyboardInterrupt as e:
+            log.error(f"{e} Interrupted ...")
+            if tempfile:
+                tempfile.unlink(missing_ok=True)
+            elif mkvfile:
+                mkvfile.unlink(missing_ok=True)
+            exit()
+        except subprocess.CalledProcessError as e:
+            log.error(f"{e} Moving on ...")
+            return
+    if tempfile:
+        log.info(f"mv {files2quotedstring([tempfile, vidfile])}")
+        if not args.dryrun:
+            tempfile.replace(vidfile)
+    else:
+        log.info(f"rm {files2quotedstring([vidfile])}")
+        if not args.dryrun:
+            vidfile.unlink()
+    if subfiles:
+        log.info(f"rm {files2quotedstring(subfiles)}")
+        for s in subfiles:
+            if not args.dryrun:
+                s.unlink()
   
 
 if __name__ == '__main__':
