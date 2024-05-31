@@ -16,34 +16,37 @@ args = None
 log = logging.getLogger()
 
 def alphabetify(p: pathlib.Path):
-  if not p.exists():
-    log.warning(f'"{p}" does not exist')
-    return
-  # if len(p.stem) < 1:
-  #   log.warning(f'"{p}" is not at least one characters long')
-  #   return
-  d = p.with_name(p.stem[0])
-  if d.is_dir():
-    ...
-  elif d.exists():
-    log.error(f'"{d}" exists and is not a directory.')
-    return
-  else:
+    if not p.exists():
+        log.warning(f'"{p}" does not exist')
+        return
+    if len(p.stem) <= 1:
+        log.warning(f'"{p}" is not more than one character long, skipping')
+        return
+    elif p.stem[0].isnumeric():
+        d = p.with_name('#')
+    else:
+        d = p.with_name(p.stem[0].upper())
+    if d.is_dir():
+        ...
+    elif d.exists():
+        log.error(f'"{d}" exists and is not a directory.')
+        return
+    else:
+        try:
+            log.info(f"mkdir {d}")
+            if not args.dryrun:
+                d.mkdir(mode=0o755)
+        except Exception as e:
+            log.error(f'Unable to create directory "{d}": {e}')
+            return
+    n = d / p.name
     try:
-      log.info(f"mkdir {d}")
-      if not args.dryrun:
-        d.mkdir(mode=0o755)
+        log.info(f"mv {p} {n}")
+        if not args.dryrun:
+            p.rename(n)
     except Exception as e:
-      log.error(f'Unable to create directory "{d}": {e}')
-      return
-  n = d / p.name
-  try:
-    log.info(f"mv {p} {n}")
-    if not args.dryrun:
-      p.rename(n)
-  except Exception as e:
-    log.error(f'Unable to move {p} to {n}: {e}')
-    return
+        log.error(f"Unable to move {p} to {n}: {e}")
+        return
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser(fromfile_prefix_chars='@',prog=prog,epilog='Written by: '+author)
