@@ -200,6 +200,7 @@ lang2iso6392 = {
   "Zulu":"zul",
   }
 
+iso6392tolang = {v: k for k, v in lang2iso6392.items()}
 iso6392 = set(lang2iso6392.values())
 
 if os.name == 'nt':
