@@ -11,7 +11,7 @@ from cetools import (
     basestem,
     lang2iso6392,
     iso6392,
-    iso6392tolang,
+#    iso6392tolang,
     files2quotedstring,
     sortkey,
 )
