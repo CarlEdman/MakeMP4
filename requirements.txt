@@ -4,3 +4,4 @@ pywin32
 mutagen
 enzyme
 sanitize_filename
+plexapi

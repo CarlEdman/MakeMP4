@@ -12,6 +12,7 @@ from cetools import (
     lang2iso6392,
     iso6392,
 #    iso6392tolang,
+    iso6391tolang,
     files2quotedstring,
     sortkey,
 )
@@ -54,6 +55,8 @@ def tomkv(vidfile: pathlib.Path):
             lang = lang2iso6392[suf]
         elif (suf := suf.lstrip(".")) in lang2iso6392:
             lang = lang2iso6392[suf]
+        elif suf in iso6391tolang:
+            lang = suf
         elif (suf := suf.lstrip("0123456789")) in lang2iso6392:
             lang = lang2iso6392[suf]
         elif (suf := suf.lstrip("_")) in lang2iso6392:
