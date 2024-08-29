@@ -1,5 +1,4 @@
 #!/usr/bin/python
-
 import argparse
 import glob
 import logging
@@ -18,13 +17,21 @@ from cetools import (
 )
 
 prog='tomkv'
-version='0.1'
+version='0.2'
 author='Carl Edman (CarlEdman@gmail.com)'
 desc='Convert video files to mkv files (incorporating separate subtitles).'
 
 parser = None
 args = None
 log = logging.getLogger()
+
+subexts = { 
+    ".srt",
+    ".idx",
+    ".ass",
+    ".sub",
+    ".sup",
+    }
 
 def tomkv(vidfile: pathlib.Path):
     if (
@@ -41,7 +48,7 @@ def tomkv(vidfile: pathlib.Path):
     for subfile in vidfile.parent.iterdir():
         if not subfile.is_file():
             continue
-        if subfile.suffix not in (".srt", ".idx", ".ass"):
+        if subfile.suffix not in subexts:
             continue
         if basestem(subfile) != basestem(vidfile):
             continue
