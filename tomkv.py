@@ -25,6 +25,15 @@ parser = None
 args = None
 log = logging.getLogger()
 
+videxts = { 
+    ".mp4",
+    ".mkv",
+    ".avi",
+    ".mpg",
+    ".m4v",
+    ".mp3",
+    }
+
 subexts = { 
     ".srt",
     ".idx",
@@ -34,10 +43,7 @@ subexts = {
     }
 
 def tomkv(vidfile: pathlib.Path):
-    if (
-        vidfile.suffix not in (".mp4", ".mkv", ".avi", ".mpg", ".m4v", ".mp3")
-        or not vidfile.is_file()
-    ):
+    if vidfile.suffix not in videxts or not vidfile.is_file():
         log.warning(f'"{vidfile}" is not recognized video file, skipping')
         return
     mkvfile = vidfile.with_suffix(".mkv")
@@ -82,17 +88,16 @@ def tomkv(vidfile: pathlib.Path):
     log.info(files2quotedstring(cl))
     if not args.dryrun:
         try:
-            subprocess.run(cl, check=True, capture_output=True)
-        #      log.info(f"{ret}")
+            sp = subprocess.run(cl, check=True, capture_output=True, text=True)
         except KeyboardInterrupt as e:
             log.error(f"{e} Interrupted ...")
             if tempfile:
                 tempfile.unlink(missing_ok=True)
             elif mkvfile:
                 mkvfile.unlink(missing_ok=True)
-            exit()
+            log.error(f"{e} {sp}\nSkipping ...")
         except subprocess.CalledProcessError as e:
-            log.error(f"{e} Moving on ...")
+            log.error(f"{e} {sp}\nMoving on ...")
             return
     if args.nodelete:
         pass
