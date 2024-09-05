@@ -91,8 +91,7 @@ def tomkv(vidfile: pathlib.Path):
             sp = subprocess.run(cl, 
                 check=True,
                 capture_output=True, 
-                text=True, 
-                stderr=subprocess.STDOUT)
+                text=True)
         except KeyboardInterrupt as e:
             log.error(f"{e} Interrupted ...")
             if tempfile:
