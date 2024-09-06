@@ -1,21 +1,17 @@
 #!/usr/bin/python
+import argparse
+import glob
+import logging
+import os
+import os.path
+import subprocess
+
+from cetools import *  # noqa: F403
 
 prog='MakeM4B'
 version='0.3'
 author='Carl Edman (CarlEdman@gmail.com)'
 desc='Convert audio files to m4b audiobook, creating chapters as necessary.'
-
-import argparse
-import glob
-import logging
-import math
-import os
-import os.path
-import re
-import subprocess
-import sys
-
-from cetools import *
 
 parser = None
 args = None
