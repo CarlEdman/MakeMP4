@@ -17,7 +17,7 @@ parser = None
 args = None
 log = logging.getLogger()
 
-pat_epis = re.compile(r"\bS(?P<season>\d+)E(?P<episode>\d+)\b")
+pat_epis = re.compile(r"\bS(?P<season>\d+)E(?P<episode>\d+)")
 pat_spec = re.compile(r"\bSP(?P<episode>\d+)\b")
 
 def serialize(p: pathlib.Path):
@@ -29,9 +29,15 @@ def serialize(p: pathlib.Path):
         return
 
     if mat := re.search(pat_epis, p.stem):
-        d = f"Season {mat.group('season')}"
+        if int(mat.group('season'))==0:
+          d = "Specials"
+          n = re.sub(r'\bS00E', "SP", p.name, count=1)
+        else:
+          d = f"Season {mat.group('season')}"
+          n = p.name
     elif re.search(pat_spec, p.stem):
         d = "Specials"
+        n = p.name
     else:
         log.warning(f'"{p}" not serializable, skipping')
         return
@@ -47,7 +53,7 @@ def serialize(p: pathlib.Path):
         log.warning(f'"{td}" exists and is not a directory, skipping {p}')
         return
 
-    t = td / p.name
+    t = td / n
     if t.exists():
         log.warning(f'"{t}" exists, skipping {p}')
         return

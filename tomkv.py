@@ -88,20 +88,19 @@ def tomkv(vidfile: pathlib.Path):
     log.info(files2quotedstring(cl))
     if not args.dryrun:
         try:
-            sp = subprocess.run(cl, 
+            subprocess.run(cl, 
                 check=True,
                 capture_output=True, 
-                text=True, 
-                stderr=subprocess.STDOUT)
+                text=True)
         except KeyboardInterrupt as e:
             log.error(f"{e} Interrupted ...")
             if tempfile:
                 tempfile.unlink(missing_ok=True)
             elif mkvfile:
                 mkvfile.unlink(missing_ok=True)
-            log.error(f"{sp}\n{e}\nSkipping ...")
+            log.error(f"{e}\nSkipping ...")
         except subprocess.CalledProcessError as e:
-            log.error(f"{sp}\n{e}\nMoving on ...")
+            log.error(f"{e}\nMoving on ...")
             return
     if args.nodelete:
         pass
