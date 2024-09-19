@@ -109,15 +109,17 @@ if __name__ == "__main__":
     const=logging.ERROR,
     help="only print error level (or higher) log messages.",
   )
-  parser.add_argument("--log", dest="logfile", action="store")
+  parser.add_argument(
+    "--log", dest="logfile", action="store", help="location of alternate log file"
+  )
   parser.add_argument(
     "paths", nargs="+", help="paths to be operated on; may include wildcards"
   )
   parser.set_defaults(loglevel=logging.WARN)
 
   args = parser.parse_args()
-  # if args.dryrun and args.loglevel > logging.INFO:
-  #   args.loglevel = logging.INFO
+  if args.dryrun and args.loglevel > logging.INFO:
+    args.loglevel = logging.INFO
 
   log.setLevel(0)
   logformat = logging.Formatter("%(asctime)s [%(levelname)s]: %(message)s")

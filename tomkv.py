@@ -14,6 +14,7 @@ from cetools import (
   iso6391tolang,
   files2quotedstring,
   sortkey,
+  to_title_case,
 )
 
 prog = "tomkv"
@@ -48,6 +49,8 @@ def tomkv(vidfile: pathlib.Path):
     log.warning(f'"{vidfile}" is not recognized video file, skipping')
     return
   mkvfile = vidfile.with_suffix(".mkv")
+  if args.titlecase:
+    mkvfile = mkvfile.with_stem(to_title_case(mkvfile.stem))
   if vidfile != mkvfile and mkvfile.exists():
     log.warning(f'"{mkvfile}" exists')
     return
@@ -109,9 +112,9 @@ def tomkv(vidfile: pathlib.Path):
   if args.nodelete:
     pass
   elif tempfile:
-    log.info(f"mv {files2quotedstring([tempfile, vidfile])}")
+    log.info(f"mv {files2quotedstring([tempfile, mkvfile])}")
     if not args.dryrun:
-      tempfile.replace(vidfile)
+      tempfile.replace(mkvfile)
   else:
     log.info(f"rm {files2quotedstring([vidfile])}")
     if not args.dryrun:
@@ -129,27 +132,50 @@ if __name__ == "__main__":
   )
   parser.add_argument("--version", action="version", version="%(prog)s " + version)
   parser.add_argument(
+    "--verbose",
+    dest="loglevel",
+    action="store_const",
+    const=logging.INFO,
+    help="print informational (or higher) log messages.",
+  )
+  parser.add_argument(
+    "--debug",
+    dest="loglevel",
+    action="store_const",
+    const=logging.DEBUG,
+    help="print debugging (or higher) log messages.",
+  )
+  parser.add_argument(
+    "--taciturn",
+    dest="loglevel",
+    action="store_const",
+    const=logging.ERROR,
+    help="only print error level (or higher) log messages.",
+  )
+  parser.add_argument(
+    "--log", dest="logfile", action="store", help="location of alternate log file."
+  )
+  parser.add_argument(
     "--dryrun",
     dest="dryrun",
     action="store_true",
     help="do not perform operations, but only print them.",
   )
   parser.add_argument(
-    "--nodelete",
+    "--no-delete",
     dest="nodelete",
     action="store_true",
-    help="do not delete source files after conversion to mkv.",
+    help="do not delete source files after conversion to MKV.",
   )
   parser.add_argument(
-    "paths", nargs="+", help="paths to be operated on; may include wildcards"
+    "--title-case",
+    dest="titlecase",
+    action="store_true",
+    help="rename files to proper title case.",
   )
   parser.add_argument(
-    "-v", "--verbose", dest="loglevel", action="store_const", const=logging.INFO
+    "paths", nargs="+", help="paths to be operated on; may include wildcards."
   )
-  parser.add_argument(
-    "-d", "--debug", dest="loglevel", action="store_const", const=logging.DEBUG
-  )
-  parser.add_argument("-l", "--log", dest="logfile", action="store")
   parser.set_defaults(loglevel=logging.WARN)
 
   args = parser.parse_args()
