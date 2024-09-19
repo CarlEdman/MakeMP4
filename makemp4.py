@@ -75,6 +75,7 @@ iso6392BtoT = {
 json_exts = set(["json", "cfg"])
 yaml_exts = set(["yaml", "yml"])
 
+
 def cfgload(fn):
   with open(fn, "r", encoding="utf-8") as f:
     if fn.suffix[1:] in yaml_exts:
@@ -90,7 +91,9 @@ def cfgdump(cfg, fn):
     if fn.suffix[1:] in yaml_exts:
       yaml.dump(cfg, f, indent=2, allow_unicode=True, encoding="utf-8")
     elif fn.suffix[1:] in json_exts:
-      json.dump(cfg, f, ensure_ascii=False, indent=2, sort_keys=True, cls=DefDictEncoder)
+      json.dump(
+        cfg, f, ensure_ascii=False, indent=2, sort_keys=True, cls=DefDictEncoder
+      )
     else:
       log.error(f"{fn} is not a config file, skipping.")
 
@@ -98,6 +101,7 @@ def cfgdump(cfg, fn):
 def syncconfig(cfg):
   if cfg.modclear():
     cfgdump(cfg, cfg["cfgname"])
+
 
 def serveconfig(fn):
   try:
@@ -113,9 +117,10 @@ def serveconfig(fn):
 
 
 def configs(path=None):
-  if path is None: path = args.outdir
+  if path is None:
+    path = args.outdir
   for e in json_exts | yaml_exts:
-    for fn in path.glob(f'*.{e}'):
+    for fn in path.glob(f"*.{e}"):
       yield from serveconfig(fn)
 
 
@@ -152,16 +157,23 @@ def tracks(cfg, typ=None):
 
 def readytomake(file, *comps):
   for f in comps:
-    if not f.exists(): return False
-    if not f.is_file(): return False
-    if f.stat().st_size == 0: return False
+    if not f.exists():
+      return False
+    if not f.is_file():
+      return False
+    if f.stat().st_size == 0:
+      return False
 
     fd = os.open(f, os.O_RDONLY | os.O_EXCL)
-    if fd < 0: return False
+    if fd < 0:
+      return False
     os.close(fd)
-  if file is None: return True
-  if not file.exists(): return True
-  if file.stat().st_size == 0: return False
+  if file is None:
+    return True
+  if not file.exists():
+    return True
+  if file.stat().st_size == 0:
+    return False
   #  fd=os.open(file,os.O_WRONLY|os.O_EXCL)
   #  if fd<0: return False
   #  os.close(fd)
@@ -176,8 +188,10 @@ def work_lock_delete():
   for l in args.outdir.glob("*.working"):
     log.debug(f"Deleting worklock {l} and associated file.")
     l.unlink()
-    try: l.with_suffix("").unlink()
-    except FileNotFoundError: pass
+    try:
+      l.with_suffix("").unlink()
+    except FileNotFoundError:
+      pass
 
 
 def do_call(cargs, outfile=None, infile=None):
@@ -197,12 +211,13 @@ def do_call(cargs, outfile=None, infile=None):
   cstr = " | ".join([subprocess.list2cmdline(c) for c in cs])
   log.debug("Executing: " + cstr)
 
-
   lockfile = None
   if outfile:
     lockfile = outfile.with_suffix(f"{outfile.suffix}.working")
-    if lockfile.exists(): log.warning(f"Lockfile {lockfile} already exists.")
-    with open(lockfile, "w") as f: f.truncate(0)
+    if lockfile.exists():
+      log.warning(f"Lockfile {lockfile} already exists.")
+    with open(lockfile, "w") as f:
+      f.truncate(0)
 
   ps = []
   for c in cs:
@@ -238,8 +253,10 @@ def do_call(cargs, outfile=None, infile=None):
         open(outfile, "w").truncate(0)
 
   if lockfile is not None:
-    try: lockfile.unlink()
-    except FileNotFoundError: pass
+    try:
+      lockfile.unlink()
+    except FileNotFoundError:
+      pass
 
   return outstr + errstr
 
@@ -251,9 +268,12 @@ def make_srt(cfg, track):
   if not f.exists():
     do_call(["ccextractorwin", track["file"], "-o", srt["file"]], srt["file"])
   if f.exists() and f.stat().st_size == 0:
-    try: f.unlink()
-    except FileNotFoundError: pass
-  if not f.exists(): return False
+    try:
+      f.unlink()
+    except FileNotFoundError:
+      pass
+  if not f.exists():
+    return False
   srt["file"] = f
   srt["type"] = "subtitles"
   srt["delay"] = 0.0
@@ -322,17 +342,13 @@ def prepare_avi(cfg, avifile):
       avittype = avitrack.get("type")
       if avittype == "General":
         for k in avitrack.iter():
-          cfg[
-            "avi" + "".join(l for l in k.tag.casefold() if l.isalnum())
-          ] = k.text
+          cfg["avi" + "".join(l for l in k.tag.casefold() if l.isalnum())] = k.text
         pass
       elif avittype == "Video" or avittype == "Audio":
         track = maketrack(cfg)
         track["type"] = avittype.casefold()
         for k in avitrack.iter():
-          track[
-            "avi" + "".join(l for l in k.tag.casefold() if l.isalnum())
-          ] = k.text
+          track["avi" + "".join(l for l in k.tag.casefold() if l.isalnum())] = k.text
       else:
         log.warning(f"Unrecognized avi track type {avittype} in {avifile}")
   except ET.ParseError:
@@ -573,9 +589,7 @@ def prepare_mkv(cfg, mkvfile):
     odur = track["duration"]
     track["duration"] = dur = t2cl[-1] / 1000.0
     if odur and odur > 0 and odur != dur:
-      log.warning(
-        f'Encoding changed duration in "{file}" from {odur:f} to {dur:f}'
-      )
+      log.warning(f'Encoding changed duration in "{file}" from {odur:f} to {dur:f}')
 
   for track in tracks(cfg, "subtitle"):
     if track["extension"] != ".sub":
@@ -608,8 +622,10 @@ def prepare_mkv(cfg, mkvfile):
     # remove idx file
 
   if args.delete_source:
-    try: mkvfile.unlink()
-    except FileNotFoundError: pass
+    try:
+      mkvfile.unlink()
+    except FileNotFoundError:
+      pass
 
 
 def build_indices(cfg, track):
@@ -617,7 +633,8 @@ def build_indices(cfg, track):
   dgifile = track["dgifile"]
   logfile = file.with_suffix(".log")
 
-  if not dgifile or dgifile.exists(): return False
+  if not dgifile or dgifile.exists():
+    return False
   if dgifile.suffix == ".dgi":
     do_call(["DGIndexNV", "-i", file, "-o", dgifile.resolve(), "-h", "-e"], dgifile)
   elif dgifile.suffix == ".d2v":
@@ -665,8 +682,10 @@ def build_indices(cfg, track):
           log.warning(f"Unrecognized DGIndex log line: {repr(l)}")
     if dg["info"] == "Finished!":
       break
-  try: logfile.unlink()
-  except FileNotFoundError: pass
+  try:
+    logfile.unlink()
+  except FileNotFoundError:
+    pass
 
   track["type"] = "video"
   # track['outformat'] = 'h264'
@@ -810,15 +829,16 @@ def build_subtitle(cfg, track):
 
     call += ["--output", outfile, infile]
     do_call(call, outfile)  # '--fix-invisible',
-    if (not outfile.exists() or not outfile.is_file() or outfile.stat().st_size == 0):
+    if not outfile.exists() or not outfile.is_file() or outfile.stat().st_size == 0:
       log.error(f"Subtitle {outfile} empty and disabled.")
       track["disable"] = True
   elif inext == "srt":
     track["outfile"] = outfile = infile.with_suffix(".ttxt")
     if outfile.exists():
       return False  # Should be not readytomake(outfile,)
-    with open(infile, "rt", encoding="utf-8", errors="replace") as i, \
-         open("temp.srt", "wt", encoding="utf-8", errors="replace") as o:
+    with open(infile, "rt", encoding="utf-8", errors="replace") as i, open(
+      "temp.srt", "wt", encoding="utf-8", errors="replace"
+    ) as o:
       for l in i.read().split("\n\n"):
         if l.startswith("\ufeff"):
           l = l[1:]
@@ -843,10 +863,14 @@ def build_subtitle(cfg, track):
           log.warning(f"Unrecognized line in {infile}: {repr(l)}")
 
     do_call(["mp4box", "-ttxt", "temp.srt"], outfile)
-    try: pathlib.Path("temp.ttxt").rename(outfile)
-    except FileNotFoundError: pass
-    try: pathlib.Path("temp.srt").unlink()
-    except FileNotFoundError: pass
+    try:
+      pathlib.Path("temp.ttxt").rename(outfile)
+    except FileNotFoundError:
+      pass
+    try:
+      pathlib.Path("temp.srt").unlink()
+    except FileNotFoundError:
+      pass
   elif False:  # inext=='idx':
     track["outfile"] = outfile = infile.with_suffix(".adj.idx")
     subfile = infile.with_suffix(".adj.sub")
@@ -854,8 +878,9 @@ def build_subtitle(cfg, track):
       shutil.copy(infile.with_suffix(".sub"), subfile)
     if outfile.exists():
       return  # Should be not readytomake(outfile,)
-    with open(infile, "rt", encoding="utf-8", errors="replace") as i, \
-         open(outfile, "wt", encoding="utf-8", errors="replace") as o:
+    with open(infile, "rt", encoding="utf-8", errors="replace") as i, open(
+      outfile, "wt", encoding="utf-8", errors="replace"
+    ) as o:
       for l in i:
         print(l)
         if (
@@ -872,9 +897,7 @@ def build_subtitle(cfg, track):
         o.write(l)
   else:
     if elong != 1.0 or delay != 0.0:
-      log.warning(
-        f'Delay and elongation not implemented for subtitles type "{infile}"'
-      )
+      log.warning(f'Delay and elongation not implemented for subtitles type "{infile}"')
     track["outfile"] = outfile = infile
 
   if not outfile.exists():
@@ -885,7 +908,9 @@ def build_subtitle(cfg, track):
 
 def build_audio(cfg, track):
   # pylint: disable=used-before-assignment
-  track["outfile"] = outfile = track["outfile"] or pathlib.Path(f'{cfg["base"]} T{track["id"]:02d}.m4a')
+  track["outfile"] = outfile = track["outfile"] or pathlib.Path(
+    f'{cfg["base"]} T{track["id"]:02d}.m4a'
+  )
   if not readytomake(outfile, track["file"]):
     return False
 
@@ -900,13 +925,11 @@ def build_audio(cfg, track):
       "eac3to",
       track["file"],
       f'{track["mkvtrack"]+1}:' if track["extension"] == "mkv" else None,
-      "stdout.wav"
+      "stdout.wav",
       #      , '-no2ndpass'
-      ,
       "-log=nul",
-      f'{track["delay"]*1000.0:+.0f}ms' if track["delay"] else None
+      f'{track["delay"]*1000.0:+.0f}ms' if track["delay"] else None,
       #      , '-0,1,2,3,5,6,4' if track['channels']==7 else None
-      ,
       "-down6" if track["downmix"] == 6 else None,
       "-downDpl" if track["downmix"] == 2 else None,
       "-normalize" if track["normalize"] else None,
@@ -927,11 +950,7 @@ def build_audio(cfg, track):
   res = do_call((c for c in call if c), outfile)
   if res and (m := re.match(r"\bwrote (\d+\.?\d*) seconds\b", res)):
     track["duration"] = to_float(m[1])
-  if (
-    (dur := track["duration"])
-    and (mdur := cfg["duration"])
-    and abs(dur - mdur) > 0.5
-  ):
+  if (dur := track["duration"]) and (mdur := cfg["duration"]) and abs(dur - mdur) > 0.5:
     log.warning(
       f'Audio track "{track["file"]}" duration differs (elongation={mdur/dur})'
     )
@@ -952,7 +971,9 @@ def build_video(cfg, track):
     if track["outformat"] not in fmt2ext:
       log.error(f'{infile}: Unrecognized output format: {track["outformat"]}')
       return False
-    track["outfile"] = outfile = pathlib.Path(f'{cfg["base"]} T{track["id"]:02d}{fmt2ext[track["outformat"]]}')
+    track["outfile"] = outfile = pathlib.Path(
+      f'{cfg["base"]} T{track["id"]:02d}{fmt2ext[track["outformat"]]}'
+    )
   else:
     track["outfile"] = outfile = pathlib.Path(outfile)
   if not readytomake(outfile, infile, dgifile):
@@ -963,23 +984,20 @@ def build_video(cfg, track):
     f"SetMTMode(5,{procs:d})" if procs != 1 else None,
     "SetMemoryMax(1024)",
     f'DGDecode_mpeg2source("{dgifile}", info=3, idct=4, cpu=3)'
-    if dgifile.suffix == ".d2v" else None,
+    if dgifile.suffix == ".d2v"
+    else None,
     f'DGSource("{dgifile}", deinterlace={1 if track["interlace_type"] in ["VIDEO", "INTERLACE"] else 0:d})\n'
     if dgifile.suffix == ".dgi"
-    else None
+    else None,
     #    , 'ColorMatrix(hints = true, interlaced=false)'
-    ,
     "unblock(cartoon=true)"
     if track["unblock"] == "cartoon"
     or (track["unblock"] == True and track["x264_tune"] == "animation")
     else None,
     "unblock(photo=true)"
-    if track["unblock"] == "photo"
-    or (track["unblock"] == True and track["x264_tune"])
+    if track["unblock"] == "photo" or (track["unblock"] == True and track["x264_tune"])
     else None,
-    "unblock()"
-    if track["unblock"] == "normal" or track["unblock"] == True
-    else None,
+    "unblock()" if track["unblock"] == "normal" or track["unblock"] == True else None,
     "tfm().tdecimate(hybrid=1)" if track["interlace_type"] in {"FILM"} else None,
   ]
 
@@ -1139,7 +1157,7 @@ def get_cover_files(l):
       continue
     log.warning(f"Cover art file {c} not found, skipping")
   return cfps
-  
+
 
 def build_mp4(cfg):
   base = cfg["base"]
@@ -1150,15 +1168,13 @@ def build_mp4(cfg):
       # log.warning(f"Unable to build {base} because {trackid}:outfile not defined")
       return False
     if not outfile.exists():
-      log.warning(
-        f"Unable to build {base} because {trackid}:{outfile} does not exist"
-      )
+      log.warning(f"Unable to build {base} because {trackid}:{outfile} does not exist")
       return False
     if outfile.stat().st_size == 0:
       log.warning(f"Unable to build {base} because {trackid}:{outfile} is empty")
       return False
 
-  outfile = make_filename(cfg).with_suffix(f'.{args.output_type}')
+  outfile = make_filename(cfg).with_suffix(f".{args.output_type}")
   if not outfile:
     log.error(f"Unable to generate filename for {cfg}.")
     return False
@@ -1166,7 +1182,7 @@ def build_mp4(cfg):
 
   infiles = [cfg["cfgname"]] + get_cover_files(cfg["coverart"])
 
-  call = [ "mp4box", "-new", outfile ]
+  call = ["mp4box", "-new", outfile]
   trcnt = {}
   mdur = cfg["duration"]
 
@@ -1216,6 +1232,7 @@ def build_mp4(cfg):
   set_chapters_cmd(outfile, cfg)
   return True
 
+
 def build_mkv(cfg):
   base = cfg["base"]
   for track in tracks(cfg):
@@ -1226,15 +1243,13 @@ def build_mkv(cfg):
       return False
     outfile = pathlib.Path(outfile)
     if not outfile.exists():
-      log.warning(
-        f"Unable to build {base} because {trackid}:{outfile} does not exist"
-      )
+      log.warning(f"Unable to build {base} because {trackid}:{outfile} does not exist")
       return False
     if outfile.stat().st_size == 0:
       log.warning(f"Unable to build {base} because {trackid}:{outfile} is empty")
       return False
 
-  outfile = make_filename(cfg).with_suffix(f'.{args.output_type}')
+  outfile = make_filename(cfg).with_suffix(f".{args.output_type}")
   if not outfile:
     log.error(f"Unable to generate filename for {cfg}.")
     return False
@@ -1245,40 +1260,46 @@ def build_mkv(cfg):
   trcnt = {}
   mdur = cfg["duration"]
 
-  call = [ 'mkvmerge',
-#    '--command-line-charset', 'utf-8',
-    '--output-charset', 'utf-8',
-    '--output', outfile,
-    '--global-tags', 'temp.xml',
-   ]
+  call = [
+    "mkvmerge",
+    #    '--command-line-charset', 'utf-8',
+    "--output-charset",
+    "utf-8",
+    "--output",
+    outfile,
+    "--global-tags",
+    "temp.xml",
+  ]
 
   for track in tracks(cfg):
     of = track["outfile"]
     dur = track["duration"]
     if mdur and dur:
       if abs(mdur - dur) > 0.5 and abs(mdur - dur) * 200 > mdur:
-        log.warning(f'Duration of "{base}" ({mdur:f}s) deviates from track {of} duration({dur:f}s).')
+        log.warning(
+          f'Duration of "{base}" ({mdur:f}s) deviates from track {of} duration({dur:f}s).'
+        )
 
     infiles.append(of)
 
     if name := track["name"] or track["trackname"]:
-      call += [ '--track-name', f'0:{name}' ]
+      call += ["--track-name", f"0:{name}"]
     if lang := track["language"]:
-      call += [ '--language', f'0:{lang}']
+      call += ["--language", f"0:{lang}"]
 
-  # --aspect-ratio TID:ratio|width/height
-  # Matroska(TM) files contain two values that set the display properties that a player should scale the image on playback to: display width and display height. With this option mkvmerge(1) will automatically calculate the display width and display height based on the image's original width and height and the aspect ratio given with this option. The ratio can be given either as a floating point number ratio or as a fraction 'width/height', e.g. '16/9'.
-  # Another way to specify the values is to use the --aspect-ratio-factor or --display-dimensions options (see above and below). These options are mutually exclusive.
-  # --aspect-ratio-factor TID:factor|n/d
-  # Another way to set the aspect ratio is to specify a factor. The original aspect ratio is first multiplied with this factor and used as the target aspect ratio afterwards.
-  # Another way to specify the values is to use the --aspect-ratio or --display-dimensions options (see above). These options are mutually exclusive.
-  #   if fps := track["frame_rate_ratio_out"]:
-  #     call[-1] += ":fps=" + str(fps)
-  #   if mdur or dur:
-  #     call[-1] += ":dur=" + str(mdur or dur)
-  #   # if sar := track['sample_aspect_ratio']:
-  #   #   (n,d) = Fraction.from_float(sar).limit_denominator(1000).as_integer_ratio()
-  #   #   call[-1] += f':par={n}:{d}'
+    # --aspect-ratio TID:ratio|width/height
+    # Matroska(TM) files contain two values that set the display properties that a player should scale the image on playback to: display width and display height. With this option mkvmerge(1) will automatically calculate the display width and display height based on the image's original width and height and the aspect ratio given with this option. The ratio can be given either as a floating point number ratio or as a fraction 'width/height', e.g. '16/9'.
+    # Another way to specify the values is to use the --aspect-ratio-factor or --display-dimensions options (see above and below). These options are mutually exclusive.
+    # --aspect-ratio-factor TID:factor|n/d
+    # Another way to set the aspect ratio is to specify a factor. The original aspect ratio is first multiplied with this factor and used as the target aspect ratio afterwards.
+    # Another way to specify the values is to use the --aspect-ratio or --display-dimensions options (see above). These options are mutually exclusive.
+    #   if fps := track["frame_rate_ratio_out"]:
+    #     call[-1] += ":fps=" + str(fps)
+    #   if mdur or dur:
+    #     call[-1] += ":dur=" + str(mdur or dur)
+    #   # if sar := track['sample_aspect_ratio']:
+    #   #   (n,d) = Fraction.from_float(sar).limit_denominator(1000).as_integer_ratio()
+    #   #   call[-1] += f':par={n}:{d}'
 
     if track["type"] in trcnt:
       trcnt[track["type"]] += 1
@@ -1290,10 +1311,15 @@ def build_mkv(cfg):
   for c in get_cover_files(cfg["coverart"]):
     mimetype = mimetypes.guess_type(str(c), False)[0]
     call += [
-      '--attachment-description', c.stem,
-      '--attachment-mime-type', mimetype,
-      '--attachment-name', f'cover{mimetypes.guess_extension(mimetype, False)}',
-      '--attach-file', c ]
+      "--attachment-description",
+      c.stem,
+      "--attachment-mime-type",
+      mimetype,
+      "--attachment-name",
+      f"cover{mimetypes.guess_extension(mimetype, False)}",
+      "--attach-file",
+      c,
+    ]
     infiles.append(c)
 
   if not readytomake(outfile, *infiles):
@@ -1305,7 +1331,8 @@ def build_mkv(cfg):
   log.debug(xml)
   xf = pathlib.Path("temp.xml")
   try:
-    with open(xf, mode='wt', encoding="utf-8") as tf: tf.write(xml)
+    with open(xf, mode="wt", encoding="utf-8") as tf:
+      tf.write(xml)
     do_call(call, outfile)
   finally:
     xf.unlink()
@@ -1337,7 +1364,11 @@ def build_meta(cfg):
   fn = f'{cfg["show"] or ""}{" S" + str(season) if season else ""}'
   ufn = "".join(c.upper() for c in fn if c.isalnum())
 
-  upd(get_meta_local(title, cfg["year"], cfg["season"], cfg["episode"], args.descdir / f"{fn}.txt"))
+  upd(
+    get_meta_local(
+      title, cfg["year"], cfg["season"], cfg["episode"], args.descdir / f"{fn}.txt"
+    )
+  )
 
   imdb_info = get_meta_imdb(
     title,
@@ -1372,15 +1403,17 @@ def main():
 
   preparers = {
     "mkv": prepare_mkv,
-    "avi": prepare_avi
+    "avi": prepare_avi,
     # , 'tivo': prepare_tivo
     # , 'mpg': prepare_mpg
   }
   for d in args.sourcedirs:
     for f in d.iterdir():
-      if not f.is_file(): continue
+      if not f.is_file():
+        continue
       fn = args.outdir / f"{f.stem}.{args.config_format}"
-      if fn.exists(): continue
+      if fn.exists():
+        continue
 
       cfgdump(defdict({"cfgname": fn.relative_to(args.outdir)}), fn)
 
@@ -1421,33 +1454,116 @@ def main():
 
 
 if __name__ == "__main__":
-  parser = argparse.ArgumentParser(fromfile_prefix_chars="@", prog=prog, epilog="Written by: " + author)
+  parser = argparse.ArgumentParser(
+    fromfile_prefix_chars="@", prog=prog, epilog="Written by: " + author
+  )
   parser.set_defaults(loglevel=logging.WARN)
   parser.add_argument("--version", action="version", version="%(prog)s " + version)
-  parser.add_argument("-v", "--verbose", dest="loglevel", action="store_const", const=logging.INFO)
-  parser.add_argument("-d", "--debug", dest="loglevel", action="store_const", const=logging.DEBUG)
-  parser.add_argument("-n", "--nice", dest="niceness", action="store", type=int, default=0)
+  parser.add_argument(
+    "-v", "--verbose", dest="loglevel", action="store_const", const=logging.INFO
+  )
+  parser.add_argument(
+    "-d", "--debug", dest="loglevel", action="store_const", const=logging.DEBUG
+  )
+  parser.add_argument(
+    "-n", "--nice", dest="niceness", action="store", type=int, default=0
+  )
   parser.add_argument("-l", "--log", type=pathlib.Path, dest="logfile", action="store")
-  parser.add_argument("sourcedirs", type=dirpath, nargs="*", help="directories to search for source files")
-  parser.add_argument("--outdir", type=dirpath, action="store", default = pathlib.Path.cwd(), help="directory for finalized .mp4 files; if unspecified use working directory")
-  parser.add_argument("--descdir", type=dirpath, action="store", help="directory for .txt files with descriptive data")
-  parser.add_argument("--artdir", type=dirpath, action="store", help="directory for .jpg and .png cover art")
-  parser.add_argument("--mak", action="store", help="your TiVo MAK key to decrypt .TiVo files to .mpg")
-  parser.add_argument("--omdbkey", action="store", help="your OMDB key to automatically retrieve posters")
-  parser.add_argument("--move-source", action="store_true", default=False, help="move source files to working directory before extraction")
-  parser.add_argument("--delete-source", action="store_true", default=False, help="delete source file after successful extraction")
-  parser.add_argument("--keep-video-in-mkv", action="store_true", default=False, help="do not attempt to extract video tracks from MKV source, but instead use MKV file directly")
-  parser.add_argument("--keep-audio-in-mkv", action="store_true", default=False, help="do not attempt to extract audio tracks from MKV source, but instead use MKV file directly")
-  parser.add_argument("--keep-sup", action="store_true", default=False, help="subtitles in SUP format are kept and not converted to IDX/SUB subtitles")
-  parser.add_argument("--ignore-year-imdb", action="store_true", default=False, help="do not use year information, if any, in omdb queries")
-  parser.add_argument("--reset-imdb", action="store_true", default=False, help="overwrite information with new IMDB data")
-  parser.add_argument("--ignore-error", action="store_true", default=False, help="ignore errors in external utilities")
-  parser.add_argument("--output-type", choices=set(["mp4", "mkv"]), default="mp4", help="container type for final result")
-  parser.add_argument("--config-format", choices=yaml_exts | json_exts, default="json", help="format for new config files")
-  parser.add_argument("--prog", type=pathlib.Path, default=sys.argv[0], help="location of the program")
+  parser.add_argument(
+    "sourcedirs", type=dirpath, nargs="*", help="directories to search for source files"
+  )
+  parser.add_argument(
+    "--outdir",
+    type=dirpath,
+    action="store",
+    default=pathlib.Path.cwd(),
+    help="directory for finalized .mp4 files; if unspecified use working directory",
+  )
+  parser.add_argument(
+    "--descdir",
+    type=dirpath,
+    action="store",
+    help="directory for .txt files with descriptive data",
+  )
+  parser.add_argument(
+    "--artdir",
+    type=dirpath,
+    action="store",
+    help="directory for .jpg and .png cover art",
+  )
+  parser.add_argument(
+    "--mak", action="store", help="your TiVo MAK key to decrypt .TiVo files to .mpg"
+  )
+  parser.add_argument(
+    "--omdbkey", action="store", help="your OMDB key to automatically retrieve posters"
+  )
+  parser.add_argument(
+    "--move-source",
+    action="store_true",
+    default=False,
+    help="move source files to working directory before extraction",
+  )
+  parser.add_argument(
+    "--delete-source",
+    action="store_true",
+    default=False,
+    help="delete source file after successful extraction",
+  )
+  parser.add_argument(
+    "--keep-video-in-mkv",
+    action="store_true",
+    default=False,
+    help="do not attempt to extract video tracks from MKV source, but instead use MKV file directly",
+  )
+  parser.add_argument(
+    "--keep-audio-in-mkv",
+    action="store_true",
+    default=False,
+    help="do not attempt to extract audio tracks from MKV source, but instead use MKV file directly",
+  )
+  parser.add_argument(
+    "--keep-sup",
+    action="store_true",
+    default=False,
+    help="subtitles in SUP format are kept and not converted to IDX/SUB subtitles",
+  )
+  parser.add_argument(
+    "--ignore-year-imdb",
+    action="store_true",
+    default=False,
+    help="do not use year information, if any, in omdb queries",
+  )
+  parser.add_argument(
+    "--reset-imdb",
+    action="store_true",
+    default=False,
+    help="overwrite information with new IMDB data",
+  )
+  parser.add_argument(
+    "--ignore-error",
+    action="store_true",
+    default=False,
+    help="ignore errors in external utilities",
+  )
+  parser.add_argument(
+    "--output-type",
+    choices=set(["mp4", "mkv"]),
+    default="mp4",
+    help="container type for final result",
+  )
+  parser.add_argument(
+    "--config-format",
+    choices=yaml_exts | json_exts,
+    default="json",
+    help="format for new config files",
+  )
+  parser.add_argument(
+    "--prog", type=pathlib.Path, default=sys.argv[0], help="location of the program"
+  )
 
   inifile = pathlib.Path(sys.argv[0]).with_suffix(".ini")
-  if inifile.exists(): sys.argv.insert(1, f"@{inifile}")
+  if inifile.exists():
+    sys.argv.insert(1, f"@{inifile}")
 
   args = parser.parse_args()
   log.setLevel(0)

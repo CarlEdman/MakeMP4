@@ -6,4 +6,4 @@ import sys
 
 for a in sys.argv[1:]:
   for f in glob.glob(a):
-    os.utime(f,None)
+    os.utime(f, None)

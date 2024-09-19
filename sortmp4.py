@@ -1,10 +1,5 @@
 #!/usr/bin/python
 
-prog='SortMP4'
-version='1.0'
-author='Carl Edman (CarlEdman@gmail.com)'
-desc='Sort mp4s from current directory to target subdirectories'
-
 import argparse
 import logging
 import pathlib
@@ -13,8 +8,13 @@ import subprocess
 import tempfile
 
 from tagmp4 import get_meta_mutagen, get_meta_enzyme
-from cetools import * # pylint: disable=unused-wildcard-import
+from cetools import *  # noqa: F403
 from sanitize_filename import sanitize
+
+prog='SortMP4'
+version='1.0'
+author='Carl Edman (CarlEdman@gmail.com)'
+desc='Sort mp4s from current directory to target subdirectories'
 
 parser = None
 args = None
