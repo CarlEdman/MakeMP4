@@ -6,7 +6,9 @@ import logging
 import logging.handlers
 import pathlib
 
-from cetools import *  # noqa: F403
+from cetools import (
+  to_title_case,
+)
 
 prog = "slash2dot"
 version = "0.1"
@@ -29,6 +31,8 @@ def slash2dot(p: pathlib.Path):
     s = dir / r.name
   else:
     s = pathlib.Path(args.separator.join(r.parts))
+  if args.titlecase:
+    s = s.with_stem(to_title_case(s.stem))
   if s.exists():
     log.error(f"Path {r} cannot be moved to {s} because the target exists, skipping")
     return
@@ -50,16 +54,36 @@ if __name__ == "__main__":
   )
   parser.add_argument("--version", action="version", version="%(prog)s " + version)
   parser.add_argument(
+    "--verbose",
+    dest="loglevel",
+    action="store_const",
+    const=logging.INFO,
+    help="print informational (or higher) log messages.",
+  )
+  parser.add_argument(
+    "--debug",
+    dest="loglevel",
+    action="store_const",
+    const=logging.DEBUG,
+    help="print debugging (or higher) log messages.",
+  )
+  parser.add_argument(
+    "--taciturn",
+    dest="loglevel",
+    action="store_const",
+    const=logging.ERROR,
+    help="only print error level (or higher) log messages.",
+  )
+  parser.add_argument(
+    "--log", dest="logfile", action="store", help="location of alternate log file."
+  )
+  parser.add_argument(
     "--dryrun",
     dest="dryrun",
     action="store_true",
     help="do not perform operations, but only print them.",
   )
   parser.add_argument(
-    "paths", nargs="+", help="paths to be operated on; may include wildcards"
-  )
-  parser.add_argument(
-    "-s",
     "--separator",
     dest="separator",
     action="store",
@@ -67,26 +91,26 @@ if __name__ == "__main__":
     help="separator to replace slashes",
   )
   parser.add_argument(
-    "-f",
     "--flatten",
     dest="flatten",
     action="store_true",
     help="ignore all but final path element",
   )
   parser.add_argument(
-    "-e",
     "--empty",
     dest="empty",
     action="store_true",
     help="remove directories left empty by action",
   )
   parser.add_argument(
-    "-v", "--verbose", dest="loglevel", action="store_const", const=logging.INFO
+    "--title-case",
+    dest="titlecase",
+    action="store_true",
+    help="rename files to proper title case.",
   )
   parser.add_argument(
-    "-d", "--debug", dest="loglevel", action="store_const", const=logging.DEBUG
+    "paths", nargs="+", help="paths to be operated on; may include wildcards"
   )
-  parser.add_argument("-l", "--log", dest="logfile", action="store")
   parser.set_defaults(loglevel=logging.WARN)
 
   args = parser.parse_args()
