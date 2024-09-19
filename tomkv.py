@@ -62,7 +62,13 @@ def tomkv(vidfile: pathlib.Path):
     subfiles.sort(key=sortkey)
 
     tempfile = mkvfile.with_stem(mkvfile.stem + "-temp") if vidfile == mkvfile else None
-    cl = ["mkvmerge", "-o", str(tempfile) if tempfile else str(mkvfile), str(vidfile)]
+    cl = [
+        "mkvmerge",
+        "--stop-after-video-ends",
+        "-o",
+        str(tempfile) if tempfile else str(mkvfile),
+        str(vidfile),
+    ]
     for s in subfiles:
         if (suf := s.suffixes[0]) in lang2iso6392:
             lang = lang2iso6392[suf]
