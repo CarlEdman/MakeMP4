@@ -11,6 +11,7 @@ import re
 import time
 
 from fractions import Fraction
+from xmlrpc.client import Boolean
 
 if os.name == "nt":
   import ctypes
@@ -21,24 +22,31 @@ if os.name == "nt":
 log = logging.getLogger()
 
 
-def totitlecase(s: str) -> str:
-  ws = s.split()
+def to_title_case(s: str) -> str:
+  vs = []
   start = True
-  for w in ws:
-    # Leave strings with a capital letter other than the first (e.g., initialisms alone)
-    if any(lambda c: c.isupper(), w[1:]):
+  for w in s.split():
+    # print(w, isroman(w, strict=False), isroman(w.upper(), strict=False))
+    # Deal with roman numerals
+    if isroman(w, strict=False):
+      vs.append(w.upper())
       start = False
     # Leave strings with non-letters in them alone, but count the following word as a beginning
-    elif any(lambda c: not c.isalpha(), w):
+    elif any(not c.isalpha() for c in w):
+      vs.append(w)
       start = True
+    # Leave strings with a capital letter other than the first (e.g., initialisms alone)
+    elif any(c.isupper() for c in w[1:]):
+      vs.append(w)
+      start = False
     # At the beginning (or re-beginning of sentence)
     elif not start and w.casefold() in titlelower:
-      w[:] = w.lower()
+      vs.append(w.lower())
       start = False
     else:
-      w[:] = w.title()
+      vs.append(w.title())
       start = False
-  return " ".join(ws)
+  return " ".join(vs)
 
 
 def export(func):
@@ -140,6 +148,16 @@ def romanize(inp, strict=False):
     if len(restinp) == 0:
       return totvalue
   return inp
+
+
+romanstrict = re.compile(r"M{0,4}(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3})")
+romannonstrict = re.compile(r"M{0,4}(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3})", re.IGNORECASE)
+
+def isroman(s, strict=True) -> Boolean:
+  if strict:
+    return romanstrict.fullmatch(s)
+  else:
+    return romannonstrict.fullmatch(s)
 
 
 def sortkey(s):
@@ -735,6 +753,7 @@ iso6391tolang = {
 iso6392tolang = {v: k for k, v in lang2iso6392.items()}
 iso6392 = set(lang2iso6392.values())
 
+# Words to lower case even in title case (except at beginning of phrases).
 titlelower = {
   "a",
   "all",
@@ -743,23 +762,31 @@ titlelower = {
   "as",
   "both",
   "but",
+  "by",
   "cause",
   "else",
   "ergo",
   "even",
   "for",
+  "from",
   "how",
   "if",
+  "in",
   "less",
   "lest",
   "let",
   "like",
   "nor",
-  "not",
+#  "not",
+  "of",
+  "on",
   "once",
   "only",
   "or",
   "plus",
   "the",
   "to",
+  "v",
+  "vs",
+  "with",
 }

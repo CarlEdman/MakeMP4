@@ -7,9 +7,10 @@ import logging.handlers
 import pathlib
 import re
 
+import cetools
 
 prog = "serialize"
-version = "0.1"
+version = "0.2"
 author = "Carl Edman (CarlEdman@gmail.com)"
 desc = "Sort files into seasonal folders."
 
@@ -42,6 +43,12 @@ def serialize(p: pathlib.Path):
   else:
     log.warning(f'"{p}" not serializable, skipping')
     return
+
+  if args.titlecase:
+    m = cetools.to_title_case(n)
+    if m != n:
+      log.error(f'"{n}" -> "{m}"')
+      n = m
 
   td = p.parent / d
   if not td.exists():
@@ -76,20 +83,41 @@ if __name__ == "__main__":
     help="do not perform operations, but only print them.",
   )
   parser.add_argument(
+    "--title-case",
+    dest="titlecase",
+    action="store_true",
+    help="rename files to proper title case.",
+  )
+  parser.add_argument(
+    "--verbose",
+    dest="loglevel",
+    action="store_const",
+    const=logging.INFO,
+    help="print informational (or higher) log messages",
+  )
+  parser.add_argument(
+    "--debug",
+    dest="loglevel",
+    action="store_const",
+    const=logging.DEBUG,
+    help="print debugging (or higher) log messages.",
+  )
+  parser.add_argument(
+    "--taciturn",
+    dest="loglevel",
+    action="store_const",
+    const=logging.ERROR,
+    help="only print error level (or higher) log messages.",
+  )
+  parser.add_argument("--log", dest="logfile", action="store")
+  parser.add_argument(
     "paths", nargs="+", help="paths to be operated on; may include wildcards"
   )
-  parser.add_argument(
-    "-v", "--verbose", dest="loglevel", action="store_const", const=logging.INFO
-  )
-  parser.add_argument(
-    "-d", "--debug", dest="loglevel", action="store_const", const=logging.DEBUG
-  )
-  parser.add_argument("-l", "--log", dest="logfile", action="store")
   parser.set_defaults(loglevel=logging.WARN)
 
   args = parser.parse_args()
-  if args.dryrun and args.loglevel > logging.INFO:
-    args.loglevel = logging.INFO
+  # if args.dryrun and args.loglevel > logging.INFO:
+  #   args.loglevel = logging.INFO
 
   log.setLevel(0)
   logformat = logging.Formatter("%(asctime)s [%(levelname)s]: %(message)s")
