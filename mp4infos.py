@@ -1,10 +1,5 @@
 #!/usr/bin/python
 
-prog = "mp4infos"
-version = "2.1"
-author = "Carl Edman (CarlEdman@gmail.com)"
-desc = "Tabular list of mp4 metadata in directory and all subdirectories."
-
 import argparse
 import logging
 import logging.handlers
@@ -13,8 +8,13 @@ import os.path
 import sys
 import csv
 
-from cetools import *
-from tagmp4 import *  # pylint: disable=unused-wildcard-import
+from cetools import * # noqa: F403
+from tagmp4 import * # noqa: F403
+
+prog = "mp4infos"
+version = "2.1"
+author = "Carl Edman (CarlEdman@gmail.com)"
+desc = "Tabular list of mp4 metadata in directory and all subdirectories."
 
 parser = None
 args = None

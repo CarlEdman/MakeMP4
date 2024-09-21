@@ -17,7 +17,7 @@ args = None
 log = logging.getLogger()
 
 
-def plexRename(dir: pathlib.Path) -> ():
+def plexRename(dir: pathlib.Path) -> None:
   base = dir.name
   pat = re.compile(
     re.escape(base)

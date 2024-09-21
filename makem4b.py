@@ -6,7 +6,7 @@ import os
 import os.path
 import subprocess
 
-from cetools import *  # noqa: F403
+from cetools import TitleHandler
 
 prog = "MakeM4B"
 version = "0.3"
