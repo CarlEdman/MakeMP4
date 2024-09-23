@@ -43,6 +43,9 @@ subexts = {
   ".sup",
 }
 
+subexts_bad = {
+  ".sub",
+}
 
 def tomkv(vidfile: pathlib.Path):
   if vidfile.suffix not in videxts or not vidfile.is_file():
@@ -59,6 +62,11 @@ def tomkv(vidfile: pathlib.Path):
     if not subfile.is_file():
       continue
     if subfile.suffix not in subexts:
+      continue
+    if subfile.suffix in subexts_bad:
+      log.warning(
+        f'"{subfile}" not in recognized subtitle format.  Try to convert to, e.g., srt using, e.g., https://subtitletools.com/).'
+      )
       continue
     if basestem(subfile) != basestem(vidfile):
       continue

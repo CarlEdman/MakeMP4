@@ -1,12 +1,14 @@
 # A subclass of ConfigParser with advanced features
 
 import os.path
+import logging
+import pathlib
 
 from fractions import Fraction
 from weakref import WeakValueDictionary, finalize
 from configparser import RawConfigParser, NoSectionError
 
-from cetools import *
+from cetools import *  # noqa: F403
 
 log = logging.getLogger()
 
@@ -165,7 +167,7 @@ class AdvConfig(RawConfigParser):
     if not self.has_option(section, opt):
       return False
     i = RawConfigParser.get(self, section, opt)
-    if i == None:
+    if i is None:
       return False
     if i == "":
       return False

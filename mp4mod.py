@@ -8,7 +8,10 @@ import os.path
 import re
 import subprocess
 
-from cetools import *  # noqa: F403
+from cetools import (
+  reglob,
+  dict_inverse,
+)
 
 prog = "MP4mod"
 version = "0.3"

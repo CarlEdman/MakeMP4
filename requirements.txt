@@ -1,7 +1,7 @@
 # pip install -r C:\Users\Carl\DVD\MakeMP4\requirements.txt
-pyyaml
-pywin32
-mutagen
 enzyme
-sanitize_filename
+mutagen
 plexapi
+pywin32
+pyyaml
+sanitize_filename

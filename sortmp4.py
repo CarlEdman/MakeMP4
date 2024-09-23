@@ -7,8 +7,13 @@ import shutil
 import subprocess
 import tempfile
 
-from tagmp4 import get_meta_mutagen, get_meta_enzyme
-from cetools import *  # noqa: F403
+from tagmp4 import (
+  get_meta_mutagen,
+#  get_meta_enzyme,
+  )
+from cetools import (
+  alphabetize,
+  )
 from sanitize_filename import sanitize
 
 prog='SortMP4'
@@ -23,7 +28,7 @@ log = logging.getLogger()
 mp4_exts = set([".mp4", ".m4r", "m4b"])
 mkv_exts = set([".mkv"])
 
-def sortmp4(f):
+def sortmp4(f) -> None:
   its = get_meta_mutagen(f)
 
   if not its:
@@ -85,7 +90,8 @@ def sortmp4(f):
   else:
     log.info(f'Moving {f} to {n}')
 
-  if args.dryrun: return
+  if args.dryrun:
+     return
 
   n.parent.mkdir(parents=True, exist_ok=True)
 
@@ -106,7 +112,8 @@ def sortmp4(f):
     raise
 
 def sortmkv(f):
-  its = get_meta_enzyme(f)
+  # its = get_meta_enzyme(f)
+  pass
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser(description=desc,fromfile_prefix_chars='@',prog=prog,epilog='Written by: '+author)
@@ -118,11 +125,12 @@ if __name__ == '__main__':
   parser.add_argument('--overwrite', action='store_true', default=False, help='overwrite existing target file.')
   parser.add_argument('--optimize', action='store_true', default=True, help='optimize target file.')
   parser.add_argument('--version', action='version', version='%(prog)s '+version)
-  parser.add_argument('--target', type=dirpath, action='store', default= 'Y:\\')
+  parser.add_argument('--target', type='dirpath', action='store', default= 'Y:\\')
   parser.add_argument('globs', nargs='*', default = [ '*' + e for e in mp4_exts | mkv_exts ], help='glob pattern of files to sort')
 
   args = parser.parse_args()
-  if args.dryrun and args.loglevel > logging.INFO: args.loglevel = logging.INFO
+  if args.dryrun and args.loglevel > logging.INFO:
+    args.loglevel = logging.INFO
 
   log.setLevel(0)
   logformat = logging.Formatter('%(asctime)s [%(levelname)s]: %(message)s')
@@ -134,7 +142,7 @@ if __name__ == '__main__':
 
   infiles = [f for e in args.globs for f in pathlib.Path.cwd().glob(e)]
   if not infiles:
-    log.error(f'No matching input files.')
+    log.error('No matching input files.')
     exit(1)
 
   for f in infiles:

@@ -25,8 +25,8 @@ def main():
       f = os.path.join(root, file)
       ts = []
       inp = subprocess.check_output(["mp4track", "--list", f])
-      for l in inp.split(r"track"):
-        if not (m := re.fullmatch(r"^\[(\d+)\]((.|\s)*)", l)):
+      for line in inp.split(r"track"):
+        if not (m := re.fullmatch(r"^\[(\d+)\]((.|\s)*)", line)):
           continue
         if len(ts) != int(m[0]):
           log.error(f"Track number {int(m[0]):d} inconsistent in {f}")

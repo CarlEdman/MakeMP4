@@ -20,34 +20,6 @@ if os.name == "nt":
 
 log = logging.getLogger()
 
-
-def to_title_case(s: str) -> str:
-  vs = []
-  start = True
-  for w in s.split():
-    # print(w, isroman(w, strict=False), isroman(w.upper(), strict=False))
-    # Deal with roman numerals
-    if isroman(w, strict=False):
-      vs.append(w.upper())
-      start = False
-    # Leave strings with non-letters in them alone, but count the following word as a beginning
-    elif any(not c.isalpha() for c in w):
-      vs.append(w)
-      start = True
-    # Leave strings with a capital letter other than the first (e.g., initialisms alone)
-    elif any(c.isupper() for c in w[1:]):
-      vs.append(w)
-      start = False
-    # At the beginning (or re-beginning of sentence)
-    elif not start and w.casefold() in titlelower:
-      vs.append(w.lower())
-      start = False
-    else:
-      vs.append(w.title())
-      start = False
-  return " ".join(vs)
-
-
 def export(func):
   """Decorator that causes function to be included in __all__."""
 
@@ -188,15 +160,15 @@ def unparse_time(t):
   return f'{"-" if t<0 else ""}{int(abs(t)/3600.0):02d}:{int(abs(t)/60.0)%60:02d}:{int(abs(t))%60:02d}.{int(abs(t)*1000.0)%1000:03d}'
 
 
-def add_to_list(l, v):
+def add_to_list(inp, v):
   if v is None:
-    return l
-  if not l:
+    return inp
+  if not inp:
     return [v]
-  if v in l:
-    return l
-  l.append(v)
-  return sorted(l)
+  if v in inp:
+    return inp
+  inp.append(v)
+  return sorted(inp)
 
 
 def to_ratio_string(f, sep="/"):
@@ -753,7 +725,7 @@ iso6392tolang = {v: k for k, v in lang2iso6392.items()}
 iso6392 = set(lang2iso6392.values())
 
 # Words to lower case even in title case (except at beginning of phrases).
-titlelower = {
+titleCaseLower = {
   "a",
   "all",
   "an",
@@ -776,16 +748,44 @@ titlelower = {
   "let",
   "like",
   "nor",
-#  "not",
+  # "not",
   "of",
   "on",
   "once",
   "only",
   "or",
-  "plus",
+  # "plus",
   "the",
+  "then",
   "to",
   "v",
   "vs",
   "with",
 }
+
+nonAlphaWordChars = "'"
+
+def to_title_case(s: str) -> str:
+  vs = []
+  start = True
+  for w in s.split():
+    # Deal with roman numerals
+    if isroman(w, strict=False):
+      vs.append(w.upper())
+      start = False
+    # Leave strings with non-letters in them alone, but count the following word as a beginning
+    elif any(not c.isalpha() and c not in nonAlphaWordChars for c in w):
+      vs.append(w)
+      start = True
+    # Leave strings with a capital letter other than the first (e.g., initialisms alone)
+    elif any(c.isupper() for c in w[1:]):
+      vs.append(w)
+      start = False
+    # At the beginning (or re-beginning of sentence)
+    elif not start and w.casefold() in titleCaseLower:
+      vs.append(w.lower())
+      start = False
+    else:
+      vs.append(w.title())
+      start = False
+  return " ".join(vs)

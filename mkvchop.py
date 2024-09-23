@@ -8,7 +8,10 @@ import re
 import subprocess
 import sys
 
-from cetools import *  # pylint: disable=unused-wildcard-import  # noqa: F403
+from cetools import (
+  to_float,
+  unparse_time,
+  )
 
 prog = "mkvchop"
 version = "0.5"
@@ -24,22 +27,22 @@ def main():
   chaptimes = {}
   chapnames = {}
   namechaps = {}
-  for l in subprocess.check_output(
+  for out in subprocess.check_output(
     ["mkvextract", "chapters", "--simple", args.infile], universal_newlines=True
   ).splitlines():
     if (
-      (m := re.fullmatch(r"CHAPTER(\d+)=(.*)", l)) is not None
+      (m := re.fullmatch(r"CHAPTER(\d+)=(.*)", out)) is not None
       and (i := int(m[1])) is not None
       and (t := to_float(m[2])) is not None
     ):
       chaptimes[i] = t
-    elif (m := re.fullmatch(r"CHAPTER(\d+)NAME=(.*)", l)) is not None and (
+    elif (m := re.fullmatch(r"CHAPTER(\d+)NAME=(.*)", out)) is not None and (
       i := int(m[1])
     ) is not None:
       chapnames[i] = m[2]
       namechaps[m[2]] = i
     else:
-      log.warning(f'mkv chapter line "{l}" not parsable.')
+      log.warning(f'mkv chapter line "{out}" not parsable.')
 
   splits = []
   chap = None
@@ -93,16 +96,16 @@ def main():
 
   for tf, ff in zip(tfs, ffs):
     chapchange = False
-    for l in subprocess.check_output(
+    for out in subprocess.check_output(
       ["mkvextract", "chapters", "--simple", tf], universal_newlines=True
     ).splitlines():
       if (
-        (m := re.fullmatch(r"CHAPTER(\d+)=(.*)", l))
+        (m := re.fullmatch(r"CHAPTER(\d+)=(.*)", out))
         and (i := int(m[1])) is not None
         and (t := to_float(m[2])) is not None
       ):
         chaptimes[i - 1] = t
-      elif (m := re.fullmatch(r"CHAPTER(\d+)NAME=(.*)", l)) and (
+      elif (m := re.fullmatch(r"CHAPTER(\d+)NAME=(.*)", out)) and (
         i := int(m[1])
       ) is not None:
         chapnames[i - 1] = m[2]

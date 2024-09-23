@@ -2,26 +2,37 @@
 
 import argparse
 import collections
-import enzyme
+# import enzyme
 import glob
 import json
 import logging
 import mutagen
 import os
-import os.path
+import pathlib
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import xml.etree.ElementTree as ET
 import xml.sax.saxutils as saxutils
 
-from cetools import *  # noqa: F403
 from mutagen.mp4 import MP4, MP4Cover
+from sanitize_filename import sanitize
 from urllib.error import HTTPError
 from urllib.parse import urlunparse, urlencode
 from urllib.request import urlopen
-from sanitize_filename import sanitize
+
+from cetools import (
+  add_to_list,
+  alphabetize,
+  defdict,
+  dict_inverse,
+  export,
+  reglob,
+  unparse_time,
+  )
 
 prog = "TagMP4"
 version = "0.4"
@@ -104,22 +115,22 @@ def get_meta_local_tv(episode, ls):
   header = [header_norm[h] if h in header_norm else h for h in header]
 
   if "Episode" not in header:
-    log.warning(f"TV series file contains no Episode header.")
+    log.warning("TV series file contains no Episode header.")
     return its
 
   cur = dict()
   ld = dict()
-  for l in ls:
-    ds = l.split("\t")
+  for l1 in ls:
+    ds = l1.split("\t")
     if len(ds) == len(header):
       cur = {k: v for k, v in zip(header, ds)}
       if "Episode" in cur:
         ld[int(cur["Episode"])] = cur
         del cur["Episode"]
     elif cur:
-      cur["Description"] = f'{cur["Description"]}  {l}' if "Description" in cur else l
+      cur["Description"] = f'{cur["Description"]}  {l1}' if "Description" in cur else l1
     else:
-      log.warning(f"TV series file does not start with a valid data line.")
+      log.warning("TV series file does not start with a valid data line.")
       return its
 
   if episode not in ld:
@@ -193,10 +204,10 @@ def get_meta_local_movie(ls):
   }
 
   its["comment"] = list()
-  for l in ls:
+  for l1 in ls:
     if m := re.fullmatch(
       r"(?P<year>[12]\d\d\d)\s*(?P<rating>G|PG-13|PG|R|NC-17|UR|NR|TV-14|TV-MA)\s*(?:(?P<hours>\d+)h)?\s*(?:(?P<minutes>\d+)m)?\s*(?P<format>.*)",
-      l,
+      l1,
     ):
       its["year"] = int(m.group("year"))
       its["rating"] = m.group("rating")
@@ -205,9 +216,9 @@ def get_meta_local_movie(ls):
       )
       if m.group("format"):
         its["comment"] = add_to_list(its["comment"], f'Format: {m.group("format")}')
-    elif m := re.fullmatch(r"This movie is\s.*", l):
-      its["description"] += l
-    elif m := re.fullmatch(r"Genres?\s*:*\s*(.*)", l):
+    elif m := re.fullmatch(r"This movie is\s.*", l1):
+      its["description"] += l1
+    elif m := re.fullmatch(r"Genres?\s*:*\s*(.*)", l1):
       genres = [
         genre_trans[w.strip()] for w in m[1].split(",") if w.strip() in genre_trans
       ]
@@ -215,19 +226,19 @@ def get_meta_local_movie(ls):
         its["genre"] = genres[0]
       else:
         its["genre"] = m[1]
-    elif m := re.fullmatch(r"Writers?\s*:*\s*(.*)", l):
+    elif m := re.fullmatch(r"Writers?\s*:*\s*(.*)", l1):
       if "writer" in its:
         its["writer"] += f";{m[1]}"
       else:
         its["writer"] = m[1]
-    elif (m := re.fullmatch(r"(\S*)\s*:*\s*(.*)", l)) and m[1] in beg_trans:
+    elif (m := re.fullmatch(r"(\S*)\s*:*\s*(.*)", l1)) and m[1] in beg_trans:
       its["comment"] = add_to_list(its["comment"], f"{beg_trans[m[1]]}: {m[2]}")
     elif "description" in its:
-      its["description"] += f"  {l}"
+      its["description"] += f"  {l1}"
     elif "title" in its:
-      its["description"] = l
+      its["description"] = l1
     else:
-      its["title"] = l
+      its["title"] = l1
 
   return its
 
@@ -237,27 +248,27 @@ def get_meta_local(title, year, season, episode, descpath):
   try:
     with open(descpath, "rt", encoding="utf-8") as f:
       ls = []
-      for l in f:
-        l = re.sub(r"\[(\d+|[a-z])\]", "", l)  # Strip footnotes
-        l = re.sub(r"\s+-+\s+", r"—", l)  # insert proper em-dashes
-        l = re.sub(r"Add to Google Calendar", "", l)  # Google calendar links
-        l = re.sub(r"[\u200A]", "", l)  # Remove hair space, ...
-        l = l.strip()  # Strip leading and trailing whitespace
-        if l == "":
+      for l1 in f:
+        l1 = re.sub(r"\[(\d+|[a-z])\]", "", l1)  # Strip footnotes
+        l1 = re.sub(r"\s+-+\s+", r"—", l1)  # insert proper em-dashes
+        l1 = re.sub(r"Add to Google Calendar", "", l1)  # Google calendar links
+        l1 = re.sub(r"[\u200A]", "", l1)  # Remove hair space, ...
+        l1 = l1.strip()  # Strip leading and trailing whitespace
+        if l1 == "":
           continue
-        if re.fullmatch(r"^(Rate [12345] stars)+(Rate not interested)?(Clear)?", l):
+        if re.fullmatch(r"^(Rate [12345] stars)+(Rate not interested)?(Clear)?", l1):
           continue
-        if re.fullmatch(r"[0-4]\.[0-9]|5\.0", l):
+        if re.fullmatch(r"[0-4]\.[0-9]|5\.0", l1):
           continue
-        if re.fullmatch(r"Movie Details", l):
+        if re.fullmatch(r"Movie Details", l1):
           continue
-        if re.fullmatch(r"Overview\s*Details(\s*Series)?", l):
+        if re.fullmatch(r"Overview\s*Details(\s*Series)?", l1):
           continue
-        if re.fullmatch(r"At Home", l):
+        if re.fullmatch(r"At Home", l1):
           continue
-        if re.fullmatch(r"In Queue", l):
+        if re.fullmatch(r"In Queue", l1):
           continue
-        ls.append(l)
+        ls.append(l1)
   except OSError:
     ls = []
 
@@ -442,7 +453,7 @@ def get_meta_imdb(
       shutil.copyfileobj(f, g)
   except HTTPError as e:
     its["omdb_status"] = e.code
-  except ValueError as e:
+  except ValueError:
     its["omdb_status"] = 400
 
   return its
@@ -456,20 +467,20 @@ def get_meta_mp4info(f):
   if not isinstance(compproc.stdout, str):
     log.warning(f'mp4info "{f}" produced no output.')
     return its
-  for l in compproc.stdout.splitlines():
-    if m := re.fullmatch(r"\s+(.+?)\s*:\s*(.+?)\s*", l):
+  for l1 in compproc.stdout.splitlines():
+    if m := re.fullmatch(r"\s+(.+?)\s*:\s*(.+?)\s*", l1):
       its[m[1]] = m[2]
-    elif m := re.fullmatch(r"(\d+)\s+(\w+)\s*(.*)", l):
+    elif m := re.fullmatch(r"(\d+)\s+(\w+)\s*(.*)", l1):
       its["TrackType" + m[1]] = m[2]
       its["TrackInfo" + m[1]] = m[3]
-    elif re.fullmatch("mp4info version .*", l):
+    elif re.fullmatch("mp4info version .*", l1):
       continue
-    elif re.fullmatch(re.escape(f) + ":", l):
+    elif re.fullmatch(re.escape(f) + ":", l1):
       continue
-    elif re.fullmatch("Track\s+Type\s+Info", l):
+    elif re.fullmatch("Track\s+Type\s+Info", l1):
       continue
     else:
-      log.warning(f'mp4info "{f}" has invalid line "{l}"')
+      log.warning(f'mp4info "{f}" has invalid line "{l1}"')
 
   return its
 
@@ -523,8 +534,8 @@ def get_meta_mutagen(f):
 @export
 def get_meta_enzyme(f):
   its = defdict()
-  with open(f, "rb") as file:
-    mkv = enzyme.MKV(file)
+  # with open(f, "rb") as file:
+  #   mkv = enzyme.MKV(file)
 
   return its
 
@@ -1103,7 +1114,7 @@ if __name__ == "__main__":
   for f in args.files:
     infiles.extend(glob.glob(f))
   if not infiles:
-    log.error(f"No input files.")
+    log.error("No input files.")
     exit(1)
 
   for f in infiles:

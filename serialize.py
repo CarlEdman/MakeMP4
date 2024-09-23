@@ -45,10 +45,7 @@ def serialize(p: pathlib.Path):
     return
 
   if args.titlecase:
-    m = cetools.to_title_case(n)
-    if m != n:
-      log.error(f'"{n}" -> "{m}"')
-      n = m
+    n = cetools.to_title_case(n)
 
   td = p.parent / d
   if not td.exists():
