@@ -1,4 +1,3 @@
-#!/usr/bin/python
 # A subclass of ConfigParser with advanced features
 
 import os.path

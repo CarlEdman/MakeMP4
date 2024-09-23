@@ -1,4 +1,3 @@
-#!/usr/bin/python
 # Various utility functions
 
 import argparse
