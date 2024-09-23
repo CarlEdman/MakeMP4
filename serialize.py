@@ -21,6 +21,14 @@ log = logging.getLogger()
 pat_epis = re.compile(r"\bS(?P<season>\d+)E(?P<episode>\d+)")
 pat_spec = re.compile(r"\bSP(?P<episode>\d+)\b")
 
+videxts = {
+  ".mp4",
+  ".mkv",
+  ".avi",
+  ".mpg",
+  ".m4v",
+  ".mp3",
+}
 
 def serialize(p: pathlib.Path):
   if not p.exists():
@@ -132,9 +140,16 @@ if __name__ == "__main__":
   slogger.setFormatter(logformat)
   log.addHandler(slogger)
 
-  ig = [pathlib.Path(d) for gd in args.paths for d in glob.iglob(gd)]
+  ig = []
+  for p in args.paths:
+    pl = pathlib.Path(p.rstrip(r"/\\\""))
+    if pl.is_dir():
+      ig += pl.rglob(f'*{"|".join({".mkv"})}')
+    else:
+      ig += (pathlib.Path(i) for i in glob.iglob(p))
+
   if len(ig) == 0:
     log.warning(f"No paths matching {args.paths}, skipping.")
 
-  for d in ig:
-    serialize(d)
+  for i in ig:
+    serialize(i)
