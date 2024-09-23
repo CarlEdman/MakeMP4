@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 prog = "mp4infos"
 version = "2.1"

@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 from plexapi.server import PlexServer
 
 plex = PlexServer()
