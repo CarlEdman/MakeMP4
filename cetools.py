@@ -755,6 +755,7 @@ titleCaseLower = {
   "only",
   "or",
   # "plus",
+  "over",
   "the",
   "then",
   "to",
@@ -769,6 +770,8 @@ def to_title_case(s: str) -> str:
   vs = []
   start = True
   for w in s.split():
+    if w.endswith(("'S", "'T",)):
+      w = w[:-1] + w[-1:].lower()
     # Deal with roman numerals
     if isroman(w, strict=False):
       vs.append(w.upper())
@@ -786,6 +789,6 @@ def to_title_case(s: str) -> str:
       vs.append(w.lower())
       start = False
     else:
-      vs.append(w.title())
+      vs.append(w[0].upper() + w[1:].lower())
       start = False
   return " ".join(vs)

@@ -29,6 +29,14 @@ args = None
 pat_epis = re.compile(r"\bS(?P<season>\d+)E(?P<episode>\d+)")
 pat_spec = re.compile(r"\bSP(?P<episode>\d+)\b")
 
+videxts = {
+  ".mp4",
+  ".mkv",
+  ".avi",
+  ".mpg",
+  ".m4v",
+  ".mp3",
+}
 
 def serialize(p: pathlib.Path):
   if not p.exists():
