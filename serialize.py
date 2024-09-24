@@ -1,22 +1,30 @@
 #!/usr/bin/python3
-
 import argparse
 import glob
-import logging
-import logging.handlers
 import pathlib
 import re
+
+import logging
+from logging import (
+  WatchedFileHandler,
+)
+# from logging.handlers import (
+#   )
 
 import cetools
 
 prog = "serialize"
-version = "0.2"
+version = "0.3"
 author = "Carl Edman (CarlEdman@gmail.com)"
 desc = "Sort files into seasonal folders."
 
+log = logging.getLogger()
 parser = None
 args = None
-log = logging.getLogger()
+
+# for h in logging.handlers:
+
+#   case h:
 
 pat_epis = re.compile(r"\bS(?P<season>\d+)E(?P<episode>\d+)")
 pat_spec = re.compile(r"\bSP(?P<episode>\d+)\b")
@@ -72,26 +80,7 @@ if __name__ == "__main__":
   parser = argparse.ArgumentParser(
     fromfile_prefix_chars="@", prog=prog, epilog="Written by: " + author
   )
-  parser.add_argument("--version", action="version", version="%(prog)s " + version)
-  parser.add_argument(
-    "--dryrun",
-    dest="dryrun",
-    action="store_true",
-    help="do not perform operations, but only print them.",
-  )
-  parser.add_argument(
-    "--title-case",
-    dest="titlecase",
-    action="store_true",
-    help="rename files to proper title case.",
-  )
-  parser.add_argument(
-    "--verbose",
-    dest="loglevel",
-    action="store_const",
-    const=logging.INFO,
-    help="print informational (or higher) log messages",
-  )
+
   parser.add_argument(
     "--debug",
     dest="loglevel",
@@ -107,11 +96,33 @@ if __name__ == "__main__":
     help="only print error level (or higher) log messages.",
   )
   parser.add_argument(
+    "--verbose",
+    dest="loglevel",
+    action="store_const",
+    const=logging.INFO,
+    help="print informational (or higher) log messages",
+  )
+
+  parser.add_argument("--version", action="version", version="%(prog)s " + version)
+  parser.add_argument(
+    "--dryrun",
+    dest="dryrun",
+    action="store_true",
+    help="do not perform operations, but only print them",
+  )
+  parser.add_argument(
     "--log", dest="logfile", action="store", help="location of alternate log file"
   )
   parser.add_argument(
     "paths", nargs="+", help="paths to be operated on; may include wildcards"
   )
+  parser.add_argument(
+    "--title-case",
+    dest="titlecase",
+    action="store_true",
+    help="rename files to proper title case",
+  )
+
   parser.set_defaults(loglevel=logging.WARN)
 
   args = parser.parse_args()
@@ -122,7 +133,7 @@ if __name__ == "__main__":
   logformat = logging.Formatter("%(asctime)s [%(levelname)s]: %(message)s")
 
   if args.logfile:
-    flogger = logging.handlers.WatchedFileHandler(args.logfile, "a", "utf-8")
+    flogger = WatchedFileHandler(args.logfile, "a", "utf-8")
     flogger.setLevel(logging.DEBUG)
     flogger.setFormatter(logformat)
     log.addHandler(flogger)
@@ -132,9 +143,11 @@ if __name__ == "__main__":
   slogger.setFormatter(logformat)
   log.addHandler(slogger)
 
-  ig = [pathlib.Path(d) for gd in args.paths for d in glob.iglob(gd)]
-  if len(ig) == 0:
-    log.warning(f"No paths matching {args.paths}, skipping.")
+  fs = (pathlib.Path(fd) for a in args.paths for fd in glob.iglob(a))
 
-  for d in ig:
+  errand = False
+  for d in fs:
+    errand = True
     serialize(d)
+  if not errand:
+    log.warning(f"No paths matching {args.paths}, skipping.")
