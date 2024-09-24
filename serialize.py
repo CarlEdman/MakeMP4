@@ -3,13 +3,9 @@ import argparse
 import glob
 import pathlib
 import re
-
 import logging
-from logging import (
-  WatchedFileHandler,
-)
-# from logging.handlers import (
-#   )
+
+from logging.handlers import WatchedFileHandler
 
 import cetools
 
@@ -37,6 +33,7 @@ videxts = {
   ".m4v",
   ".mp3",
 }
+
 
 def serialize(p: pathlib.Path):
   if not p.exists():
@@ -85,16 +82,14 @@ def serialize(p: pathlib.Path):
 
 
 if __name__ == "__main__":
-  parser = argparse.ArgumentParser(
-    fromfile_prefix_chars="@", prog=prog, epilog="Written by: " + author
-  )
+  parser = argparse.ArgumentParser(fromfile_prefix_chars="@", prog=prog, epilog="Written by: " + author)
 
   parser.add_argument(
     "--debug",
     dest="loglevel",
     action="store_const",
     const=logging.DEBUG,
-    help="print debugging (or higher) log messages.",
+    help="print debugging (or higher) log messages",
   )
   parser.add_argument(
     "--taciturn",
@@ -110,8 +105,17 @@ if __name__ == "__main__":
     const=logging.INFO,
     help="print informational (or higher) log messages",
   )
-
-  parser.add_argument("--version", action="version", version="%(prog)s " + version)
+  parser.add_argument(
+    "--title-case",
+    dest="titlecase",
+    action="store_true",
+    help="rename files to proper title case",
+  )
+  parser.add_argument(
+    "--version",
+    action="version",
+    version="%(prog)s " + version,
+  )
   parser.add_argument(
     "--dryrun",
     dest="dryrun",
@@ -119,16 +123,15 @@ if __name__ == "__main__":
     help="do not perform operations, but only print them",
   )
   parser.add_argument(
-    "--log", dest="logfile", action="store", help="location of alternate log file"
+    "--log",
+    dest="logfile",
+    action="store",
+    help="location of alternate log file",
   )
   parser.add_argument(
-    "paths", nargs="+", help="paths to be operated on; may include wildcards"
-  )
-  parser.add_argument(
-    "--title-case",
-    dest="titlecase",
-    action="store_true",
-    help="rename files to proper title case",
+    "paths",
+    nargs="+",
+    help="paths to be operated on; may include wildcards",
   )
 
   parser.set_defaults(loglevel=logging.WARN)
