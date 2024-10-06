@@ -79,8 +79,13 @@ def tomkv(vidfile: pathlib.Path):
     "--stop-after-video-ends",
     "-o",
     str(tempfile) if tempfile else str(mkvfile),
-    str(vidfile),
   ]
+  if args.striplang:
+    cl += [
+    "-a", args.striplang,
+    "-s", args.striplang,
+      ]
+  cl += [ str(vidfile) ]
   for s in subfiles:
     if (suf := s.suffixes[0]) in lang2iso6392:
       lang = lang2iso6392[suf]
@@ -180,6 +185,12 @@ if __name__ == "__main__":
     dest="titlecase",
     action="store_true",
     help="rename files to proper title case.",
+  )
+  parser.add_argument(
+    "--strip-lang",
+    dest="striplang",
+    action="store",
+    help="Remove audio and subtitle tracks in the given language ISO639-2 code.",
   )
   parser.add_argument(
     "paths", nargs="+", help="paths to be operated on; may include wildcards."
