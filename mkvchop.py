@@ -11,7 +11,7 @@ import sys
 from cetools import (
   to_float,
   unparse_time,
-  )
+)
 
 prog = "mkvchop"
 version = "0.5"
@@ -28,21 +28,23 @@ def main():
   chapnames = {}
   namechaps = {}
   for out in subprocess.check_output(
-    ["mkvextract", "chapters", "--simple", args.infile], universal_newlines=True
-  ).splitlines():
-    if (
-      (m := re.fullmatch(r"CHAPTER(\d+)=(.*)", out)) is not None
-      and (i := int(m[1])) is not None
-      and (t := to_float(m[2])) is not None
-    ):
-      chaptimes[i] = t
-    elif (m := re.fullmatch(r"CHAPTER(\d+)NAME=(.*)", out)) is not None and (
-      i := int(m[1])
-    ) is not None:
-      chapnames[i] = m[2]
-      namechaps[m[2]] = i
-    else:
-      log.warning(f'mkv chapter line "{out}" not parsable.')
+    ["mkvextract",
+     "chapters",
+     "--simple", 
+     args.infile,
+#     universal_newlines=True,
+     ]
+    ).splitlines():
+      if ((m := re.fullmatch(r"CHAPTER(\d+)=(.*)", out)) is not None
+            and (i := int(m[1])) is not None
+            and (t := to_float(m[2])) is not None
+      ):
+        chaptimes[i] = t
+      elif (m := re.fullmatch(r"CHAPTER(\d+)NAME=(.*)", out)) is not None and (i := int(m[1])) is not None:
+        chapnames[i] = m[2]
+        namechaps[m[2]] = i
+      else:
+        log.warning(f'mkv chapter line "{out}" not parsable.')
 
   splits = []
   chap = None
@@ -156,11 +158,10 @@ if __name__ == "__main__":
     help="dryrun only; do not modify file",
   )
   parser.add_argument(
-    "-s",
     "--start",
     type=int,
     default=1,
-    help="initial value of index for outfiles (default: %(default)d)",
+    help="initial index for outfiles (default: %(default)d)",
   )
   parser.add_argument("infile", type=str, help="mkv file to be chopped up")
   parser.add_argument(
