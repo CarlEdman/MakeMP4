@@ -10,11 +10,17 @@ ignore = ["E501"]
 # Avoid trying to fix flake8-bugbear (`B`) violations.
 unfixable = ["B"]
 
-# Ignore `E402` (import violations) in all `__init__.py` files, and in selected subdirectories.
 [lint.per-file-ignores]
+# Ignore `E402` (import violations) in all `__init__.py` files, and in selected subdirectories.
 "__init__.py" = ["E402"]
 "**/{tests,docs,tools}/*" = ["E402"]
 
-# Use single quotes in `ruff format`.
 [format]
+# Use single quotes in `ruff format`.
 quote-style = "single"
+
+# Enable reformatting of code snippets in docstrings.
+docstring-code-format = true
+
+# Use tabs instead of 2 space indentation.
+indent-style = "space"
