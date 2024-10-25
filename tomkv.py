@@ -102,13 +102,12 @@ def tomkv(vidfile: pathlib.Path):
         iso6392 = iso6391to6392[s]
       elif s in lang2iso6392:
         iso6392 = lang2iso6392[s]
-    
-    if iso6392:
-      cl += ['--language', f'0:{iso6392}']
-    else:
-      log.warning(f'Cannot identify language for {subfile}')
 
-    cl.append(str(subfile))
+    if not iso6392:
+      iso6392 = "eng"
+      log.warning(f'Cannot identify language for {subfile}, defaulting to {iso6392}')
+
+    cl += ['--language', f'0:{iso6392}', str(subfile)]
   log.info(files2quotedstring(cl))
   if not args.dryrun:
     try:
