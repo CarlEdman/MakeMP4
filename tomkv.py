@@ -9,9 +9,8 @@ import subprocess
 from cetools import (
   basestem,
   lang2iso6392,
-  iso6392,
-  #    iso6392tolang,
-  iso6391tolang,
+  iso6392tolang,
+  iso6391to6392,
   files2quotedstring,
   sortkey,
   to_title_case,
@@ -89,28 +88,27 @@ def tomkv(vidfile: pathlib.Path):
       args.striplang,
     ]
   cl += [str(vidfile)]
-  for s in subfiles:
-    if (suf := s.suffixes[0]) in lang2iso6392:
-      lang = lang2iso6392[suf]
-    elif (suf := suf.lstrip('.')) in lang2iso6392:
-      lang = lang2iso6392[suf]
-    elif suf in iso6391tolang:
-      lang = suf
-    elif (suf := suf.lstrip('0123456789')) in lang2iso6392:
-      lang = lang2iso6392[suf]
-    elif (suf := suf.lstrip('_')) in lang2iso6392:
-      lang = lang2iso6392[suf]
-    elif suf in iso6392:
-      lang = suf
-    elif (suf := suf[: suf.find(',')]) in iso6392:
-      lang = suf
+  for subfile in subfiles:
+    suffixes = [s.lstrip('.') for s in subfile.suffixes]
+    suffixes = [t for s in suffixes for t in s.split()]
+    suffixes = [t for s in suffixes for t in s.split('_')]
+    suffixes = [t for s in suffixes for t in s.split(',')]
+
+    iso6392 = None
+    for s in suffixes:
+      if s in iso6392tolang:
+        iso6392 = s
+      elif s in iso6391to6392:
+        iso6392 = iso6391to6392[s]
+      elif s in lang2iso6392:
+        iso6392 = lang2iso6392[s]
+    
+    if iso6392:
+      cl += ['--language', f'0:{iso6392}']
     else:
-      log.warning(f'Cannot identify language for {s}')
-      lang = None
-    if lang:
-      cl += ['--language', f'0:{lang}']
-    #            cl += ["--track-name", "Subtitle"]
-    cl.append(str(s))
+      log.warning(f'Cannot identify language for {subfile}')
+
+    cl.append(str(subfile))
   log.info(files2quotedstring(cl))
   if not args.dryrun:
     try:
