@@ -775,6 +775,8 @@ titleCaseLower = {
 
 nonAlphaWordChars = "'"
 
+# partpat = re.compile(r'\((?P<part>\d)\)')
+
 def to_title_case(s: str) -> str:
   vs = []
   start = True
@@ -800,4 +802,7 @@ def to_title_case(s: str) -> str:
     else:
       vs.append(w[0].upper() + w[1:].lower())
       start = False
+  # if (len(vs) >= 2) and (mat := partpat.fullmatch(vs[-1])):
+  #   vs[-1] = f'Part {mat.group('part')}'
+  #   vs[-2] += ','
   return " ".join(vs)

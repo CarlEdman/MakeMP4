@@ -10,7 +10,7 @@ from logging.handlers import WatchedFileHandler
 import cetools
 
 prog = "serialize"
-version = "0.3"
+version = "0.4"
 author = "Carl Edman (CarlEdman@gmail.com)"
 desc = "Sort files into seasonal folders."
 
@@ -22,9 +22,6 @@ args = None
 
 #   case h:
 
-pat_epis = re.compile(r"\bS(?P<season>\d+)E(?P<episode>\d+)")
-pat_spec = re.compile(r"\bSP(?P<episode>\d+)\b")
-
 videxts = {
   ".mp4",
   ".mkv",
@@ -34,28 +31,57 @@ videxts = {
   ".mp3",
 }
 
+pat = re.compile(
+  r'(?P<show>.*)\s+(S(?P<season>\d+)E|(?P<special>SP))(?P<episode>\d+)(?P<extraeps>(E\d+)+)?(?:\s+(?P<desc>.*))?'
+)
 
 def serialize(p: pathlib.Path):
   if not p.exists():
-    log.warning(f'"{p}" does not exist')
+    log.warning(f'"{p}" does not exist, skipping.')
     return
   if not p.is_file():
-    log.warning(f'"{p}" is not a file')
+    log.warning(f'"{p}" is not a file, skipping.')
+    return
+  if p.suffix not in videxts:
+    log.warning(f'"{p}" is not a recognized video file, skipping.')
     return
 
-  if mat := re.search(pat_epis, p.stem):
-    if int(mat.group("season")) == 0:
-      d = "Specials"
-      n = re.sub(r"\bS00E", "SP", p.name, count=1)
-    else:
-      d = f"Season {mat.group('season')}"
-      n = p.name
-  elif re.search(pat_spec, p.stem):
-    d = "Specials"
-    n = p.name
+  if mat := pat.fullmatch(p.stem):
+    show = mat.group('show')
+    season = mat.group('season')
+    special = mat.group('special')
+    episode = mat.group('episode')
+    extraeps = mat.group('extraeps')
+    desc = mat.group('desc')
+    if special or (season and int(season) == 0):
+      if episode and int(episode) > 100:
+        d = 'Extras'
+        if desc:
+          n = f'{desc}{p.suffix}'
+        else:
+          log.warning(f'"{p}" is not a recognized extras video file, skipping.')
+          return
+      else:
+        d = 'Specials'
+        n = f'{show} SP{episode}'
+        if extraeps:
+          n += extraeps
+        if desc:
+          n += f' {desc}'
+        n += p.suffix
+    elif season and int(season) > 0 and episode and int(episode) > 0:
+      d = f'Season {int(season):02}'
+      n = f'{show} S{season}E{episode}'
+      if extraeps:
+        n += extraeps
+      if desc:
+        n += f' {desc}'
+      n += p.suffix
   else:
-    log.warning(f'"{p}" not serializable, skipping')
-    return
+    d = 'Extras'
+    n = str(p)
+#    log.warning(f'"{p}" not serializable, skipping')
+#    return
 
   if args.titlecase:
     n = cetools.to_title_case(n)
@@ -79,7 +105,6 @@ def serialize(p: pathlib.Path):
   log.info(f'mv "{p}" "{t}"')
   if not args.dryrun:
     p.rename(t)
-
 
 if __name__ == "__main__":
   parser = argparse.ArgumentParser(fromfile_prefix_chars="@", prog=prog, epilog="Written by: " + author)
@@ -157,8 +182,16 @@ if __name__ == "__main__":
   fs = (pathlib.Path(fd) for a in args.paths for fd in glob.iglob(a))
 
   errand = False
-  for d in fs:
+  for f in fs:
     errand = True
-    serialize(d)
+    if f.is_dir():
+      for f2 in f.iterdir():
+        if f2.is_file():
+          serialize(f2)
+          errand = True
+    elif f.is_file():
+      serialize(f)
+      errand = True
+      
   if not errand:
-    log.warning(f"No paths matching {args.paths}, skipping.")
+    log.warning(f"No proper files matching {args.paths}.")
