@@ -63,7 +63,7 @@ def serialize(p: pathlib.Path):
           return
       else:
         d = 'Specials'
-        n = f'{show} SP{episode}'
+        n = f'{show} S00E{episode}'
         if extraeps:
           n += extraeps
         if desc:
