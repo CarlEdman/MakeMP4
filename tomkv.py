@@ -47,7 +47,7 @@ subexts_bad = {
 }
 
 
-def tomkv(vidfile: pathlib.Path):
+def doit(vidfile: pathlib.Path):
   if vidfile.suffix not in videxts or not vidfile.is_file():
     log.warning(f'"{vidfile}" is not recognized video file, skipping')
     return
@@ -95,8 +95,6 @@ def tomkv(vidfile: pathlib.Path):
     '--stop-after-video-ends',
     '-o', 
     str(tempfile),
-    '-o', 
-    str(tempfile),
   ]
 
 
@@ -110,7 +108,6 @@ def tomkv(vidfile: pathlib.Path):
 
 
   cl += [str(vidfile)]
-  for subfile in sorted(subfiles, key=sortkey):
   for subfile in sorted(subfiles, key=sortkey):
     suffixes = [s.lstrip('.') for s in subfile.suffixes]
     suffixes = [t for s in suffixes for t in s.split()]
@@ -152,14 +149,10 @@ def tomkv(vidfile: pathlib.Path):
   if args.nodelete:
     return
 
-  log.info(f'rm {files2quotedstring([vidfile])}')
+  log.info(f'rm {files2quotedstring([vidfile] + subfiles)}')
   if not args.dryrun:
     vidfile.unlink()
-
-  if subfiles:
-    log.info(f'rm {files2quotedstring(subfiles)}')
     for s in subfiles:
-      if not args.dryrun:
         s.unlink()
 
 if __name__ == '__main__':
@@ -238,10 +231,17 @@ if __name__ == '__main__':
   slogger.setFormatter(logformat)
   log.addHandler(slogger)
 
-  ig = [pathlib.Path(d) for gd in args.paths for d in glob.iglob(gd)]
-  if len(ig) == 0:
-    log.warning(f'No paths matching {args.paths}, skipping.')
-    exit()
+  errand = False
+  for f in (pathlib.Path(fd) for a in args.paths for fd in glob.iglob(a)):
+    errand = True
+    if f.is_dir():
+      for f2 in f.iterdir():
+        if f2.is_file() and f2.suffix in videxts:
+          doit(f2)
+          errand = True
+    elif f.is_file():
+      doit(f)
+      errand = True
 
-  for d in ig:
-    tomkv(d)
+  if not errand:
+    log.warning(f'No proper files matching {args.paths}.')

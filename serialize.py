@@ -35,7 +35,7 @@ pat = re.compile(
   r'(?P<show>.*)\s+(S(?P<season>\d+)E|(?P<special>SP))(?P<episode>\d+)(?P<extraeps>(E\d+)+)?(?:\s+(?P<desc>.*))?'
 )
 
-def serialize(p: pathlib.Path):
+def doit(p: pathlib.Path):
   if not p.exists():
     log.warning(f'"{p}" does not exist, skipping.')
     return
@@ -179,19 +179,17 @@ if __name__ == "__main__":
   slogger.setFormatter(logformat)
   log.addHandler(slogger)
 
-  fs = (pathlib.Path(fd) for a in args.paths for fd in glob.iglob(a))
-
   errand = False
-  for f in fs:
+  for f in (pathlib.Path(fd) for a in args.paths for fd in glob.iglob(a)):
     errand = True
     if f.is_dir():
       for f2 in f.iterdir():
         if f2.is_file():
-          serialize(f2)
+          doit(f2)
           errand = True
     elif f.is_file():
-      serialize(f)
+      doit(f)
       errand = True
-      
+
   if not errand:
-    log.warning(f"No proper files matching {args.paths}.")
+    log.warning(f'No proper files matching {args.paths}.')

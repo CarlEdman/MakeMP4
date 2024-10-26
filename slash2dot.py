@@ -20,7 +20,7 @@ args = None
 log = logging.getLogger()
 
 
-def slash2dot(p: pathlib.Path):
+def doit(p: pathlib.Path):
   dir = pathlib.Path.cwd().resolve()
   try:
     r = p.resolve().relative_to(dir)
@@ -131,9 +131,17 @@ if __name__ == "__main__":
   slogger.setFormatter(logformat)
   log.addHandler(slogger)
 
-  ig = [pathlib.Path(d) for gd in args.paths for d in glob.iglob(gd)]
-  if len(ig) == 0:
-    log.warning(f"No paths matching {args.paths}, skipping.")
-  else:
-    for d in ig:
-      slash2dot(d)
+  errand = False
+  for f in (pathlib.Path(fd) for a in args.paths for fd in glob.iglob(a)):
+    errand = True
+    if f.is_dir():
+      for f2 in f.iterdir():
+        if f2.is_file():
+          doit(f2)
+          errand = True
+    elif f.is_file():
+      doit(f)
+      errand = True
+
+  if not errand:
+    log.warning(f'No proper files matching {args.paths}.')
