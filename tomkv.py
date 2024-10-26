@@ -54,6 +54,9 @@ def tomkv(vidfile: pathlib.Path):
   mkvfile = vidfile.with_suffix('.mkv')
   if args.titlecase:
     mkvfile = mkvfile.with_stem(to_title_case(mkvfile.stem))
+
+  tempfile = mkvfile.with_stem(mkvfile.stem + '-temp')
+
   if vidfile != mkvfile and mkvfile.exists():
     log.warning(f'"{mkvfile}" exists')
     return
@@ -71,15 +74,20 @@ def tomkv(vidfile: pathlib.Path):
     if basestem(subfile) != basestem(vidfile):
       continue
     subfiles.append(subfile)
-  subfiles.sort(key=sortkey)
 
-  tempfile = mkvfile.with_stem(mkvfile.stem + '-temp') if vidfile == mkvfile else None
+  if vidfile == mkvfile and not subfiles:
+    log.warning(
+      f'"{mkvfile}" is already in MKV format and there are no subtitles to integrate, skipping.'
+    )
+    return
+
   cl = [
     'mkvmerge',
     '--stop-after-video-ends',
-    '-o',
-    str(tempfile) if tempfile else str(mkvfile),
+    '-o', 
+    str(tempfile),
   ]
+
   if args.striplang:
     cl += [
       '-a',
@@ -87,8 +95,9 @@ def tomkv(vidfile: pathlib.Path):
       '-s',
       args.striplang,
     ]
+
   cl += [str(vidfile)]
-  for subfile in subfiles:
+  for subfile in sorted(subfiles, key=sortkey):
     suffixes = [s.lstrip('.') for s in subfile.suffixes]
     suffixes = [t for s in suffixes for t in s.split()]
     suffixes = [t for s in suffixes for t in s.split('_')]
@@ -108,6 +117,7 @@ def tomkv(vidfile: pathlib.Path):
       log.warning(f'Cannot identify language for {subfile}, defaulting to {iso6392}')
 
     cl += ['--language', f'0:{iso6392}', str(subfile)]
+
   log.info(files2quotedstring(cl))
   if not args.dryrun:
     try:
@@ -123,21 +133,16 @@ def tomkv(vidfile: pathlib.Path):
       log.error(f'{e}\nMoving on ...')
       return
   if args.nodelete:
-    pass
-  elif tempfile:
-    log.info(f'mv {files2quotedstring([tempfile, mkvfile])}')
-    if not args.dryrun:
-      tempfile.replace(mkvfile)
-  else:
-    log.info(f'rm {files2quotedstring([vidfile])}')
-    if not args.dryrun:
-      vidfile.unlink()
-  if not args.nodelete and subfiles:
+    return
+  
+  log.info(f'mv {files2quotedstring([tempfile, mkvfile])}')
+  if not args.dryrun:
+    tempfile.replace(mkvfile)
+  if subfiles:
     log.info(f'rm {files2quotedstring(subfiles)}')
     for s in subfiles:
       if not args.dryrun:
         s.unlink()
-
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser(
