@@ -57,6 +57,9 @@ def tomkv(vidfile: pathlib.Path):
 
   tempfile = mkvfile.with_stem(mkvfile.stem + '-temp')
 
+
+  tempfile = mkvfile.with_stem(mkvfile.stem + '-temp')
+
   if vidfile != mkvfile and mkvfile.exists():
     log.warning(f'"{mkvfile}" exists')
     return
@@ -81,12 +84,21 @@ def tomkv(vidfile: pathlib.Path):
     )
     return
 
+  if vidfile == mkvfile and not subfiles:
+    log.warning(
+      f'"{mkvfile}" is already in MKV format and there are no subtitles to integrate, skipping.'
+    )
+    return
+
   cl = [
     'mkvmerge',
     '--stop-after-video-ends',
     '-o', 
     str(tempfile),
+    '-o', 
+    str(tempfile),
   ]
+
 
   if args.striplang:
     cl += [
@@ -96,7 +108,9 @@ def tomkv(vidfile: pathlib.Path):
       args.striplang,
     ]
 
+
   cl += [str(vidfile)]
+  for subfile in sorted(subfiles, key=sortkey):
   for subfile in sorted(subfiles, key=sortkey):
     suffixes = [s.lstrip('.') for s in subfile.suffixes]
     suffixes = [t for s in suffixes for t in s.split()]
@@ -117,6 +131,7 @@ def tomkv(vidfile: pathlib.Path):
       log.warning(f'Cannot identify language for {subfile}, defaulting to {iso6392}')
 
     cl += ['--language', f'0:{iso6392}', str(subfile)]
+
 
   log.info(files2quotedstring(cl))
   if not args.dryrun:
