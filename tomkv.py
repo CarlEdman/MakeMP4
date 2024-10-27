@@ -57,12 +57,10 @@ def doit(vidfile: pathlib.Path):
 
   tempfile = mkvfile.with_stem(mkvfile.stem + '-temp')
 
-
-  tempfile = mkvfile.with_stem(mkvfile.stem + '-temp')
-
   if vidfile != mkvfile and mkvfile.exists():
     log.warning(f'"{mkvfile}" exists')
     return
+
   subfiles = []
   for subfile in vidfile.parent.iterdir():
     if not subfile.is_file():
@@ -78,36 +76,18 @@ def doit(vidfile: pathlib.Path):
       continue
     subfiles.append(subfile)
 
-  if vidfile == mkvfile and not subfiles:
+  if vidfile == mkvfile and not subfiles and not args.langs:
     log.warning(
-      f'"{mkvfile}" is already in MKV format and there are no subtitles to integrate, skipping.'
+      f'"{mkvfile}" is already in MKV format, there are no subtitles to integrate, and languags are unchanged: skipping...'
     )
     return
 
-  if vidfile == mkvfile and not subfiles:
-    log.warning(
-      f'"{mkvfile}" is already in MKV format and there are no subtitles to integrate, skipping.'
-    )
-    return
+  cl = [ 'mkvmerge', '--stop-after-video-ends', '-o',  tempfile ]
 
-  cl = [
-    'mkvmerge',
-    '--stop-after-video-ends',
-    '-o', 
-    str(tempfile),
-  ]
+  if args.langs:
+    cl += [ '--audio-tracks', args.langs, ' --subtitle-tracks', args.langs ]
 
-
-  if args.striplang:
-    cl += [
-      '-a',
-      args.striplang,
-      '-s',
-      args.striplang,
-    ]
-
-
-  cl += [str(vidfile)]
+  cl += [ vidfile ]
   for subfile in sorted(subfiles, key=sortkey):
     suffixes = [s.lstrip('.') for s in subfile.suffixes]
     suffixes = [t for s in suffixes for t in s.split()]
@@ -127,13 +107,12 @@ def doit(vidfile: pathlib.Path):
       iso6392 = "eng"
       log.warning(f'Cannot identify language for {subfile}, defaulting to {iso6392}')
 
-    cl += ['--language', f'0:{iso6392}', str(subfile)]
-
+    cl += [ '--language', f'0:{iso6392}', subfile ]
 
   log.info(files2quotedstring(cl))
   if not args.dryrun:
     try:
-      subprocess.run(cl, check=True, capture_output=True, text=True)
+      subprocess.run(map(str, cl), check=True, capture_output=True, text=True)
     except KeyboardInterrupt as e:
       log.error(f'{e} Interrupted ...')
       tempfile.unlink(missing_ok=True)
@@ -158,59 +137,70 @@ def doit(vidfile: pathlib.Path):
 if __name__ == '__main__':
   parser = argparse.ArgumentParser(
     fromfile_prefix_chars='@', prog=prog, epilog='Written by: ' + author
-  )
-  parser.add_argument('--version', action='version', version='%(prog)s ' + version)
+    )
+  parser.add_argument(
+    '-d',
+    '--dryrun',
+    dest='dryrun',
+    action='store_true',
+    help='do not perform operations, but only print them.',
+    )
+  parser.add_argument(
+    '-n',
+    '--no-delete',
+    dest='nodelete',
+    action='store_true',
+    help='do not delete source files (video and subtitles) after conversion to MKV.',
+    )
+  parser.add_argument(
+    '-t',
+    '--title-case',
+    dest='titlecase',
+    action='store_true',
+    help='rename files to proper title case.',
+    )
+  parser.add_argument(
+    '-l',
+    '--languages',
+    '--language',
+    '--langs',
+    '--lang',
+    dest='langs',
+    action='store',
+    help='Set audio and subtitle tracks in the given language ISO639-2 codes; prefix with ! to negate.',
+    )
+  parser.add_argument(
+    '--version', 
+    action='version', 
+    version='%(prog)s ' + version
+    )
   parser.add_argument(
     '--verbose',
     dest='loglevel',
     action='store_const',
     const=logging.INFO,
     help='print informational (or higher) log messages.',
-  )
+    )
   parser.add_argument(
     '--debug',
     dest='loglevel',
     action='store_const',
     const=logging.DEBUG,
     help='print debugging (or higher) log messages.',
-  )
+    )
   parser.add_argument(
     '--taciturn',
     dest='loglevel',
     action='store_const',
     const=logging.ERROR,
     help='only print error level (or higher) log messages.',
-  )
+    )
   parser.add_argument(
     '--log', dest='logfile', action='store', help='location of alternate log file.'
-  )
-  parser.add_argument(
-    '--dryrun',
-    dest='dryrun',
-    action='store_true',
-    help='do not perform operations, but only print them.',
-  )
-  parser.add_argument(
-    '--no-delete',
-    dest='nodelete',
-    action='store_true',
-    help='do not delete source files (video and subtitles) after conversion to MKV.',
-  )
-  parser.add_argument(
-    '--title-case',
-    dest='titlecase',
-    action='store_true',
-    help='rename files to proper title case.',
-  )
-  parser.add_argument(
-    '--strip-lang',
-    dest='striplang',
-    action='store',
-    help='Remove audio and subtitle tracks in the given language ISO639-2 code.',
-  )
+    )
   parser.add_argument(
     'paths', nargs='+', help='paths to be operated on; may include wildcards.'
-  )
+    )
   parser.set_defaults(loglevel=logging.WARN)
 
   args = parser.parse_args()
