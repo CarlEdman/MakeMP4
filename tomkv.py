@@ -57,12 +57,10 @@ def doit(vidfile: pathlib.Path):
 
   tempfile = mkvfile.with_stem(mkvfile.stem + '-temp')
 
-
-  tempfile = mkvfile.with_stem(mkvfile.stem + '-temp')
-
   if vidfile != mkvfile and mkvfile.exists():
     log.warning(f'"{mkvfile}" exists')
     return
+
   subfiles = []
   for subfile in vidfile.parent.iterdir():
     if not subfile.is_file():
@@ -78,36 +76,18 @@ def doit(vidfile: pathlib.Path):
       continue
     subfiles.append(subfile)
 
-  if vidfile == mkvfile and not subfiles:
+  if vidfile == mkvfile and not subfiles and not args.languages:
     log.warning(
-      f'"{mkvfile}" is already in MKV format and there are no subtitles to integrate, skipping.'
+      f'"{mkvfile}" is already in MKV format, there are no subtitles to integrate, and languages are set: skipping...'
     )
     return
 
-  if vidfile == mkvfile and not subfiles:
-    log.warning(
-      f'"{mkvfile}" is already in MKV format and there are no subtitles to integrate, skipping.'
-    )
-    return
+  cl = [ 'mkvmerge', '--stop-after-video-ends', '-o',  tempfile ]
 
-  cl = [
-    'mkvmerge',
-    '--stop-after-video-ends',
-    '-o', 
-    str(tempfile),
-  ]
+  if args.languages:
+    cl += [ '--audio-tracks', args.languages, ' --subtitle-tracks', args.languages ]
 
-
-  if args.striplang:
-    cl += [
-      '-a',
-      args.striplang,
-      '-s',
-      args.striplang,
-    ]
-
-
-  cl += [str(vidfile)]
+  cl += [ vidfile ]
   for subfile in sorted(subfiles, key=sortkey):
     suffixes = [s.lstrip('.') for s in subfile.suffixes]
     suffixes = [t for s in suffixes for t in s.split()]
@@ -127,13 +107,12 @@ def doit(vidfile: pathlib.Path):
       iso6392 = "eng"
       log.warning(f'Cannot identify language for {subfile}, defaulting to {iso6392}')
 
-    cl += ['--language', f'0:{iso6392}', str(subfile)]
-
+    cl += [ '--language', f'0:{iso6392}', subfile ]
 
   log.info(files2quotedstring(cl))
   if not args.dryrun:
     try:
-      subprocess.run(cl, check=True, capture_output=True, text=True)
+      subprocess.run(map(str, cl), check=True, capture_output=True, text=True)
     except KeyboardInterrupt as e:
       log.error(f'{e} Interrupted ...')
       tempfile.unlink(missing_ok=True)
@@ -203,10 +182,10 @@ if __name__ == '__main__':
     help='rename files to proper title case.',
   )
   parser.add_argument(
-    '--strip-lang',
-    dest='striplang',
+    '--language',
+    dest='languages',
     action='store',
-    help='Remove audio and subtitle tracks in the given language ISO639-2 code.',
+    help='Set audio and subtitle tracks in the given language ISO639-2 codes; prefix with ! to negate.',
   )
   parser.add_argument(
     'paths', nargs='+', help='paths to be operated on; may include wildcards.'
