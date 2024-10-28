@@ -139,13 +139,6 @@ if __name__ == '__main__':
     fromfile_prefix_chars='@', prog=prog, epilog='Written by: ' + author
     )
   parser.add_argument(
-    '-d',
-    '--dryrun',
-    dest='dryrun',
-    action='store_true',
-    help='do not perform operations, but only print them.',
-    )
-  parser.add_argument(
     '-n',
     '--no-delete',
     dest='nodelete',
@@ -166,6 +159,13 @@ if __name__ == '__main__':
     action='store',
     help='Set audio and subtitle tracks in the given language ISO639-2 codes; prefix with ! to negate.',
     )
+  parser.add_argument(
+    '-d',
+    '--dryrun',
+    dest='dryrun',
+    action='store_true',
+    help='do not perform operations, but only print them.',
+  )
   parser.add_argument(
     '--version', 
     action='version', 
@@ -194,31 +194,13 @@ if __name__ == '__main__':
     )
   parser.add_argument(
     '--log', dest='logfile', action='store', help='location of alternate log file.'
-  )
+    )
   parser.add_argument(
     '--dryrun',
     dest='dryrun',
     action='store_true',
     help='do not perform operations, but only print them.',
-  )
-  parser.add_argument(
-    '--no-delete',
-    dest='nodelete',
-    action='store_true',
-    help='do not delete source files (video and subtitles) after conversion to MKV.',
-  )
-  parser.add_argument(
-    '--title-case',
-    dest='titlecase',
-    action='store_true',
-    help='rename files to proper title case.',
-  )
-  parser.add_argument(
-    '--language',
-    dest='languages',
-    action='store',
-    help='Set audio and subtitle tracks in the given language ISO639-2 codes; prefix with ! to negate.',
-  )
+    )
   parser.add_argument(
     'paths', nargs='+', help='paths to be operated on; may include wildcards.'
     )
