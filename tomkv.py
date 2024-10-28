@@ -76,16 +76,16 @@ def doit(vidfile: pathlib.Path):
       continue
     subfiles.append(subfile)
 
-  if vidfile == mkvfile and not subfiles and not args.langs:
+  if vidfile == mkvfile and not subfiles and not args.languages:
     log.warning(
-      f'"{mkvfile}" is already in MKV format, there are no subtitles to integrate, and languags are unchanged: skipping...'
+      f'"{mkvfile}" is already in MKV format, there are no subtitles to integrate, and languages are set: skipping...'
     )
     return
 
   cl = [ 'mkvmerge', '--stop-after-video-ends', '-o',  tempfile ]
 
-  if args.langs:
-    cl += [ '--audio-tracks', args.langs, ' --subtitle-tracks', args.langs ]
+  if args.languages:
+    cl += [ '--audio-tracks', args.languages, ' --subtitle-tracks', args.languages ]
 
   cl += [ vidfile ]
   for subfile in sorted(subfiles, key=sortkey):
@@ -162,10 +162,7 @@ if __name__ == '__main__':
   parser.add_argument(
     '-l',
     '--languages',
-    '--language',
-    '--langs',
-    '--lang',
-    dest='langs',
+    dest='languages',
     action='store',
     help='Set audio and subtitle tracks in the given language ISO639-2 codes; prefix with ! to negate.',
     )
