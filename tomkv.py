@@ -45,7 +45,7 @@ subexts = {
 subexts_skip = {
   '.sub',
 }
-
+ 
 
 def doit(vidfile: pathlib.Path):
   if vidfile.suffix not in videxts or not vidfile.is_file():
