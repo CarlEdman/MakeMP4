@@ -42,7 +42,7 @@ subexts = {
   '.sup',
 }
 
-subexts_bad = {
+subexts_skip = {
   '.sub',
 }
 
@@ -67,11 +67,6 @@ def doit(vidfile: pathlib.Path):
       continue
     if subfile.suffix not in subexts:
       continue
-    if subfile.suffix in subexts_bad:
-      log.warning(
-        f'"{subfile}" not in recognized subtitle format.  Try to convert to, e.g., srt using, e.g., https://subtitletools.com/).'
-      )
-      continue
     if basestem(subfile) != basestem(vidfile):
       continue
     subfiles.append(subfile)
@@ -85,10 +80,16 @@ def doit(vidfile: pathlib.Path):
   cl = [ 'mkvmerge', '--stop-after-video-ends', '-o',  tempfile ]
 
   if args.languages:
-    cl += [ '--audio-tracks', args.languages, ' --subtitle-tracks', args.languages ]
+    cl += [ '--audio-tracks', args.languages, '--subtitle-tracks', args.languages ]
 
   cl += [ vidfile ]
   for subfile in sorted(subfiles, key=sortkey):
+    if subfile.suffix in subexts_skip:
+      # log.warning(
+      #   f'"{subfile}" not in recognized subtitle format.  Try to convert to, e.g., srt using, e.g., https://subtitletools.com/).'
+      # )
+      continue
+
     suffixes = [s.lstrip('.') for s in subfile.suffixes]
     suffixes = [t for s in suffixes for t in s.split()]
     suffixes = [t for s in suffixes for t in s.split('_')]
@@ -112,7 +113,7 @@ def doit(vidfile: pathlib.Path):
   log.info(files2quotedstring(cl))
   if not args.dryrun:
     try:
-      subprocess.run(map(str, cl), check=True, capture_output=True, text=True)
+      subprocess.run(list(map(str, cl)), check=True, capture_output=True, text=True)
     except KeyboardInterrupt as e:
       log.error(f'{e} Interrupted ...')
       tempfile.unlink(missing_ok=True)
@@ -125,14 +126,16 @@ def doit(vidfile: pathlib.Path):
   if not args.dryrun:
     tempfile.replace(mkvfile)
 
-  if args.nodelete:
+  delfiles = [] if vidfile == mkvfile else [ vidfile ]
+  delfiles += subfiles
+
+  if args.nodelete or not delfiles:
     return
 
-  log.info(f'rm {files2quotedstring([vidfile] + subfiles)}')
+  log.info(f'rm {files2quotedstring(delfiles)}')
   if not args.dryrun:
-    vidfile.unlink()
-    for s in subfiles:
-        s.unlink()
+    for d in delfiles:
+      d.unlink()
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser(
