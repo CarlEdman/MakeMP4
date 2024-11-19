@@ -29,13 +29,19 @@ videxts = {
   '.avi',
   '.m4v',
   '.mkv',
+  '.mkv',
   '.mp3',
+  '.mp4',
+  '.mpg',
+  '.ts',
   '.mp4',
   '.mpg',
   '.ts',
 }
 
 subexts = {
+  '.ass',
+  '.idx',
   '.ass',
   '.idx',
   '.srt',
@@ -45,6 +51,29 @@ subexts = {
 
 subexts_skip = {
  '.sub',
+ '.sub',
+}
+
+posterexts2mime = {
+  'apng': 'image/apng',
+  'avif': 'image/avif',
+  'bmp': 'image/bmp',
+  'emf': 'image/emf',
+  'gif': 'image/gif',
+  'heic': 'image/heic',
+  'heif': 'image/heif',
+  'jpeg': 'image/jpeg',
+  'png': 'image/png',
+  'svg+xml': 'image/svg+xml',
+  'tiff': 'image/tiff',
+  'webp': 'image/webp',
+  'wmf': 'image/wmf',
+}
+
+posternames = {
+  'cover',
+  'poster',
+  '',
 }
 
 posterexts2mime = {
@@ -81,6 +110,8 @@ def doit(vidfile: pathlib.Path):
 
   if mkvfile.exists() and not vidfile.samefile(mkvfile):
     log.warning(f'"{mkvfile}" already exists')
+  if mkvfile.exists() and not vidfile.samefile(mkvfile):
+    log.warning(f'"{mkvfile}" already exists')
     return
 
   cl = [ 'mkvmerge', '--stop-after-video-ends', '-o',  tempfile ]
@@ -102,6 +133,22 @@ def doit(vidfile: pathlib.Path):
         # )
         continue
 
+  intfiles = []
+  for f in sorted(list(vidfile.parent.iterdir()), key=sortkey):
+    if not f.is_file():
+      continue
+    if f.suffix in subexts and basestem(f) == basestem(vidfile):
+      intfiles.append(f)
+      if f.suffix in subexts_skip:
+        # log.warning(
+        #   f'"{subfile}" not in recognized subtitle format.  Try to convert to, e.g., srt using, e.g., https://subtitletools.com/).'
+        # )
+        continue
+
+      sufs = [s.lstrip('.') for s in f.suffixes]
+      sufs = [t for s in sufs for t in s.split()]
+      sufs = [t for s in sufs for t in s.split('_')]
+      sufs = [t for s in sufs for t in s.split(',')]
       sufs = [s.lstrip('.') for s in f.suffixes]
       sufs = [t for s in sufs for t in s.split()]
       sufs = [t for s in sufs for t in s.split('_')]
@@ -115,12 +162,37 @@ def doit(vidfile: pathlib.Path):
           iso6392 = iso6391to6392[s]
         elif s in lang2iso6392:
           iso6392 = lang2iso6392[s]
+      iso6392 = None
+      for s in sufs:
+        if s in iso6392tolang:
+          iso6392 = s
+        elif s in iso6391to6392:
+          iso6392 = iso6391to6392[s]
+        elif s in lang2iso6392:
+          iso6392 = lang2iso6392[s]
 
+      if not iso6392:
+        iso6392 = args.default_language
+        log.warning(f'Cannot identify language for {f}, defaulting to {iso6392}')
       if not iso6392:
         iso6392 = args.default_language
         log.warning(f'Cannot identify language for {f}, defaulting to {iso6392}')
 
       cl += [ '--language', f'0:{iso6392}', f ]
+
+    # elif f.suffix in posterexts2mime and basestem(f) == basestem(vidfile):
+    #   cl += [
+    #     '--attachment-mime-type', posterexts2mime[f.suffix],
+    #     '--attachment-description', f,
+    #     '--attachment-name', to_title_case(f.stem) if args.titlecase else f.stem,
+    #     '--attach-file', f,
+    #   ]
+
+  if mkvfile.exists() and not intfiles and not args.languages and not args.force:
+    log.warning(
+      f'"{mkvfile}" is already in MKV format, there are no subtitles or posters to integrate,  languages are already set, and "--force" was not set: skipping...'
+    )
+    return
 
     # elif f.suffix in posterexts2mime and basestem(f) == basestem(vidfile):
     #   cl += [
@@ -154,13 +226,19 @@ def doit(vidfile: pathlib.Path):
 
   if vidfile.exists() and mkvfile.exists() and not vidfile.samefile(mkvfile):
     intfiles.append(vidfile)
+  if vidfile.exists() and mkvfile.exists() and not vidfile.samefile(mkvfile):
+    intfiles.append(vidfile)
 
   if args.nodelete or not intfiles:
     return
 
   intfiles = set(intfiles)
   log.info(f'rm {files2quotedstring(intfiles)}')
+  intfiles = set(intfiles)
+  log.info(f'rm {files2quotedstring(intfiles)}')
   if not args.dryrun:
+    for i in intfiles:
+      i.unlink()
     for i in intfiles:
       i.unlink()
 
@@ -182,6 +260,13 @@ if __name__ == '__main__':
     action='store_true',
     help='rename files to proper title case.',
     )
+  parser.add_argument(
+    '-f',
+    '--force',
+    dest='force',
+    action='store_true',
+    help='force remuxing without any apparent need.',
+  )
   parser.add_argument(
     '-f',
     '--force',
