@@ -26,26 +26,48 @@ args = None
 log = logging.getLogger()
 
 videxts = {
-  '.mp4',
-  '.mkv',
   '.avi',
-  '.mpg',
   '.m4v',
+  '.mkv',
   '.mp3',
+  '.mp4',
+  '.mpg',
+  '.ts',
 }
 
 subexts = {
-  '.srt',
-  '.idx',
   '.ass',
+  '.idx',
+  '.srt',
   '.sub',
   '.sup',
 }
 
 subexts_skip = {
-  '.sub',
+ '.sub',
 }
- 
+
+posterexts2mime = {
+  'apng': 'image/apng',
+  'avif': 'image/avif',
+  'bmp': 'image/bmp',
+  'emf': 'image/emf',
+  'gif': 'image/gif',
+  'heic': 'image/heic',
+  'heif': 'image/heif',
+  'jpeg': 'image/jpeg',
+  'png': 'image/png',
+  'svg+xml': 'image/svg+xml',
+  'tiff': 'image/tiff',
+  'webp': 'image/webp',
+  'wmf': 'image/wmf',
+}
+
+posternames = {
+  'cover',
+  'poster',
+  '',
+}
 
 def doit(vidfile: pathlib.Path):
   if vidfile.suffix not in videxts or not vidfile.is_file():
@@ -57,24 +79,8 @@ def doit(vidfile: pathlib.Path):
 
   tempfile = mkvfile.with_stem(mkvfile.stem + '-temp')
 
-  if vidfile != mkvfile and mkvfile.exists():
-    log.warning(f'"{mkvfile}" exists')
-    return
-
-  subfiles = []
-  for subfile in vidfile.parent.iterdir():
-    if not subfile.is_file():
-      continue
-    if subfile.suffix not in subexts:
-      continue
-    if basestem(subfile) != basestem(vidfile):
-      continue
-    subfiles.append(subfile)
-
-  if vidfile == mkvfile and not subfiles and not args.languages:
-    log.warning(
-      f'"{mkvfile}" is already in MKV format, there are no subtitles to integrate, and languages are set: skipping...'
-    )
+  if mkvfile.exists() and not vidfile.samefile(mkvfile):
+    log.warning(f'"{mkvfile}" already exists')
     return
 
   cl = [ 'mkvmerge', '--stop-after-video-ends', '-o',  tempfile ]
@@ -83,32 +89,52 @@ def doit(vidfile: pathlib.Path):
     cl += [ '--audio-tracks', args.languages, '--subtitle-tracks', args.languages ]
 
   cl += [ vidfile ]
-  for subfile in sorted(subfiles, key=sortkey):
-    if subfile.suffix in subexts_skip:
-      # log.warning(
-      #   f'"{subfile}" not in recognized subtitle format.  Try to convert to, e.g., srt using, e.g., https://subtitletools.com/).'
-      # )
+
+  intfiles = []
+  for f in sorted(list(vidfile.parent.iterdir()), key=sortkey):
+    if not f.is_file():
       continue
+    if f.suffix in subexts and basestem(f) == basestem(vidfile):
+      intfiles.append(f)
+      if f.suffix in subexts_skip:
+        # log.warning(
+        #   f'"{subfile}" not in recognized subtitle format.  Try to convert to, e.g., srt using, e.g., https://subtitletools.com/).'
+        # )
+        continue
 
-    suffixes = [s.lstrip('.') for s in subfile.suffixes]
-    suffixes = [t for s in suffixes for t in s.split()]
-    suffixes = [t for s in suffixes for t in s.split('_')]
-    suffixes = [t for s in suffixes for t in s.split(',')]
+      sufs = [s.lstrip('.') for s in f.suffixes]
+      sufs = [t for s in sufs for t in s.split()]
+      sufs = [t for s in sufs for t in s.split('_')]
+      sufs = [t for s in sufs for t in s.split(',')]
 
-    iso6392 = None
-    for s in suffixes:
-      if s in iso6392tolang:
-        iso6392 = s
-      elif s in iso6391to6392:
-        iso6392 = iso6391to6392[s]
-      elif s in lang2iso6392:
-        iso6392 = lang2iso6392[s]
+      iso6392 = None
+      for s in sufs:
+        if s in iso6392tolang:
+          iso6392 = s
+        elif s in iso6391to6392:
+          iso6392 = iso6391to6392[s]
+        elif s in lang2iso6392:
+          iso6392 = lang2iso6392[s]
 
-    if not iso6392:
-      iso6392 = "eng"
-      log.warning(f'Cannot identify language for {subfile}, defaulting to {iso6392}')
+      if not iso6392:
+        iso6392 = args.default_language
+        log.warning(f'Cannot identify language for {f}, defaulting to {iso6392}')
 
-    cl += [ '--language', f'0:{iso6392}', subfile ]
+      cl += [ '--language', f'0:{iso6392}', f ]
+
+    # elif f.suffix in posterexts2mime and basestem(f) == basestem(vidfile):
+    #   cl += [
+    #     '--attachment-mime-type', posterexts2mime[f.suffix],
+    #     '--attachment-description', f,
+    #     '--attachment-name', to_title_case(f.stem) if args.titlecase else f.stem,
+    #     '--attach-file', f,
+    #   ]
+
+  if mkvfile.exists() and not intfiles and not args.languages and not args.force:
+    log.warning(
+      f'"{mkvfile}" is already in MKV format, there are no subtitles or posters to integrate,  languages are already set, and "--force" was not set: skipping...'
+    )
+    return
 
   log.info(files2quotedstring(cl))
   if not args.dryrun:
@@ -126,16 +152,17 @@ def doit(vidfile: pathlib.Path):
   if not args.dryrun:
     tempfile.replace(mkvfile)
 
-  delfiles = [] if vidfile == mkvfile else [ vidfile ]
-  delfiles += subfiles
+  if vidfile.exists() and mkvfile.exists() and not vidfile.samefile(mkvfile):
+    intfiles.append(vidfile)
 
-  if args.nodelete or not delfiles:
+  if args.nodelete or not intfiles:
     return
 
-  log.info(f'rm {files2quotedstring(delfiles)}')
+  intfiles = set(intfiles)
+  log.info(f'rm {files2quotedstring(intfiles)}')
   if not args.dryrun:
-    for d in delfiles:
-      d.unlink()
+    for i in intfiles:
+      i.unlink()
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser(
@@ -146,7 +173,7 @@ if __name__ == '__main__':
     '--no-delete',
     dest='nodelete',
     action='store_true',
-    help='do not delete source files (video and subtitles) after conversion to MKV.',
+    help='do not delete source files (e.g., video, subtitles, or posters) after conversion to MKV.',
     )
   parser.add_argument(
     '-t',
@@ -156,12 +183,27 @@ if __name__ == '__main__':
     help='rename files to proper title case.',
     )
   parser.add_argument(
+    '-f',
+    '--force',
+    dest='force',
+    action='store_true',
+    help='force remuxing without any apparent need.',
+  )
+  parser.add_argument(
     '-l',
     '--languages',
     dest='languages',
     action='store',
-    help='Set audio and subtitle tracks in the given language ISO639-2 codes; prefix with ! to negate.',
+    help='keep audio and subtitle tracks in the given language ISO639-2 codes; prefix with ! to discard same.',
     )
+  parser.add_argument(
+    '--default-language',
+    dest='default_language',
+    action='store',
+    default='eng',
+    choices=iso6392tolang.keys(),
+    help='ISO6392 language code to use by default for subtitles.',
+  )
   parser.add_argument(
     '-d',
     '--dryrun',
