@@ -17,7 +17,7 @@ from cetools import (
 )
 
 prog = 'tomkv'
-version = '0.2'
+version = '0.3'
 author = 'Carl Edman (CarlEdman@gmail.com)'
 desc = 'Convert video files to mkv files (incorporating separate subtitles).'
 
@@ -29,11 +29,7 @@ videxts = {
   '.avi',
   '.m4v',
   '.mkv',
-  '.mkv',
   '.mp3',
-  '.mp4',
-  '.mpg',
-  '.ts',
   '.mp4',
   '.mpg',
   '.ts',
@@ -42,16 +38,13 @@ videxts = {
 subexts = {
   '.ass',
   '.idx',
-  '.ass',
-  '.idx',
   '.srt',
   '.sub',
   '.sup',
 }
 
 subexts_skip = {
- '.sub',
- '.sub',
+  '.sub',
 }
 
 posterexts2mime = {
@@ -76,27 +69,6 @@ posternames = {
   '',
 }
 
-posterexts2mime = {
-  'apng': 'image/apng',
-  'avif': 'image/avif',
-  'bmp': 'image/bmp',
-  'emf': 'image/emf',
-  'gif': 'image/gif',
-  'heic': 'image/heic',
-  'heif': 'image/heif',
-  'jpeg': 'image/jpeg',
-  'png': 'image/png',
-  'svg+xml': 'image/svg+xml',
-  'tiff': 'image/tiff',
-  'webp': 'image/webp',
-  'wmf': 'image/wmf',
-}
-
-posternames = {
-  'cover',
-  'poster',
-  '',
-}
 
 def doit(vidfile: pathlib.Path):
   if vidfile.suffix not in videxts or not vidfile.is_file():
@@ -114,24 +86,12 @@ def doit(vidfile: pathlib.Path):
     log.warning(f'"{mkvfile}" already exists')
     return
 
-  cl = [ 'mkvmerge', '--stop-after-video-ends', '-o',  tempfile ]
+  cl = ['mkvmerge', '--stop-after-video-ends', '-o', tempfile]
 
   if args.languages:
-    cl += [ '--audio-tracks', args.languages, '--subtitle-tracks', args.languages ]
+    cl += ['--audio-tracks', args.languages, '--subtitle-tracks', args.languages]
 
-  cl += [ vidfile ]
-
-  intfiles = []
-  for f in sorted(list(vidfile.parent.iterdir()), key=sortkey):
-    if not f.is_file():
-      continue
-    if f.suffix in subexts and basestem(f) == basestem(vidfile):
-      intfiles.append(f)
-      if f.suffix in subexts_skip:
-        # log.warning(
-        #   f'"{subfile}" not in recognized subtitle format.  Try to convert to, e.g., srt using, e.g., https://subtitletools.com/).'
-        # )
-        continue
+  cl += [vidfile]
 
   intfiles = []
   for f in sorted(list(vidfile.parent.iterdir()), key=sortkey):
@@ -163,22 +123,12 @@ def doit(vidfile: pathlib.Path):
         elif s in lang2iso6392:
           iso6392 = lang2iso6392[s]
       iso6392 = None
-      for s in sufs:
-        if s in iso6392tolang:
-          iso6392 = s
-        elif s in iso6391to6392:
-          iso6392 = iso6391to6392[s]
-        elif s in lang2iso6392:
-          iso6392 = lang2iso6392[s]
 
       if not iso6392:
         iso6392 = args.default_language
         log.warning(f'Cannot identify language for {f}, defaulting to {iso6392}')
-      if not iso6392:
-        iso6392 = args.default_language
-        log.warning(f'Cannot identify language for {f}, defaulting to {iso6392}')
 
-      cl += [ '--language', f'0:{iso6392}', f ]
+      cl += ['--language', f'0:{iso6392}', f]
 
     # elif f.suffix in posterexts2mime and basestem(f) == basestem(vidfile):
     #   cl += [
@@ -190,7 +140,7 @@ def doit(vidfile: pathlib.Path):
 
   if mkvfile.exists() and not intfiles and not args.languages and not args.force:
     log.warning(
-      f'"{mkvfile}" is already in MKV format, there are no subtitles or posters to integrate,  languages are already set, and "--force" was not set: skipping...'
+      f'"{mkvfile}" is already in MKV format, there are no subtitles or posters to integrate, languages are already set, and "--force" was not set: skipping...'
     )
     return
 
@@ -226,14 +176,10 @@ def doit(vidfile: pathlib.Path):
 
   if vidfile.exists() and mkvfile.exists() and not vidfile.samefile(mkvfile):
     intfiles.append(vidfile)
-  if vidfile.exists() and mkvfile.exists() and not vidfile.samefile(mkvfile):
-    intfiles.append(vidfile)
 
   if args.nodelete or not intfiles:
     return
 
-  intfiles = set(intfiles)
-  log.info(f'rm {files2quotedstring(intfiles)}')
   intfiles = set(intfiles)
   log.info(f'rm {files2quotedstring(intfiles)}')
   if not args.dryrun:
@@ -242,30 +188,24 @@ def doit(vidfile: pathlib.Path):
     for i in intfiles:
       i.unlink()
 
+
 if __name__ == '__main__':
   parser = argparse.ArgumentParser(
     fromfile_prefix_chars='@', prog=prog, epilog='Written by: ' + author
-    )
+  )
   parser.add_argument(
     '-n',
     '--no-delete',
     dest='nodelete',
     action='store_true',
     help='do not delete source files (e.g., video, subtitles, or posters) after conversion to MKV.',
-    )
+  )
   parser.add_argument(
     '-t',
     '--title-case',
     dest='titlecase',
     action='store_true',
     help='rename files to proper title case.',
-    )
-  parser.add_argument(
-    '-f',
-    '--force',
-    dest='force',
-    action='store_true',
-    help='force remuxing without any apparent need.',
   )
   parser.add_argument(
     '-f',
@@ -280,7 +220,7 @@ if __name__ == '__main__':
     dest='languages',
     action='store',
     help='keep audio and subtitle tracks in the given language ISO639-2 codes; prefix with ! to discard same.',
-    )
+  )
   parser.add_argument(
     '--default-language',
     dest='default_language',
@@ -295,39 +235,35 @@ if __name__ == '__main__':
     dest='dryrun',
     action='store_true',
     help='do not perform operations, but only print them.',
-    )
-  parser.add_argument(
-    '--version', 
-    action='version', 
-    version='%(prog)s ' + version
-    )
+  )
+  parser.add_argument('--version', action='version', version='%(prog)s ' + version)
   parser.add_argument(
     '--verbose',
     dest='loglevel',
     action='store_const',
     const=logging.INFO,
     help='print informational (or higher) log messages.',
-    )
+  )
   parser.add_argument(
     '--debug',
     dest='loglevel',
     action='store_const',
     const=logging.DEBUG,
     help='print debugging (or higher) log messages.',
-    )
+  )
   parser.add_argument(
     '--taciturn',
     dest='loglevel',
     action='store_const',
     const=logging.ERROR,
     help='only print error level (or higher) log messages.',
-    )
+  )
   parser.add_argument(
     '--log', dest='logfile', action='store', help='location of alternate log file.'
-    )
+  )
   parser.add_argument(
     'paths', nargs='+', help='paths to be operated on; may include wildcards.'
-    )
+  )
   parser.set_defaults(loglevel=logging.WARN)
 
   args = parser.parse_args()
