@@ -185,8 +185,6 @@ def doit(vidfile: pathlib.Path):
   if not args.dryrun:
     for i in intfiles:
       i.unlink()
-    for i in intfiles:
-      i.unlink()
 
 
 if __name__ == '__main__':
