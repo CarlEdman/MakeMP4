@@ -162,12 +162,9 @@ def doit(vidfile: pathlib.Path):
   if not args.dryrun:
     try:
       subprocess.run(list(map(str, cl)), check=True, capture_output=True, text=True)
-    except KeyboardInterrupt as e:
-      log.error(f'{e} Interrupted ...')
+    except Exception as e:
       tempfile.unlink(missing_ok=True)
-      log.error(f'{e}\nSkipping ...')
-    except subprocess.CalledProcessError as e:
-      log.error(f'{e}\nMoving on ...')
+      log.error(f'{e}: Skipping ...')
       return
 
   log.info(f'mv {files2quotedstring([tempfile, mkvfile])}')
@@ -183,8 +180,6 @@ def doit(vidfile: pathlib.Path):
   intfiles = set(intfiles)
   log.info(f'rm {files2quotedstring(intfiles)}')
   if not args.dryrun:
-    for i in intfiles:
-      i.unlink()
     for i in intfiles:
       i.unlink()
 
