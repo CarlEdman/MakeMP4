@@ -48,7 +48,7 @@ subexts_skip = {
 }
 
 posterexts2mime = {
-  'apng': 'image/apng',
+  'apng': 'image/apnge/',
   'avif': 'image/avif',
   'bmp': 'image/bmp',
   'emf': 'image/emf',
@@ -109,52 +109,40 @@ def doit(vidfile: pathlib.Path):
       sufs = [t for s in sufs for t in s.split()]
       sufs = [t for s in sufs for t in s.split('_')]
       sufs = [t for s in sufs for t in s.split(',')]
-      sufs = [s.lstrip('.') for s in f.suffixes]
-      sufs = [t for s in sufs for t in s.split()]
-      sufs = [t for s in sufs for t in s.split('_')]
-      sufs = [t for s in sufs for t in s.split(',')]
 
       iso6392 = None
+      sdh = False
       for s in sufs:
-        if s in iso6392tolang:
+        if s in { 'sdh', 'hi' }:
+          sdh = True
+        elif s in iso6392tolang:
           iso6392 = s
         elif s in iso6391to6392:
           iso6392 = iso6391to6392[s]
         elif s in lang2iso6392:
           iso6392 = lang2iso6392[s]
-      iso6392 = None
 
       if not iso6392:
         iso6392 = args.default_language
         log.warning(f'Cannot identify language for {f}, defaulting to {iso6392}')
 
-      cl += ['--language', f'0:{iso6392}', f]
+      name = iso6392tolang[iso6392]
+      if sdh:
+        name += ' Full'
+      cl += ['--language', f'0:{iso6392}', f, '--track-name', f'0:{name}' ]
 
-    # elif f.suffix in posterexts2mime and basestem(f) == basestem(vidfile):
-    #   cl += [
-    #     '--attachment-mime-type', posterexts2mime[f.suffix],
-    #     '--attachment-description', f,
-    #     '--attachment-name', to_title_case(f.stem) if args.titlecase else f.stem,
-    #     '--attach-file', f,
-    #   ]
+      # elif f.suffix in posterexts2mime and basestem(f) == basestem(vidfile):
+      # intfiles.append(f)
+      #   cl += [
+      #     '--attachment-mime-type', posterexts2mime[f.suffix],
+      #     '--attachment-description', f,
+      #     '--attachment-name', to_title_case(f.stem) if args.titlecase else f.stem,
+      #     '--attach-file', f,
+      #   ]
 
   if mkvfile.exists() and not intfiles and not args.languages and not args.force:
     log.warning(
       f'"{mkvfile}" is already in MKV format, there are no subtitles or posters to integrate, languages are already set, and "--force" was not set: skipping...'
-    )
-    return
-
-    # elif f.suffix in posterexts2mime and basestem(f) == basestem(vidfile):
-    #   cl += [
-    #     '--attachment-mime-type', posterexts2mime[f.suffix],
-    #     '--attachment-description', f,
-    #     '--attachment-name', to_title_case(f.stem) if args.titlecase else f.stem,
-    #     '--attach-file', f,
-    #   ]
-
-  if mkvfile.exists() and not intfiles and not args.languages and not args.force:
-    log.warning(
-      f'"{mkvfile}" is already in MKV format, there are no subtitles or posters to integrate,  languages are already set, and "--force" was not set: skipping...'
     )
     return
 
@@ -257,7 +245,7 @@ if __name__ == '__main__':
     '--log', dest='logfile', action='store', help='location of alternate log file.'
   )
   parser.add_argument(
-    'paths', nargs='+', help='paths to be operated on; may include wildcards.'
+    'paths', nargs='+', help='paths to be operated on; may include wildcards; directories convert content.'
   )
   parser.set_defaults(loglevel=logging.WARN)
 
