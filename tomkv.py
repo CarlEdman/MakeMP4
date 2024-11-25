@@ -26,13 +26,19 @@ args = None
 log = logging.getLogger()
 
 videxts = {
+  '.264',
+  '.265',
   '.avi',
+  '.h264',
+  '.h265',
   '.m4v',
   '.mkv',
+  '.mov',
   '.mp3',
   '.mp4',
   '.mpg',
   '.ts',
+  '.webm',
 }
 
 subexts = {
