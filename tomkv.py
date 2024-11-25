@@ -131,14 +131,14 @@ def doit(vidfile: pathlib.Path):
         name += ' Full'
       cl += ['--language', f'0:{iso6392}', f, '--track-name', f'0:{name}' ]
 
-      # elif f.suffix in posterexts2mime and basestem(f) == basestem(vidfile):
-      # intfiles.append(f)
-      #   cl += [
-      #     '--attachment-mime-type', posterexts2mime[f.suffix],
-      #     '--attachment-description', f,
-      #     '--attachment-name', to_title_case(f.stem) if args.titlecase else f.stem,
-      #     '--attach-file', f,
-      #   ]
+    elif f.suffix in posterexts2mime and basestem(f) == basestem(vidfile):
+      intfiles.append(f)
+      cl += [
+        '--attachment-mime-type', posterexts2mime[f.suffix],
+        '--attachment-description', basestem(f).stem,
+        '--attachment-name', to_title_case(f.stem) if args.titlecase else f.stem,
+        '--attach-file', f,
+      ]
 
   if mkvfile.exists() and not intfiles and not args.languages and not args.force:
     log.warning(
