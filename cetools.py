@@ -336,11 +336,9 @@ class defdict(dict):
 
 
 def basestem(p: pathlib.Path) -> pathlib.Path:
-  while True:
-    o = p.with_suffix("")
-    if o == p:
-      return o
-    p = o
+  while p.suffix:
+    p = p.with_suffix('')
+  return p
 
 
 def files2quotedstring(s: list) -> str:

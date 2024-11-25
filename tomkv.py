@@ -93,12 +93,12 @@ def doit(vidfile: pathlib.Path):
 
   cl += [vidfile]
 
-  intfiles = []
+  intfiles = set()
   for f in sorted(list(vidfile.parent.iterdir()), key=sortkey):
     if not f.is_file():
       continue
     if f.suffix in subexts and basestem(f) == basestem(vidfile):
-      intfiles.append(f)
+      intfiles.add(f)
       if f.suffix in subexts_skip:
         # log.warning(
         #   f'"{subfile}" not in recognized subtitle format.  Try to convert to, e.g., srt using, e.g., https://subtitletools.com/).'
@@ -131,14 +131,14 @@ def doit(vidfile: pathlib.Path):
         name += ' Full'
       cl += ['--language', f'0:{iso6392}', f, '--track-name', f'0:{name}' ]
 
-      # elif f.suffix in posterexts2mime and basestem(f) == basestem(vidfile):
-      # intfiles.append(f)
-      #   cl += [
-      #     '--attachment-mime-type', posterexts2mime[f.suffix],
-      #     '--attachment-description', f,
-      #     '--attachment-name', to_title_case(f.stem) if args.titlecase else f.stem,
-      #     '--attach-file', f,
-      #   ]
+    elif f.suffix in posterexts2mime and basestem(f) == basestem(vidfile):
+      intfiles.add(f)
+      cl += [
+        '--attachment-mime-type', posterexts2mime[f.suffix],
+        '--attachment-description', basestem(f).stem,
+        '--attachment-name', to_title_case(f.stem) if args.titlecase else f.stem,
+        '--attach-file', f,
+      ]
 
   if mkvfile.exists() and not intfiles and not args.languages and not args.force:
     log.warning(
@@ -160,12 +160,11 @@ def doit(vidfile: pathlib.Path):
     tempfile.replace(mkvfile)
 
   if vidfile.exists() and mkvfile.exists() and not vidfile.samefile(mkvfile):
-    intfiles.append(vidfile)
+    intfiles.add(vidfile)
 
   if args.nodelete or not intfiles:
     return
 
-  intfiles = set(intfiles)
   log.info(f'rm {files2quotedstring(intfiles)}')
   if not args.dryrun:
     for i in intfiles:
