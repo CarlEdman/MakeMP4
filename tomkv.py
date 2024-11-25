@@ -19,20 +19,26 @@ from cetools import (
 prog = 'tomkv'
 version = '0.3'
 author = 'Carl Edman (CarlEdman@gmail.com)'
-desc = 'Convert video files to mkv files (incorporating separate subtitles).'
+desc = 'Convert video files to mkv files (incorporating separate subtitles & posters).'
 
 parser = None
 args = None
 log = logging.getLogger()
 
 videxts = {
+  '.264',
+  '.265',
   '.avi',
+  '.h264',
+  '.h265',
   '.m4v',
   '.mkv',
+  '.mov',
   '.mp3',
   '.mp4',
   '.mpg',
   '.ts',
+  '.webm',
 }
 
 subexts = {
@@ -48,7 +54,7 @@ subexts_skip = {
 }
 
 posterexts2mime = {
-  'apng': 'image/apnge/',
+  'apng': 'image/apnge',
   'avif': 'image/avif',
   'bmp': 'image/bmp',
   'emf': 'image/emf',
