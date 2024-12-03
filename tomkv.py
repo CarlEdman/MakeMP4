@@ -37,6 +37,7 @@ videxts = {
   '.mp3',
   '.mp4',
   '.mpg',
+  '.smi',
   '.ts',
   '.webm',
 }
@@ -54,27 +55,29 @@ subexts_skip = {
 }
 
 posterexts2mime = {
-  'apng': 'image/apnge',
-  'avif': 'image/avif',
-  'bmp': 'image/bmp',
-  'emf': 'image/emf',
-  'gif': 'image/gif',
-  'heic': 'image/heic',
-  'heif': 'image/heif',
-  'jpeg': 'image/jpeg',
-  'png': 'image/png',
-  'svg+xml': 'image/svg+xml',
-  'tiff': 'image/tiff',
-  'webp': 'image/webp',
-  'wmf': 'image/wmf',
+  '.apng': 'image/apnge',
+  '.avif': 'image/avif',
+  '.bmp': 'image/bmp',
+  '.emf': 'image/emf',
+  '.gif': 'image/gif',
+  '.heic': 'image/heic',
+  '.heif': 'image/heif',
+  '.jpeg': 'image/jpeg',
+  '.jpg': 'image/jpeg',
+  '.png': 'image/png',
+  '.svg': 'image/svg',
+  '.svg+xml': 'image/svg+xml',
+  '.tiff': 'image/tiff',
+  '.webp': 'image/webp',
+  '.wmf': 'image/wmf',
 }
 
-posternames = {
+posterstems = {
   'cover',
   'poster',
-  '',
 }
 
+findelfiles = set()
 
 def doit(vidfile: pathlib.Path):
   if vidfile.suffix not in videxts or not vidfile.is_file():
@@ -88,8 +91,6 @@ def doit(vidfile: pathlib.Path):
 
   if mkvfile.exists() and not vidfile.samefile(mkvfile):
     log.warning(f'"{mkvfile}" already exists')
-  if mkvfile.exists() and not vidfile.samefile(mkvfile):
-    log.warning(f'"{mkvfile}" already exists')
     return
 
   cl = ['mkvmerge', '--stop-after-video-ends', '-o', tempfile]
@@ -99,12 +100,14 @@ def doit(vidfile: pathlib.Path):
 
   cl += [vidfile]
 
-  intfiles = set()
+  delfiles = set()
+  noop = True
   for f in sorted(list(vidfile.parent.iterdir()), key=sortkey):
     if not f.is_file():
       continue
     if f.suffix in subexts and basestem(f) == basestem(vidfile):
-      intfiles.add(f)
+      noop = False
+      delfiles.add(f)
       if f.suffix in subexts_skip:
         # log.warning(
         #   f'"{subfile}" not in recognized subtitle format.  Try to convert to, e.g., srt using, e.g., https://subtitletools.com/).'
@@ -136,9 +139,11 @@ def doit(vidfile: pathlib.Path):
       if sdh:
         name += ' Full'
       cl += ['--language', f'0:{iso6392}', f, '--track-name', f'0:{name}' ]
+      noop = False
 
-    elif f.suffix in posterexts2mime and basestem(f) == basestem(vidfile):
-      intfiles.add(f)
+    elif f.suffix in posterexts2mime and f.stem in posterstems:
+      noop = False
+      findelfiles.add(f)
       cl += [
         '--attachment-mime-type', posterexts2mime[f.suffix],
         '--attachment-description', basestem(f).stem,
@@ -146,34 +151,47 @@ def doit(vidfile: pathlib.Path):
         '--attach-file', f,
       ]
 
-  if mkvfile.exists() and not intfiles and not args.languages and not args.force:
+  if noop:
     log.warning(
       f'"{mkvfile}" is already in MKV format, there are no subtitles or posters to integrate, languages are already set, and "--force" was not set: skipping...'
     )
     return
 
   log.info(files2quotedstring(cl))
+  mkvmerge_warning = False
   if not args.dryrun:
     try:
-      subprocess.run(list(map(str, cl)), check=True, capture_output=True, text=True)
-    except Exception as e:
-      tempfile.unlink(missing_ok=True)
-      log.error(f'{e}: Skipping ...')
-      return
+      subprocess.run(list(map(str, cl)),
+                     check=True,
+                     capture_output=True,
+                     text=True)
+    except subprocess.CalledProcessError as e:
+      if e.returncode == 1:
+        log.info(e.stdout)
+        log.warning(f'{e.stderr}\n{e}\nProceeding and preserving files ...')
+        mkvmerge_warning = True
+      else:
+        tempfile.unlink(missing_ok=True)
+        log.info(e.stdout)
+        log.error(f'{e.stderr}\n{e}\nSkipping ...')
+        return
 
   log.info(f'mv {files2quotedstring([tempfile, mkvfile])}')
   if not args.dryrun:
+    if mkvmerge_warning:
+      backupfile = mkvfile.with_stem(mkvfile.stem + '-backup')
+      mkvfile.rename(backupfile)
     tempfile.replace(mkvfile)
 
   if vidfile.exists() and mkvfile.exists() and not vidfile.samefile(mkvfile):
-    intfiles.add(vidfile)
+    delfiles.add(vidfile)
 
-  if args.nodelete or not intfiles:
+  if args.nodelete or mkvmerge_warning or not delfiles:
     return
 
-  log.info(f'rm {files2quotedstring(intfiles)}')
+  log.info(f'rm {files2quotedstring(delfiles)}')
   if not args.dryrun:
-    for i in intfiles:
+    for i in delfiles:
       i.unlink()
 
 
@@ -274,15 +292,20 @@ if __name__ == '__main__':
 
   errand = False
   for f in (pathlib.Path(fd) for a in args.paths for fd in glob.iglob(a)):
-    errand = True
     if f.is_dir():
       for f2 in f.iterdir():
         if f2.is_file() and f2.suffix in videxts:
           doit(f2)
           errand = True
-    elif f.is_file():
+    elif f.is_file() and f.suffix in videxts:
       doit(f)
       errand = True
 
   if not errand:
     log.warning(f'No proper files matching {args.paths}.')
+
+  if not args.nodelete or findelfiles:
+    log.info(f'rm {files2quotedstring(findelfiles)}')
+    if not args.dryrun:
+      for i in findelfiles:
+        i.unlink()
