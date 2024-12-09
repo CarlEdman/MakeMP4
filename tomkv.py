@@ -151,7 +151,7 @@ def doit(vidfile: pathlib.Path):
         '--attach-file', f,
       ]
 
-  if noop:
+  if noop and not args.force:
     log.warning(
       f'"{mkvfile}" is already in MKV format, there are no subtitles or posters to integrate, languages are already set, and "--force" was not set: skipping...'
     )
@@ -304,7 +304,7 @@ if __name__ == '__main__':
   if not errand:
     log.warning(f'No proper files matching {args.paths}.')
 
-  if not args.nodelete or findelfiles:
+  if not args.nodelete and findelfiles:
     log.info(f'rm {files2quotedstring(findelfiles)}')
     if not args.dryrun:
       for i in findelfiles:
