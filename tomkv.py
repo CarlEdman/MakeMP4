@@ -105,7 +105,8 @@ def doit(vidfile: pathlib.Path):
   for f in sorted(list(vidfile.parent.iterdir()), key=sortkey):
     if not f.is_file():
       continue
-    if f.suffix in subexts and basestem(f) == basestem(vidfile):
+    vstem = vidfile.stem
+    if f.suffix in subexts and str(f)[:len(vstem)] == str(vstem):
       noop = False
       delfiles.add(f)
       if f.suffix in subexts_skip:
@@ -171,7 +172,8 @@ def doit(vidfile: pathlib.Path):
         log.warning(f'{e.stderr}\n{e}\nProceeding and preserving files ...')
         mkvmerge_warning = True
       else:
-        tempfile.unlink(missing_ok=True)
+        if tempfile.exists():
+          tempfile.unlink(missing_ok=True)
         log.info(e.stdout)
         log.error(f'{e.stderr}\n{e}\nSkipping ...')
         return
@@ -192,7 +194,8 @@ def doit(vidfile: pathlib.Path):
   log.info(f'rm {files2quotedstring(delfiles)}')
   if not args.dryrun:
     for i in delfiles:
-      i.unlink()
+      if i.exists():
+        i.unlink()
 
 
 if __name__ == '__main__':
@@ -308,4 +311,5 @@ if __name__ == '__main__':
     log.info(f'rm {files2quotedstring(findelfiles)}')
     if not args.dryrun:
       for i in findelfiles:
-        i.unlink()
+        if i.exists():
+          i.unlink()
