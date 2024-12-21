@@ -101,12 +101,11 @@ def doit(vidfile: pathlib.Path):
   cl += [vidfile]
 
   delfiles = set()
-  noop = True
+  noop = mkvfile == vidfile
   for f in sorted(list(vidfile.parent.iterdir()), key=sortkey):
     if not f.is_file():
       continue
-    vstem = vidfile.stem
-    if f.suffix in subexts and str(f)[:len(vstem)] == str(vstem):
+    if f.suffix in subexts and str(f).startswith(vidfile.stem):
       noop = False
       delfiles.add(f)
       if f.suffix in subexts_skip:
