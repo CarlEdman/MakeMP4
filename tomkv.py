@@ -105,7 +105,7 @@ def doit(vidfile: pathlib.Path):
   for f in sorted(list(vidfile.parent.iterdir()), key=sortkey):
     if not f.is_file():
       continue
-    if f.suffix in subexts and str(f).startswith(vidfile.stem):
+    if f.suffix in subexts and f.stem.startswith(vidfile.stem):
       noop = False
       delfiles.add(f)
       if f.suffix in subexts_skip:
