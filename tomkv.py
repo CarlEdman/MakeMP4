@@ -181,7 +181,12 @@ def doit(vidfile: pathlib.Path):
   if not args.dryrun:
     if mkvmerge_warning:
       backupfile = mkvfile.with_stem(mkvfile.stem + '-backup')
-      mkvfile.rename(backupfile)
+      try:
+        mkvfile.rename(backupfile)
+      except FileNotFoundError as e:
+        log.error(f'Temp mkvfile "{mkvfile}" not found, skipping: {e}')
+        return
+   
     tempfile.replace(mkvfile)
 
   if vidfile.exists() and mkvfile.exists() and not vidfile.samefile(mkvfile):
