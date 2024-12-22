@@ -50,7 +50,7 @@ subexts = {
   '.sup',
 }
 
-subexts_skip = {
+exts_skip = {
   '.sub',
 }
 
@@ -105,14 +105,16 @@ def doit(vidfile: pathlib.Path):
   for f in sorted(list(vidfile.parent.iterdir()), key=sortkey):
     if not f.is_file():
       continue
+    if f.suffix in exts_skip:
+      noop = False
+      delfiles.add(f)
+      # log.warning(
+      #   f'"{subfile}" not in recognized subtitle format.  Try to convert to, e.g., srt using, e.g., https://subtitletools.com/).'
+      # )
+      continue
     if f.suffix in subexts and f.stem.startswith(vidfile.stem):
       noop = False
       delfiles.add(f)
-      if f.suffix in subexts_skip:
-        # log.warning(
-        #   f'"{subfile}" not in recognized subtitle format.  Try to convert to, e.g., srt using, e.g., https://subtitletools.com/).'
-        # )
-        continue
 
       sufs = [s.lstrip('.') for s in f.suffixes]
       sufs = [t for s in sufs for t in s.split()]
