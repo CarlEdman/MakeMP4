@@ -46,7 +46,6 @@ subexts = {
   '.ass',
   '.idx',
   '.srt',
-  '.sub',
   '.sup',
 }
 
