@@ -17,7 +17,7 @@ from cetools import (
 )
 
 prog = 'tomkv'
-version = '0.3'
+version = '0.4'
 author = 'Carl Edman (CarlEdman@gmail.com)'
 desc = 'Convert video files to mkv files (incorporating separate subtitles & posters).'
 
@@ -79,6 +79,12 @@ posterstems = {
 findelfiles = set()
 
 def doit(vidfile: pathlib.Path):
+  if vidfile.is_dir():
+    log.info(f'Recursing on "{vidfile}" ...')
+    for f in sorted(list(vidfile.parent.iterdir()), key=sortkey):
+      doit(f)
+    return
+    
   if vidfile.suffix not in videxts or not vidfile.is_file():
     log.warning(f'"{vidfile}" is not recognized video file, skipping')
     return
@@ -104,16 +110,11 @@ def doit(vidfile: pathlib.Path):
   for f in sorted(list(vidfile.parent.iterdir()), key=sortkey):
     if not f.is_file():
       continue
-    if f.suffix in exts_skip:
-      noop = False
-      delfiles.add(f)
-      # log.warning(
-      #   f'"{subfile}" not in recognized subtitle format.  Try to convert to, e.g., srt using, e.g., https://subtitletools.com/).'
-      # )
-      continue
     if f.suffix in subexts and f.stem.startswith(vidfile.stem):
       noop = False
       delfiles.add(f)
+      if f.suffix in exts_skip:
+        continue
 
       sufs = [s.lstrip('.') for s in f.suffixes]
       sufs = [t for s in sufs for t in s.split()]
@@ -298,19 +299,8 @@ if __name__ == '__main__':
   slogger.setFormatter(logformat)
   log.addHandler(slogger)
 
-  errand = False
   for f in (pathlib.Path(fd) for a in args.paths for fd in glob.iglob(a)):
-    if f.is_dir():
-      for f2 in f.iterdir():
-        if f2.is_file() and f2.suffix in videxts:
-          doit(f2)
-          errand = True
-    elif f.is_file() and f.suffix in videxts:
-      doit(f)
-      errand = True
-
-  if not errand:
-    log.warning(f'No proper files matching {args.paths}.')
+    doit(f)
 
   if not args.nodelete and findelfiles:
     log.info(f'rm {files2quotedstring(findelfiles)}')
