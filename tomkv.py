@@ -78,10 +78,10 @@ posterstems = {
 
 findelfiles = set()
 
-def doit(vidfile: pathlib.Path):
+def doit(vidfile: pathlib.Path) -> Boolean:
   if vidfile.is_dir():
     log.info(f'Recursing on "{vidfile}" ...')
-    for f in sorted(list(vidfile.parent.iterdir()), key=sortkey):
+    for f in sorted(list(vidfile.iterdir()), key=sortkey):
       doit(f)
     return
     
