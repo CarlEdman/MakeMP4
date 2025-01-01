@@ -78,16 +78,15 @@ posterstems = {
 
 findelfiles = set()
 
-def doit(vidfile: pathlib.Path):
+def doit(vidfile: pathlib.Path) -> Boolean:
   if vidfile.is_dir():
-    log.info(f'Recursing on "{vidfile}" ...')
-    for f in sorted(list(vidfile.parent.iterdir()), key=sortkey):
-      doit(f)
-    return
-    
+    log.debug(f'Recursing on "{vidfile}" ...')
+    return max(map(doit, sorted(list(vidfile.iterdir()), key=sortkey)), default=False)
+
   if vidfile.suffix not in videxts or not vidfile.is_file():
-    log.warning(f'"{vidfile}" is not recognized video file, skipping')
-    return
+    log.debug(f'"{vidfile}" is not recognized video file, skipping')
+    return False
+
   mkvfile = vidfile.with_suffix('.mkv')
   if args.titlecase:
     mkvfile = mkvfile.with_stem(to_title_case(mkvfile.stem))
@@ -96,7 +95,7 @@ def doit(vidfile: pathlib.Path):
 
   if mkvfile.exists() and not vidfile.samefile(mkvfile):
     log.warning(f'"{mkvfile}" already exists')
-    return
+    return False
 
   cl = ['mkvmerge', '--stop-after-video-ends', '-o', tempfile]
 
@@ -154,10 +153,10 @@ def doit(vidfile: pathlib.Path):
       ]
 
   if noop and not args.force:
-    log.warning(
+    log.debug(
       f'"{mkvfile}" is already in MKV format, there are no subtitles or posters to integrate, languages are already set, and "--force" was not set: skipping...'
     )
-    return
+    return False
 
   log.info(files2quotedstring(cl))
   mkvmerge_warning = False
@@ -177,7 +176,11 @@ def doit(vidfile: pathlib.Path):
           tempfile.unlink(missing_ok=True)
         log.info(e.stdout)
         log.error(f'{e.stderr}\n{e}\nSkipping ...')
-        return
+      return False
+    except KeyboardInterrupt as e:
+      if tempfile.exists():
+        tempfile.unlink(missing_ok=True)
+      raise e
 
   log.info(f'mv {files2quotedstring([tempfile, mkvfile])}')
   if not args.dryrun:
@@ -187,7 +190,7 @@ def doit(vidfile: pathlib.Path):
         mkvfile.rename(backupfile)
       except FileNotFoundError as e:
         log.error(f'Temp mkvfile "{mkvfile}" not found, skipping: {e}')
-        return
+        return False
    
     tempfile.replace(mkvfile)
 
@@ -195,13 +198,15 @@ def doit(vidfile: pathlib.Path):
     delfiles.add(vidfile)
 
   if args.nodelete or mkvmerge_warning or not delfiles:
-    return
+    return True
 
   log.info(f'rm {files2quotedstring(delfiles)}')
   if not args.dryrun:
     for i in delfiles:
       if i.exists():
         i.unlink()
+  
+  return True
 
 
 if __name__ == '__main__':
@@ -299,8 +304,8 @@ if __name__ == '__main__':
   slogger.setFormatter(logformat)
   log.addHandler(slogger)
 
-  for f in (pathlib.Path(fd) for a in args.paths for fd in glob.iglob(a)):
-    doit(f)
+  if not max(map(doit, (pathlib.Path(fd) for a in args.paths for fd in glob.iglob(a))), default=False):
+    log.warning(f'No valid video files found for arguments "{args.paths}".')
 
   if not args.nodelete and findelfiles:
     log.info(f'rm {files2quotedstring(findelfiles)}')
