@@ -78,7 +78,7 @@ posterstems = {
 
 findelfiles = set()
 
-def doit(vidfile: pathlib.Path) -> Boolean:
+def doit(vidfile: pathlib.Path) -> bool:
   if vidfile.is_dir():
     log.debug(f'Recursing on "{vidfile}" ...')
     return max(map(doit, sorted(list(vidfile.iterdir()), key=sortkey)), default=False)
