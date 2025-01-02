@@ -78,28 +78,17 @@ posterstems = {
 
 findelfiles = set()
 
-<<<<<<< HEAD
 def doit(vidfile: pathlib.Path) -> bool:
   if vidfile.is_dir():
     log.debug(f'Recursing on "{vidfile}" ...')
     for f in sorted(list(vidfile.iterdir()), key=sortkey):
       doit(f)
-    return
+      return max(map(doit, sorted(list(vidfile.iterdir()), key=sortkey)), default=False)
     
-  if vidfile.suffix not in videxts or not vidfile.is_file():
-    log.debug(f'"{vidfile}" is not recognized video file, skipping')
-    return
-=======
-def doit(vidfile: pathlib.Path) -> Boolean:
-  if vidfile.is_dir():
-    log.debug(f'Recursing on "{vidfile}" ...')
-    return max(map(doit, sorted(list(vidfile.iterdir()), key=sortkey)), default=False)
-
   if vidfile.suffix not in videxts or not vidfile.is_file():
     log.debug(f'"{vidfile}" is not recognized video file, skipping')
     return False
 
->>>>>>> 4f881d4e6230f7a1c78daa273b8ff5ce9f22c5ab
   mkvfile = vidfile.with_suffix('.mkv')
   if args.titlecase:
     mkvfile = mkvfile.with_stem(to_title_case(mkvfile.stem))
