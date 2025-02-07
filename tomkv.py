@@ -106,7 +106,7 @@ def doit(vidfile: pathlib.Path) -> bool:
 
   delfiles = set()
   noop = mkvfile == vidfile
-  noop |= bool(args.languages)
+  noop &= not bool(args.languages)
   for f in sorted(list(vidfile.parent.iterdir()), key=sortkey):
     if not f.is_file():
       continue
