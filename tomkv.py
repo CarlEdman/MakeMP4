@@ -105,13 +105,14 @@ def doit(vidfile: pathlib.Path) -> bool:
   cl += [vidfile]
 
   delfiles = set()
-  noop = mkvfile == vidfile
-  noop &= not bool(args.languages)
+
+  done = mkvfile != vidfile
+  done = done or bool(args.languages)
   for f in sorted(list(vidfile.parent.iterdir()), key=sortkey):
     if not f.is_file():
       continue
     if f.suffix in subexts and f.stem.startswith(vidfile.stem):
-      noop = False
+      done = True
       delfiles.add(f)
       if f.suffix in exts_skip:
         continue
@@ -140,11 +141,11 @@ def doit(vidfile: pathlib.Path) -> bool:
       name = iso6392tolang[iso6392]
       if sdh:
         name += ' Full'
-      cl += ['--language', f'0:{iso6392}', f, '--track-name', f'0:{name}' ]
-      noop = False
+      cl += [ '--language', f'0:{iso6392}', f, '--track-name', f'0:{name}' ]
+      done = True
 
     elif f.suffix in posterexts2mime and f.stem in posterstems:
-      noop = False
+      done = True
       findelfiles.add(f)
       cl += [
         '--attachment-mime-type', posterexts2mime[f.suffix],
@@ -153,7 +154,7 @@ def doit(vidfile: pathlib.Path) -> bool:
         '--attach-file', f,
       ]
 
-  if noop and not args.force:
+  if not done:
     log.debug(
       f'"{mkvfile}" is already in MKV format, there are no subtitles or posters to integrate, languages are already set, and "--force" was not set: skipping...'
     )
