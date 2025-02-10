@@ -144,7 +144,7 @@ def doit(vidfile: pathlib.Path) -> bool:
       cl += [ '--language', f'0:{iso6392}', f, '--track-name', f'0:{name}' ]
       todo = True
 
-    elif f.suffix.lower() in posterexts2mime and f.stem in posterstems.lower():
+    elif f.suffix.lower() in posterexts2mime and f.stem.lower() in posterstems:
       todo = True
       findelfiles.add(f)
       cl += [
