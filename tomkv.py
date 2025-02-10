@@ -123,11 +123,8 @@ def doit(vidfile: pathlib.Path) -> bool:
       sufs = [t for s in sufs for t in s.split(',')]
 
       iso6392 = None
-      sdh = False
       for s in sufs:
-        if s in { 'sdh', 'hi' }:
-          sdh = True
-        elif s in iso6392tolang:
+        if s in iso6392tolang:
           iso6392 = s
         elif s in iso6391to6392:
           iso6392 = iso6391to6392[s]
@@ -138,9 +135,7 @@ def doit(vidfile: pathlib.Path) -> bool:
         iso6392 = args.default_language
         log.warning(f'Cannot identify language for {f}, defaulting to {iso6392}')
 
-      name = iso6392tolang[iso6392]
-      if sdh:
-        name += ' Full'
+      name = f.stem.removeprefix(vidfile.stem)
       cl += [ '--language', f'0:{iso6392}', f, '--track-name', f'0:{name}' ]
       todo = True
 
