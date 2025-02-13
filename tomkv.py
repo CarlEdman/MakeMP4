@@ -106,7 +106,7 @@ def doit(vidfile: pathlib.Path) -> bool:
 
   delfiles = set()
 
-  todo = args.forced
+  todo = args.force
   todo = todo | (mkvfile != vidfile)
   todo = todo or bool(args.languages)
   for f in sorted(list(vidfile.parent.iterdir()), key=sortkey):
