@@ -106,7 +106,8 @@ def doit(vidfile: pathlib.Path) -> bool:
 
   delfiles = set()
 
-  todo = mkvfile != vidfile
+  todo = args.forced
+  todo = todo | (mkvfile != vidfile)
   todo = todo or bool(args.languages)
   for f in sorted(list(vidfile.parent.iterdir()), key=sortkey):
     if not f.is_file():
@@ -136,7 +137,7 @@ def doit(vidfile: pathlib.Path) -> bool:
         log.warning(f'Cannot identify language for {f}, defaulting to {iso6392}')
 
       name = f.stem.removeprefix(vidfile.stem)
-      cl += [ '--language', f'0:{iso6392}', f, '--track-name', f'0:{name}' ]
+      cl += [ '--language', f'0:{iso6392}', '--track-name', f'0:{name}', f ]
       todo = True
 
     elif f.suffix.lower() in posterexts2mime and f.stem.lower() in posterstems:
