@@ -136,7 +136,7 @@ def doit(vidfile: pathlib.Path) -> bool:
         iso6392 = args.default_language
         log.warning(f'Cannot identify language for {f}, defaulting to {iso6392}')
 
-      name = f.stem.removeprefix(vidfile.stem)
+      name = f.stem.removeprefix(vidfile.stem).strip(' ._')
       cl += [ '--language', f'0:{iso6392}', '--track-name', f'0:{name}', f ]
       todo = True
 
