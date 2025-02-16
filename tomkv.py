@@ -81,12 +81,10 @@ findelfiles = set()
 def doit(vidfile: pathlib.Path) -> bool:
   if vidfile.is_dir():
     log.debug(f'Recursing on "{vidfile}" ...')
-    for f in sorted(list(f for f in vidfile.iterdir() if f.is_dir() or f.suffix in videxts), key=sortkey):
-      doit(f)
-      return max(map(doit, sorted(list(vidfile.iterdir()), key=sortkey)), default=False)
+    return max(map(doit, sorted(list(vidfile.iterdir()), key=sortkey)), default=False)
     
-  if vidfile.suffix not in videxts or not vidfile.is_file():
-    log.warning(f'"{vidfile}" is not recognized video file, skipping')
+  if vidfile.suffix.lower() not in videxts or not vidfile.is_file():
+    log.debug(f'"{vidfile}" is not recognized video file, skipping')
     return False
 
   mkvfile = vidfile.with_suffix('.mkv')
@@ -107,12 +105,15 @@ def doit(vidfile: pathlib.Path) -> bool:
   cl += [vidfile]
 
   delfiles = set()
-  noop = mkvfile == vidfile
+
+  todo = args.force
+  todo = todo | (mkvfile != vidfile)
+  todo = todo or bool(args.languages)
   for f in sorted(list(vidfile.parent.iterdir()), key=sortkey):
     if not f.is_file():
       continue
     if f.suffix in subexts and f.stem.startswith(vidfile.stem):
-      noop = False
+      todo = True
       delfiles.add(f)
       if f.suffix in exts_skip:
         continue
@@ -123,11 +124,8 @@ def doit(vidfile: pathlib.Path) -> bool:
       sufs = [t for s in sufs for t in s.split(',')]
 
       iso6392 = None
-      sdh = False
       for s in sufs:
-        if s in { 'sdh', 'hi' }:
-          sdh = True
-        elif s in iso6392tolang:
+        if s in iso6392tolang:
           iso6392 = s
         elif s in iso6391to6392:
           iso6392 = iso6391to6392[s]
@@ -138,14 +136,12 @@ def doit(vidfile: pathlib.Path) -> bool:
         iso6392 = args.default_language
         log.warning(f'Cannot identify language for {f}, defaulting to {iso6392}')
 
-      name = iso6392tolang[iso6392]
-      if sdh:
-        name += ' Full'
-      cl += ['--language', f'0:{iso6392}', f, '--track-name', f'0:{name}' ]
-      noop = False
+      name = f.stem.removeprefix(vidfile.stem).strip(' ._')
+      cl += [ '--language', f'0:{iso6392}', '--track-name', f'0:{name}', f ]
+      todo = True
 
-    elif f.suffix in posterexts2mime and f.stem in posterstems:
-      noop = False
+    elif f.suffix.lower() in posterexts2mime and f.stem.lower() in posterstems:
+      todo = True
       findelfiles.add(f)
       cl += [
         '--attachment-mime-type', posterexts2mime[f.suffix],
@@ -154,7 +150,7 @@ def doit(vidfile: pathlib.Path) -> bool:
         '--attach-file', f,
       ]
 
-  if noop and not args.force:
+  if not todo:
     log.debug(
       f'"{mkvfile}" is already in MKV format, there are no subtitles or posters to integrate, languages are already set, and "--force" was not set: skipping...'
     )
@@ -205,8 +201,7 @@ def doit(vidfile: pathlib.Path) -> bool:
   log.info(f'rm {files2quotedstring(delfiles)}')
   if not args.dryrun:
     for i in delfiles:
-      if i.exists():
-        i.unlink()
+      i.unlink(missing_ok=True)
   
   return True
 
