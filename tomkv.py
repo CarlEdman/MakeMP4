@@ -81,12 +81,12 @@ findelfiles = set()
 def doit(vidfile: pathlib.Path) -> bool:
   if vidfile.is_dir():
     log.debug(f'Recursing on "{vidfile}" ...')
-    for f in sorted(list(vidfile.iterdir()), key=sortkey):
+    for f in sorted(list(f for f in vidfile.iterdir() if f.is_dir() or f.suffix in videxts), key=sortkey):
       doit(f)
       return max(map(doit, sorted(list(vidfile.iterdir()), key=sortkey)), default=False)
     
   if vidfile.suffix not in videxts or not vidfile.is_file():
-    log.debug(f'"{vidfile}" is not recognized video file, skipping')
+    log.warning(f'"{vidfile}" is not recognized video file, skipping')
     return False
 
   mkvfile = vidfile.with_suffix('.mkv')
@@ -223,6 +223,13 @@ if __name__ == '__main__':
     help='do not delete source files (e.g., video, subtitles, or posters) after conversion to MKV.',
   )
   parser.add_argument(
+    '-R',
+    '--recurse',
+    dest='recurse',
+    action='store_true',
+    help='recurse into subdirectories of given directories.',
+  )
+  parser.add_argument(
     '-t',
     '--title-case',
     dest='titlecase',
@@ -306,7 +313,7 @@ if __name__ == '__main__':
   slogger.setFormatter(logformat)
   log.addHandler(slogger)
 
-  if not max(map(doit, (pathlib.Path(fd) for a in args.paths for fd in glob.iglob(a))), default=False):
+  if not max(map(doit, (pathlib.Path(f) for a in args.paths for f in glob.iglob(a))), default=False):
     log.warning(f'No valid video files found for arguments "{args.paths}".')
 
   if not args.nodelete and findelfiles:
