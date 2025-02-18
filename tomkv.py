@@ -34,7 +34,6 @@ videxts = {
   '.m4v',
   '.mkv',
   '.mov',
-  '.mp3',
   '.mp4',
   '.mpg',
   '.smi',
