@@ -39,6 +39,7 @@ videxts = {
   '.smi',
   '.ts',
   '.webm',
+  '.wmv'
 }
 
 subexts = {
@@ -109,6 +110,13 @@ def doit(vidfile: pathlib.Path) -> bool:
   todo = todo | (mkvfile != vidfile)
   todo = todo or bool(args.languages)
   for f in sorted(list(vidfile.parent.iterdir()), key=sortkey):
+    # if f.is_dir() and f.name.lower() in { "sub", "subs" }:
+    #   g = f / vidfile.name
+    #   h = g.with_suffix(".srt")
+    #   if h.exists() and h.is_file():
+    #     f = h
+      
+    #   pass
     if not f.is_file():
       continue
     if f.suffix in subexts and f.stem.startswith(vidfile.stem):
