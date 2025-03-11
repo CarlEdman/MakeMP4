@@ -31,10 +31,8 @@ def main():
     ["mkvextract",
      "chapters",
      "--simple", 
-     args.infile,
-#     universal_newlines=True,
-     ]
-    ).splitlines():
+     args.infile],
+     encoding='utf-8').splitlines():
       if ((m := re.fullmatch(r"CHAPTER(\d+)=(.*)", out)) is not None
             and (i := int(m[1])) is not None
             and (t := to_float(m[2])) is not None
