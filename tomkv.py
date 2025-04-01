@@ -109,6 +109,13 @@ def doit(vidfile: pathlib.Path) -> bool:
   todo = args.force
   todo = todo | (mkvfile != vidfile)
   todo = todo or bool(args.languages)
+  
+  chapfile = vidfile.with_suffix('.chapters')
+  if chapfile.exists():
+    todo = True
+    delfiles.add(chapfile)
+    cl += ['--chapters', chapfile]
+
   for f in sorted(list(vidfile.parent.iterdir()), key=sortkey):
     # if f.is_dir() and f.name.lower() in { "sub", "subs" }:
     #   g = f / vidfile.name
@@ -158,7 +165,7 @@ def doit(vidfile: pathlib.Path) -> bool:
 
   if not todo:
     log.debug(
-      f'"{mkvfile}" is already in MKV format, there are no subtitles or posters to integrate, languages are already set, and "--force" was not set: skipping...'
+      f'"{mkvfile}" is already in MKV format, there are no subtitles, chapters, or posters to integrate, languages are already set, and "--force" was not set: skipping...'
     )
     return False
 
@@ -221,7 +228,7 @@ if __name__ == '__main__':
     '--no-delete',
     dest='nodelete',
     action='store_true',
-    help='do not delete source files (e.g., video, subtitles, or posters) after conversion to MKV.',
+    help='do not delete source files (e.g., video, subtitles, chapters, or posters) after conversion to MKV.',
   )
   parser.add_argument(
     '-R',
