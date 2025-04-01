@@ -82,7 +82,7 @@ def doit(vidfile: pathlib.Path) -> bool:
   if vidfile.is_dir():
     log.debug(f'Recursing on "{vidfile}" ...')
     return max(map(doit, sorted(list(vidfile.iterdir()), key=sortkey)), default=False)
-    
+
   if vidfile.suffix.lower() not in videxts or not vidfile.is_file():
     log.debug(f'"{vidfile}" is not recognized video file, skipping')
     return False
@@ -115,7 +115,6 @@ def doit(vidfile: pathlib.Path) -> bool:
     #   h = g.with_suffix(".srt")
     #   if h.exists() and h.is_file():
     #     f = h
-      
     #   pass
     if not f.is_file():
       continue
