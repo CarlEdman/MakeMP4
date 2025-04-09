@@ -5,6 +5,7 @@ import logging
 import logging.handlers
 import pathlib
 import subprocess
+import os
 
 from cetools import (
   basestem,
@@ -87,7 +88,10 @@ def doit(vidfile: pathlib.Path) -> bool:
     log.debug(f'"{vidfile}" is not recognized video file, skipping')
     return False
 
+  vidfile_stat = os.path(vidfile)
+
   mkvfile = vidfile.with_suffix('.mkv')
+  
   if args.titlecase:
     mkvfile = mkvfile.with_stem(to_title_case(mkvfile.stem))
 
@@ -204,6 +208,11 @@ def doit(vidfile: pathlib.Path) -> bool:
         return False
    
     tempfile.replace(mkvfile)
+    os.utime(mkvfile,
+             (vidfile.st_atime, vidfile.st_mtime),
+             (vidfile.st_atime_ns, vidfile.st_mtime_ns))
+    os.chmod(mkvfile, vidfile_stat.st_mode)
+    os.chown(mkvfile, vidfile_stat.st_uid, vidfile_stat.st_gid)
 
   if vidfile.exists() and mkvfile.exists() and not vidfile.samefile(mkvfile):
     delfiles.add(vidfile)
