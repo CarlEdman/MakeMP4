@@ -88,7 +88,7 @@ def doit(vidfile: pathlib.Path) -> bool:
     log.debug(f'"{vidfile}" is not recognized video file, skipping')
     return False
 
-  vidfile_stat = os.path(vidfile)
+  vidfile_stat = os.stat(vidfile)
 
   mkvfile = vidfile.with_suffix('.mkv')
   
@@ -209,8 +209,8 @@ def doit(vidfile: pathlib.Path) -> bool:
    
     tempfile.replace(mkvfile)
     os.utime(mkvfile,
-             (vidfile.st_atime, vidfile.st_mtime),
-             (vidfile.st_atime_ns, vidfile.st_mtime_ns))
+#             (vidfile_stat.st_atime, vidfile_stat.st_mtime),
+             ns=(vidfile_stat.st_atime_ns, vidfile_stat.st_mtime_ns))
     os.chmod(mkvfile, vidfile_stat.st_mode)
     os.chown(mkvfile, vidfile_stat.st_uid, vidfile_stat.st_gid)
 
