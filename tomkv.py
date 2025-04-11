@@ -141,6 +141,7 @@ def doit(vidfile: pathlib.Path) -> bool:
       sufs = [t for s in sufs for t in s.split(',')]
 
       iso6392 = None
+      print(sufs)
       for s in sufs:
         if s in iso6392tolang:
           iso6392 = s
@@ -148,6 +149,7 @@ def doit(vidfile: pathlib.Path) -> bool:
           iso6392 = iso6391to6392[s]
         elif s in lang2iso6392:
           iso6392 = lang2iso6392[s]
+        print(f'{s} -> {iso6392}')
 
       if not iso6392:
         iso6392 = args.default_language
