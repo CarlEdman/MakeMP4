@@ -78,6 +78,8 @@ posterstems = {
 }
 
 findelfiles = set()
+successes = []
+failures = []
 
 def doit(vidfile: pathlib.Path) -> bool:
   if vidfile.is_dir():
@@ -99,6 +101,7 @@ def doit(vidfile: pathlib.Path) -> bool:
 
   if mkvfile.exists() and not vidfile.samefile(mkvfile):
     log.warning(f'"{mkvfile}" already exists')
+    failures.append(mkvfile)
     return False
 
   cl = ['mkvmerge', '--stop-after-video-ends', '-o', tempfile]
@@ -188,13 +191,16 @@ def doit(vidfile: pathlib.Path) -> bool:
         log.info(e.stdout)
         log.warning(f'{e.stderr}\n{e}\nProceeding and preserving files ...')
         mkvmerge_warning = True
+        failures.append(vidfile)
       else:
         if tempfile.exists():
           tempfile.unlink(missing_ok=True)
         log.info(e.stdout)
         log.error(f'{e.stderr}\n{e}\nSkipping ...')
+        failures.append(vidfile)
       return False
     except KeyboardInterrupt as e:
+      failures.append(vidfile)
       if tempfile.exists():
         tempfile.unlink(missing_ok=True)
       raise e
@@ -207,6 +213,7 @@ def doit(vidfile: pathlib.Path) -> bool:
         mkvfile.rename(backupfile)
       except FileNotFoundError as e:
         log.error(f'Temp mkvfile "{mkvfile}" not found, skipping: {e}')
+        failures.append(vidfile)
         return False
    
     tempfile.replace(mkvfile)
@@ -217,7 +224,10 @@ def doit(vidfile: pathlib.Path) -> bool:
       os.chown(mkvfile, vidstat.st_uid, vidstat.st_gid)
     except Exception as e:
       log.error(f'Failed to set ownership and permissions for "{mkvfile}", skipping: {e}')
+      failures.append(vidfile)
       return False
+
+  successes.append(vidfile)
 
   if vidfile.exists() and mkvfile.exists() and not vidfile.samefile(mkvfile):
     delfiles.add(vidfile)
