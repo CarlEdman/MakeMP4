@@ -5,3 +5,4 @@ plexapi
 pywin32
 pyyaml
 sanitize_filename
+plexapi
