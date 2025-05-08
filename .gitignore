@@ -6,4 +6,4 @@ workspace.code-workspace
 *.ini
 __pycache__/
 *.vscode
-venv/
+.venv/
