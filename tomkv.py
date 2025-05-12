@@ -79,6 +79,8 @@ posterstems = {
   'poster',
 }
 
+chapexts = {'.chapters', '.chapters.xml'}
+
 findelfiles = set()
 successes = []
 failures = []
@@ -119,11 +121,12 @@ def doit(vidfile: pathlib.Path) -> bool:
   todo = todo | (mkvfile != vidfile)
   todo = todo or bool(args.languages)
   
-  chapfile = vidfile.with_suffix('.chapters')
-  if chapfile.exists():
-    todo = True
-    delfiles.add(chapfile)
-    cl += ['--chapters', chapfile]
+  for e in chapexts:
+    chapfile = vidfile.with_suffix(e)
+    if chapfile.exists():
+      todo = True
+      delfiles.add(chapfile)
+      cl += ['--chapters', chapfile]
 
   for f in sorted(list(vidfile.parent.iterdir()), key=sortkey):
     # if f.is_dir() and f.name.lower() in { "sub", "subs" }:
