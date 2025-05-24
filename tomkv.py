@@ -50,6 +50,7 @@ subexts = {
   '.idx',
   '.srt',
   '.sup',
+  '.vtt',
 }
 
 exts_skip = {
