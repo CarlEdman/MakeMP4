@@ -355,7 +355,7 @@ if __name__ == '__main__':
   log.addHandler(slogger)
 
 #  if not max(map(doit, (pathlib.Path(f) for a in args.paths for f in glob.iglob(a))), default=False):
-  if not max(map(doit, (pathlib.Path(a) for a in args.paths), default=False)):
+  if not max(map(doit, (pathlib.Path(a) for a in args.paths)), default=False):
     log.warning(f'No valid video files found for arguments "{args.paths}".')
 
   if not args.nodelete and findelfiles:
