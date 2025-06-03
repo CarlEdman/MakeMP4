@@ -367,7 +367,7 @@ if __name__ == '__main__':
     ps = ( f for p in ps for f in glob.iglob(p) )
   ps = map(pathlib.Path, ps)
   if not max(map(doit, ps), default=False):
-    log.warning(f'No valid video files found for arguments "{ps}".')
+    log.warning(f'No valid video files found for arguments "{args.paths}".')
       
   if not args.nodelete and findelfiles:
     log.info(f'rm {files2quotedstring(findelfiles)}')
