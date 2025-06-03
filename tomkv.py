@@ -1,6 +1,6 @@
 #!python3
 import argparse
-import glob
+# import glob
 import logging
 import logging.handlers
 import pathlib
@@ -88,6 +88,8 @@ failures = []
 
 def doit(vidfile: pathlib.Path) -> bool:
   if vidfile.is_dir():
+    if not args.recurse:
+      return False
     log.debug(f'Recursing on "{vidfile}" ...')
     return max(map(doit, sorted(list(vidfile.iterdir()), key=sortkey)), default=False)
 
@@ -261,13 +263,6 @@ if __name__ == '__main__':
     help='do not delete source files (e.g., video, subtitles, chapters, or posters) after conversion to MKV.',
   )
   parser.add_argument(
-    '-R',
-    '--recurse',
-    dest='recurse',
-    action='store_true',
-    help='recurse into subdirectories of given directories.',
-  )
-  parser.add_argument(
     '-t',
     '--title-case',
     dest='titlecase',
@@ -295,6 +290,14 @@ if __name__ == '__main__':
     default='eng',
     choices=iso6392tolang.keys(),
     help='ISO6392 language code to use by default for subtitles.',
+  )
+  parser.add_argument(
+    '-R',
+    '--recurse',
+    dest='recurse',
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help='Recurse into subdirectories.',
   )
   parser.add_argument(
     '-d',
@@ -351,7 +354,8 @@ if __name__ == '__main__':
   slogger.setFormatter(logformat)
   log.addHandler(slogger)
 
-  if not max(map(doit, (pathlib.Path(f) for a in args.paths for f in glob.iglob(a))), default=False):
+#  if not max(map(doit, (pathlib.Path(f) for a in args.paths for f in glob.iglob(a))), default=False):
+  if not max(map(doit, (pathlib.Path(a) for a in args.paths), default=False)):
     log.warning(f'No valid video files found for arguments "{args.paths}".')
 
   if not args.nodelete and findelfiles:
