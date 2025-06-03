@@ -1,6 +1,6 @@
 #!python3
 import argparse
-# import glob
+import glob
 import logging
 import logging.handlers
 import pathlib
@@ -300,6 +300,14 @@ if __name__ == '__main__':
     help='Recurse into subdirectories.',
   )
   parser.add_argument(
+    '-G',
+    '--glob',
+    dest='glob',
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help='Glob argument paths.',
+  )
+  parser.add_argument(
     '-d',
     '--dryrun',
     dest='dryrun',
@@ -354,10 +362,13 @@ if __name__ == '__main__':
   slogger.setFormatter(logformat)
   log.addHandler(slogger)
 
-#  if not max(map(doit, (pathlib.Path(f) for a in args.paths for f in glob.iglob(a))), default=False):
-  if not max(map(doit, (pathlib.Path(a) for a in args.paths)), default=False):
-    log.warning(f'No valid video files found for arguments "{args.paths}".')
-
+  ps = args.paths
+  if args.glob:
+    ps = ( f for p in ps for f in glob.iglob(p) )
+  ps = map(pathlib.Path, ps)
+  if not max(map(doit, ps), default=False):
+    log.warning(f'No valid video files found for arguments "{ps}".')
+      
   if not args.nodelete and findelfiles:
     log.info(f'rm {files2quotedstring(findelfiles)}')
     if not args.dryrun:
