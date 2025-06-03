@@ -340,7 +340,7 @@ if __name__ == '__main__':
     '--log', dest='logfile', action='store', help='location of alternate log file.'
   )
   parser.add_argument(
-    'paths', nargs='+', help='paths to be operated on; may include wildcards; directories convert content.'
+    'paths', nargs='+', help='paths to be operated on; may include wildcards (if glob is set); directories convert content (if recurse is set).'
   )
   parser.set_defaults(loglevel=logging.WARN)
 
@@ -367,8 +367,8 @@ if __name__ == '__main__':
     ps = ( f for p in ps for f in glob.iglob(p) )
   ps = map(pathlib.Path, ps)
   if not max(map(doit, ps), default=False):
-    log.warning(f'No valid video files found for arguments "{args.paths}".')
-      
+    log.warning(f'No valid video files found for arguments: {' '.join(args.paths)}')
+
   if not args.nodelete and findelfiles:
     log.info(f'rm {files2quotedstring(findelfiles)}')
     if not args.dryrun:
