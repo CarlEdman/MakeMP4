@@ -6,3 +6,4 @@ plexapi
 pyyaml
 sanitize_filename
 plexapi
+teletype

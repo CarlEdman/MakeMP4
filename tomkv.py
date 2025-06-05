@@ -1,5 +1,6 @@
 #!python3
 import argparse
+import teletype
 import glob
 import logging
 import logging.handlers
@@ -361,6 +362,9 @@ if __name__ == '__main__':
   slogger.setLevel(args.loglevel)
   slogger.setFormatter(logformat)
   log.addHandler(slogger)
+
+#  c = curses.initscr()
+#  print(c)
 
   ps = args.paths
   if args.glob:
