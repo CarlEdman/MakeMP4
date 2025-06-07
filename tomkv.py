@@ -6,6 +6,7 @@ import logging.handlers
 import pathlib
 import subprocess
 import os
+import shutil
 
 from cetools import (
   basestem,
@@ -22,6 +23,7 @@ version = '0.5'
 author = 'Carl Edman (CarlEdman@gmail.com)'
 desc = 'Convert video files to mkv files (incorporating separate subtitles & posters).'
 
+(cols, lines) = shutil.get_terminal_size(fallback=(0,0))
 parser = None
 args = None
 log = logging.getLogger()
@@ -87,7 +89,8 @@ successes = []
 failures = []
 
 def doit(vidfile: pathlib.Path) -> bool:
-  print(vidfile, end='\r')
+  if cols>0:
+    print(str(vidfile)[:cols-1], end='\r')
 
   if vidfile.is_dir():
     if not args.recurse:
