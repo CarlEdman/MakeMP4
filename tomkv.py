@@ -90,7 +90,7 @@ failures = []
 
 def doit(vidfile: pathlib.Path) -> bool:
   if cols>0:
-    print(str(vidfile)[:cols-1], end='\r')
+    print((str(vidfile) + " "*cols)[:cols-1], end='\r')
 
   if vidfile.is_dir():
     if not args.recurse:
