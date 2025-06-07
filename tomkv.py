@@ -1,6 +1,5 @@
 #!python3
 import argparse
-import teletype
 import glob
 import logging
 import logging.handlers
@@ -19,7 +18,7 @@ from cetools import (
 )
 
 prog = 'tomkv'
-version = '0.4'
+version = '0.5'
 author = 'Carl Edman (CarlEdman@gmail.com)'
 desc = 'Convert video files to mkv files (incorporating separate subtitles & posters).'
 
@@ -88,6 +87,8 @@ successes = []
 failures = []
 
 def doit(vidfile: pathlib.Path) -> bool:
+  print(vidfile, end='\r')
+
   if vidfile.is_dir():
     if not args.recurse:
       return False

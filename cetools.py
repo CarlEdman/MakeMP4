@@ -3,7 +3,7 @@
 import argparse
 import json
 import logging
-import logging.handlers
+# import logging.handlers
 import os
 import pathlib
 import re
@@ -12,11 +12,11 @@ import time
 from fractions import Fraction
 from xmlrpc.client import Boolean
 
-if os.name == "nt":
-  import ctypes
-  import win32api
-  import win32process
-  import win32con
+# if os.name == "nt":
+#   import ctypes
+#   import win32api
+#   import win32process
+#   import win32con
 
 log = logging.getLogger()
 
@@ -42,10 +42,11 @@ class TitleHandler(logging.Handler):
     pass
 
   def emit(self, record):
-    if os.name == "nt":
-      ctypes.windll.kernel32.SetConsoleTitleA(
-        self.format(record).encode(encoding="cp1252", errors="ignore")
-      )
+    pass
+    # if os.name == "nt":
+    #   ctypes.windll.kernel32.SetConsoleTitleA(
+    #     self.format(record).encode(encoding="cp1252", errors="ignore")
+    #   )
 
 
 def nice(niceness):
@@ -53,20 +54,20 @@ def nice(niceness):
 
   if hasattr(os, "nice"):
     return os.nice(niceness)  # pylint: disable=no-member
-  elif os.name == "nt":
-    pcs = [
-      win32process.IDLE_PRIORITY_CLASS,
-      win32process.BELOW_NORMAL_PRIORITY_CLASS,
-      win32process.NORMAL_PRIORITY_CLASS,
-      win32process.ABOVE_NORMAL_PRIORITY_CLASS,
-      win32process.HIGH_PRIORITY_CLASS,
-      win32process.REALTIME_PRIORITY_CLASS,
-    ]
-    pri = pcs[max(0, min(2 - niceness, len(pcs) - 1))]
+  # elif os.name == "nt":
+  #   pcs = [
+  #     win32process.IDLE_PRIORITY_CLASS,
+  #     win32process.BELOW_NORMAL_PRIORITY_CLASS,
+  #     win32process.NORMAL_PRIORITY_CLASS,
+  #     win32process.ABOVE_NORMAL_PRIORITY_CLASS,
+  #     win32process.HIGH_PRIORITY_CLASS,
+  #     win32process.REALTIME_PRIORITY_CLASS,
+  #   ]
+  #   pri = pcs[max(0, min(2 - niceness, len(pcs) - 1))]
 
-    pid = win32api.GetCurrentProcessId()
-    handle = win32api.OpenProcess(win32con.PROCESS_ALL_ACCESS, True, pid)
-    win32process.SetPriorityClass(handle, pri)
+  #   pid = win32api.GetCurrentProcessId()
+  #   handle = win32api.OpenProcess(win32con.PROCESS_ALL_ACCESS, True, pid)
+  #   win32process.SetPriorityClass(handle, pri)
 
 
 def dict_inverse(d):
@@ -231,36 +232,38 @@ def sleep_change_directories(dirs, state=None):
     if nstate != state:
       return nstate
 
-    if os.name == "nt":
-      import win32file, win32event, win32con  # noqa: E401
+    # if os.name == "nt":
+    #   import win32file, win32event, win32con  # noqa: E401
 
-      watches = (
-        win32con.FILE_NOTIFY_CHANGE_FILE_NAME
-        | win32con.FILE_NOTIFY_CHANGE_ATTRIBUTES
-        | win32con.FILE_NOTIFY_CHANGE_LAST_WRITE
-      )
-      try:
-        chs = [win32file.FindFirstChangeNotification(str(d), 0, watches) for d in dirs]
-        while win32event.WaitForMultipleObjects(chs, 0, 1000) == win32con.WAIT_TIMEOUT:
-          pass
-      finally:
-        for ch in chs:
-          win32file.FindCloseChangeNotification(ch)
-    else:
-      time.sleep(10)
+    #   watches = (
+    #     win32con.FILE_NOTIFY_CHANGE_FILE_NAME
+    #     | win32con.FILE_NOTIFY_CHANGE_ATTRIBUTES
+    #     | win32con.FILE_NOTIFY_CHANGE_LAST_WRITE
+    #   )
+    #   try:
+    #     chs = [win32file.FindFirstChangeNotification(str(d), 0, watches) for d in dirs]
+    #     while win32event.WaitForMultipleObjects(chs, 0, 1000) == win32con.WAIT_TIMEOUT:
+    #       pass
+    #   finally:
+    #     for ch in chs:
+    #       win32file.FindCloseChangeNotification(ch)
+    # else:
+    time.sleep(10)
 
 
 def sleep_inhibit():
-  if os.name == "nt":
-    ES_CONTINUOUS = 0x80000000
-    ES_SYSTEM_REQUIRED = 0x00000001
-    ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED)
+  pass
+  # if os.name == "nt":
+  #   ES_CONTINUOUS = 0x80000000
+  #   ES_SYSTEM_REQUIRED = 0x00000001
+  #   ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED)
 
 
 def sleep_uninhibit():
-  if os.name == "nt":
-    ES_CONTINUOUS = 0x80000000
-    ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS)
+  pass
+  # if os.name == "nt":
+  #   ES_CONTINUOUS = 0x80000000
+  #   ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS)
 
 
 def dirpath(p):
