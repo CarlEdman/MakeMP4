@@ -1,10 +1,9 @@
 # pip install -r C:\Users\Carl\DVD\MakeMP4\requirements.txt
+#pywin32
+blessed
 enzyme
 mutagen
+plex_api_client
 plexapi
-#pywin32
 pyyaml
 sanitize_filename
-plexapi
-#teletype
-blessed
