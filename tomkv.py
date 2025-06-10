@@ -90,7 +90,6 @@ chapexts = {'.chapters', '.chapters.xml'}
 findelfiles = set()
 successes = []
 failures = []
-
 modemask = 0o7777
 
 def octal_type(x):
@@ -107,7 +106,7 @@ def uid_type(x):
   except KeyError:
     pass
 
-  log.warn(f'No uid recognized for "{x}", not setting.')
+  log.warning(f'No uid recognized for "{x}", not setting.')
   return None
 
 def gid_type(x):
@@ -121,7 +120,7 @@ def gid_type(x):
   except KeyError:
     pass
 
-  log.warn(f'No gid recognized for "{x}", not setting.')
+  log.warning(f'No gid recognized for "{x}", not setting.')
   return None
 
 def set_stat(f: pathlib.Path) -> bool:
