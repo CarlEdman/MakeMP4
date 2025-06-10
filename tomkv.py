@@ -89,6 +89,9 @@ findelfiles = set()
 successes = []
 failures = []
 
+def octal_type(x):
+  return int(x, 8)
+
 def set_stat(f: pathlib.Path) -> bool:
   if os.name == 'nt':
     return True
@@ -332,7 +335,7 @@ if __name__ == '__main__':
   parser.add_argument(
     '--file-mode',
     dest='file_mode',
-    type=int,
+    type=octal_type,
     action='store',
     default=None,
     help='if set, vidfiles mode will be changed.',
@@ -341,7 +344,7 @@ if __name__ == '__main__':
     '--dir-mode',
     '--directory-mode',
     dest='dir_mode',
-    type=int,
+    type=octal_type,
     action='store',
     default=None,
     help='if set, folders mode will be changed.',
