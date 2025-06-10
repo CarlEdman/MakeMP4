@@ -7,6 +7,7 @@ import pathlib
 import subprocess
 import os
 import shutil
+import sys
 
 from cetools import (
   basestem,
@@ -88,27 +89,54 @@ findelfiles = set()
 successes = []
 failures = []
 
+def set_stat(f: pathlib.Path) -> bool:
+  if os.name == 'nt':
+    return True
+  if not f.exists():
+    log.debug(f'"{f}" does not exists, skipping')
+    return False
+  s = f.stat()
+  if f.is_file() and args.file_mode is not None and s.st_mode != args.file_mode:
+    log.info(f'Changing "{f}" mode from {s.st_mode} to {args.file_mode}.')
+    f.chmod(args.file_mode)
+  if f.is_dir() and args.dir_mode is not None and s.st_mode != args.dir_mode:
+    log.info(f'Changing "{f}" mode from {s.st_mode} to {args.dir_mode}.')
+    f.chmod(args.dir_mode)
+  if args.uid is not None and s.st_uid != args.uid:
+    log.info(f'Changing "{f}" owner from {s.st_uid} to {args.uid}.')
+    os.chown(f, args.uid)
+  if args.gid is not None and s.st_gid != args.gid:
+    log.info(f'Changing "{f}" group from {s.st_gid} to {args.gid}.')
+    os.chown(f, -1, args.gid)
+  return True
+
 def doit(vidfile: pathlib.Path) -> bool:
+  todo = args.force
+
   if cols>0:
     print((str(vidfile) + " "*cols)[:cols-1], end='\r')
 
+  if not vidfile.exists():
+    log.debug(f'"{vidfile}" does not exists, skipping')
+    return False
+
+  vidstat = vidfile.stat()
+  set_stat(vidfile)
+
   if vidfile.is_dir():
+    set_stat(vidfile)
     if not args.recurse:
       return False
     log.debug(f'Recursing on "{vidfile}" ...')
     return max(map(doit, sorted(list(vidfile.iterdir()), key=sortkey)), default=False)
 
-  if vidfile.suffix.lower() not in videxts or not vidfile.is_file():
+  if not vidfile.is_file() or vidfile.suffix.lower() not in videxts:
     log.debug(f'"{vidfile}" is not recognized video file, skipping')
     return False
 
-  vidstat = os.stat(vidfile)
-
   mkvfile = vidfile.with_suffix('.mkv')
-  
   if args.titlecase:
     mkvfile = mkvfile.with_stem(to_title_case(mkvfile.stem))
-
   tempfile = mkvfile.with_stem(mkvfile.stem + '-temp')
 
   if mkvfile.exists() and not vidfile.samefile(mkvfile):
@@ -125,7 +153,6 @@ def doit(vidfile: pathlib.Path) -> bool:
 
   delfiles = set()
 
-  todo = args.force
   todo = todo | (mkvfile != vidfile)
   todo = todo or bool(args.languages)
   
@@ -231,10 +258,8 @@ def doit(vidfile: pathlib.Path) -> bool:
    
     tempfile.replace(mkvfile)
     try:
-      os.utime(mkvfile,
-               ns=(vidstat.st_atime_ns, vidstat.st_mtime_ns))
-      os.chmod(mkvfile, vidstat.st_mode)
-      os.chown(mkvfile, vidstat.st_uid, vidstat.st_gid)
+      os.utime(mkvfile, ns=(vidstat.st_atime_ns, vidstat.st_mtime_ns))
+      mkvfile.chmod(vidstat.st_uid, vidstat.st_gid)
     except Exception as e:
       log.error(f'Failed to set ownership and permissions for "{mkvfile}", skipping: {e}')
       failures.append(vidfile)
@@ -287,6 +312,39 @@ if __name__ == '__main__':
     dest='languages',
     action='store',
     help='keep audio and subtitle tracks in the given language ISO639-2 codes; prefix with ! to discard same.',
+  )
+  parser.add_argument(
+    '--uid',
+    dest='uid',
+    type=int,
+    action='store',
+    default=None,
+    help='if set, vidfiles will have their uid changed.',
+  )
+  parser.add_argument(
+    '--gid',
+    dest='gid',
+    type=int,
+    action='store',
+    default=None,
+    help='if set, vidfiles will have their gid changed.',
+  )
+  parser.add_argument(
+    '--file-mode',
+    dest='file_mode',
+    type=int,
+    action='store',
+    default=None,
+    help='if set, vidfiles mode will be changed.',
+  )
+  parser.add_argument(
+    '--dir-mode',
+    '--directory-mode',
+    dest='dir_mode',
+    type=int,
+    action='store',
+    default=None,
+    help='if set, folders mode will be changed.',
   )
   parser.add_argument(
     '--default-language',
@@ -344,6 +402,16 @@ if __name__ == '__main__':
   parser.add_argument(
     '--log', dest='logfile', action='store', help='location of alternate log file.'
   )
+  for i in (
+    pathlib.Path(sys.argv[0]).with_suffix('.ini'),
+    pathlib.Path(prog).with_suffix('.ini'),
+    (pathlib.Path('..') / prog ).with_suffix('.ini'),
+    pathlib.Path() / prog / 'config.ini'
+  ):
+    if not i.exists():
+      continue
+    sys.argv.insert(1, f'@{i}')
+
   parser.add_argument(
     'paths', nargs='+', help='paths to be operated on; may include wildcards (if glob is set); directories convert content (if recurse is set).'
   )
@@ -366,9 +434,6 @@ if __name__ == '__main__':
   slogger.setLevel(args.loglevel)
   slogger.setFormatter(logformat)
   log.addHandler(slogger)
-
-#  c = curses.initscr()
-#  print(c)
 
   ps = args.paths
   if args.glob:
