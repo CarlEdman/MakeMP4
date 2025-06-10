@@ -100,10 +100,10 @@ def set_stat(f: pathlib.Path) -> bool:
     return False
   s = f.stat()
   if f.is_file() and args.file_mode is not None and s.st_mode != args.file_mode:
-    log.info(f'Changing "{f}" mode from {s.st_mode} to {args.file_mode}.')
+    log.info(f'Changing "{f}" mode from {oct(s.st_mode)} to {oct(args.file_mode)}.')
     f.chmod(args.file_mode)
   if f.is_dir() and args.dir_mode is not None and s.st_mode != args.dir_mode:
-    log.info(f'Changing "{f}" mode from {s.st_mode} to {args.dir_mode}.')
+    log.info(f'Changing "{f}" mode from {oct(s.st_mode)} to {oct(args.dir_mode)}.')
     f.chmod(args.dir_mode)
   if args.uid is not None and s.st_uid != args.uid:
     log.info(f'Changing "{f}" owner from {s.st_uid} to {args.uid}.')
