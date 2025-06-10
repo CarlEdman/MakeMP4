@@ -4,6 +4,7 @@ import glob
 import logging
 import logging.handlers
 import pathlib
+import pwd
 import subprocess
 import os
 import shutil
@@ -90,8 +91,38 @@ findelfiles = set()
 successes = []
 failures = []
 
+modemask = 0o7777
+
 def octal_type(x):
   return int(x, 8)
+
+def uid_type(x):
+  try:
+    return pwd.getpwnam(x).pw_uid
+  except KeyError:
+    pass
+
+  try:
+    return int(x)
+  except KeyError:
+    pass
+
+  log.warn(f'No uid recognized for "{x}", not setting.')
+  return None
+
+def gid_type(x):
+  try:
+    return pwd.getpwnam(x).pw_gid
+  except KeyError:
+    pass
+
+  try:
+    return int(x)
+  except KeyError:
+    pass
+
+  log.warn(f'No gid recognized for "{x}", not setting.')
+  return None
 
 def set_stat(f: pathlib.Path) -> bool:
   if os.name == 'nt':
@@ -100,12 +131,17 @@ def set_stat(f: pathlib.Path) -> bool:
     log.debug(f'"{f}" does not exists, skipping')
     return False
   s = f.stat()
-  if f.is_file() and args.file_mode is not None and s.st_mode != args.file_mode:
+
+#  print(oct(s.st_mode), oct(args.file_mode), oct(s.st_mode & modemask), oct(args.file_mode & modemask))
+  if f.is_file() and args.file_mode is not None and (s.st_mode & modemask) != (args.file_mode & modemask):
     log.info(f'Changing "{f}" mode from {oct(s.st_mode)} to {oct(args.file_mode)}.')
     f.chmod(args.file_mode)
-  if f.is_dir() and args.dir_mode is not None and s.st_mode != args.dir_mode:
+
+#  print(oct(s.st_mode), oct(args.dir_mode), oct(s.st_mode & modemask), oct(args.dir_mode & modemask))
+  if f.is_dir() and args.dir_mode is not None and (s.st_mode & modemask) != (args.dir_mode & modemask):
     log.info(f'Changing "{f}" mode from {oct(s.st_mode)} to {oct(args.dir_mode)}.')
     f.chmod(args.dir_mode)
+
   if args.uid is not None and s.st_uid != args.uid:
     log.info(f'Changing "{f}" owner from {s.st_uid} to {args.uid}.')
     os.chown(f, args.uid, -1)
@@ -263,7 +299,7 @@ def doit(vidfile: pathlib.Path) -> bool:
     tempfile.replace(mkvfile)
     try:
       os.utime(mkvfile, ns=(vidstat.st_atime_ns, vidstat.st_mtime_ns))
-      mkvfile.chmod(vidstat.st_uid, vidstat.st_gid)
+      mkvfile.chmod(vidstat.st_mode)
     except Exception as e:
       log.error(f'Failed to set ownership and permissions for "{mkvfile}", skipping: {e}')
       failures.append(vidfile)
@@ -320,7 +356,7 @@ if __name__ == '__main__':
   parser.add_argument(
     '--uid',
     dest='uid',
-    type=int,
+    type=uid_type,
     action='store',
     default=None,
     help='if set, vidfiles will have their uid changed.',
@@ -328,7 +364,7 @@ if __name__ == '__main__':
   parser.add_argument(
     '--gid',
     dest='gid',
-    type=int,
+    type=gid_type,
     action='store',
     default=None,
     help='if set, vidfiles will have their gid changed.',
@@ -406,12 +442,13 @@ if __name__ == '__main__':
   parser.add_argument(
     '--log', dest='logfile', action='store', help='location of alternate log file.'
   )
-  for i in (
+  iq=[
+    (pathlib.Path.home() / '.config' / prog).with_suffix('.ini'),
     pathlib.Path(sys.argv[0]).with_suffix('.ini'),
     pathlib.Path(prog).with_suffix('.ini'),
     (pathlib.Path('..') / prog ).with_suffix('.ini'),
-    pathlib.Path() / prog / 'config.ini'
-  ):
+  ]
+  for i in iq:
     if not i.exists():
       continue
     sys.argv.insert(1, f'@{i}')
