@@ -104,7 +104,7 @@ def set_stat(f: pathlib.Path) -> bool:
     f.chmod(args.dir_mode)
   if args.uid is not None and s.st_uid != args.uid:
     log.info(f'Changing "{f}" owner from {s.st_uid} to {args.uid}.')
-    os.chown(f, args.uid)
+    os.chown(f, args.uid, -1)
   if args.gid is not None and s.st_gid != args.gid:
     log.info(f'Changing "{f}" group from {s.st_gid} to {args.gid}.')
     os.chown(f, -1, args.gid)
