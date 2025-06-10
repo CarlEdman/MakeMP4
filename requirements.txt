@@ -3,7 +3,6 @@
 blessed
 enzyme
 mutagen
-plex_api_client
 plexapi
 pyyaml
 sanitize_filename
