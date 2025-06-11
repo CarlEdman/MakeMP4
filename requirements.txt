@@ -5,5 +5,5 @@ enzyme
 mutagen
 plexapi
 pyyaml
-sanitize_filename
 ruff
+sanitize_filename
