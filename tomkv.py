@@ -78,14 +78,16 @@ posterexts2mime = {
   '.webp': 'image/webp',
   '.wmf': 'image/wmf',
 }
- 
 
 posterstems = {
   'cover',
   'poster',
 }
 
-chapexts = {'.chapters', '.chapters.xml'}
+chapexts = {
+  '.chapters',
+  '.chapters.xml'
+}
 
 findelfiles = set()
 successes = []
@@ -409,53 +411,46 @@ if __name__ == '__main__':
     default=False,
     help='Glob argument paths.',
   )
-  parser.add_argument(
-    '-d',
-    '--dryrun',
+  parser.add_argument('-d', '--dryrun',
     dest='dryrun',
     action='store_true',
-    help='do not perform operations, but only print them.',
-  )
-  parser.add_argument('--version', action='version', version='%(prog)s ' + version)
-  parser.add_argument(
-    '--verbose',
+    help='do not perform operations, but only print them.')
+  parser.add_argument('--version',
+    action='version',
+    version='%(prog)s ' + version)
+  parser.add_argument('--verbose',
     dest='loglevel',
     action='store_const',
     const=logging.INFO,
-    help='print informational (or higher) log messages.',
-  )
-  parser.add_argument(
-    '--debug',
+    help='print informational (or higher) log messages.')
+  parser.add_argument('--debug',
     dest='loglevel',
     action='store_const',
     const=logging.DEBUG,
-    help='print debugging (or higher) log messages.',
-  )
-  parser.add_argument(
-    '--taciturn',
+    help='print debugging (or higher) log messages.')
+  parser.add_argument('--taciturn',
     dest='loglevel',
     action='store_const',
     const=logging.ERROR,
-    help='only print error level (or higher) log messages.',
-  )
-  parser.add_argument(
-    '--log', dest='logfile', action='store', help='location of alternate log file.'
-  )
-  iq=[
-    (pathlib.Path.home() / '.config' / prog).with_suffix('.ini'),
-    pathlib.Path(sys.argv[0]).with_suffix('.ini'),
-    pathlib.Path(prog).with_suffix('.ini'),
-    (pathlib.Path('..') / prog ).with_suffix('.ini'),
-  ]
-  for i in iq:
-    if not i.exists():
-      continue
-    sys.argv.insert(1, f'@{i}')
-
+    help='only print error level (or higher) log messages.')
+  parser.add_argument('--log',
+    dest='logfile',
+    action='store', 
+    help='location of alternate log file.')
   parser.add_argument(
     'paths', nargs='+', help='paths to be operated on; may include wildcards (if glob is set); directories convert content (if recurse is set).'
   )
+
   parser.set_defaults(loglevel=logging.WARN)
+  for i in [
+    (pathlib.Path.home() / '.config' / prog).with_suffix('.ini'),
+    pathlib.Path(sys.argv[0]).with_suffix('.ini'),
+    pathlib.Path(prog).with_suffix('.ini'),
+    (pathlib.Path('..') / prog).with_suffix('.ini'),
+  ]:
+    if not i.exists():
+      continue
+    sys.argv.insert(1, f'@{i}')
 
   args = parser.parse_args()
   if args.dryrun and args.loglevel > logging.INFO:
