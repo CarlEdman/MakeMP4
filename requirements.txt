@@ -6,3 +6,4 @@ mutagen
 plexapi
 pyyaml
 sanitize_filename
+ruff
