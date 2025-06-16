@@ -7,3 +7,5 @@ plexapi
 pyyaml
 ruff
 sanitize_filename
+ansi
+

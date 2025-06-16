@@ -1,4 +1,4 @@
-#!python3
+#! python3
 import argparse
 import glob
 import logging
@@ -9,13 +9,17 @@ import subprocess
 import os
 import shutil
 import sys
+import textwrap
+import ansi
+import ansi.sequence
 
 from cetools import (
   basestem,
   lang2iso6392,
   iso6392tolang,
   iso6391to6392,
-  files2quotedstring,
+  path2quotedstring,
+  paths2quotedstring,
   sortkey,
   to_title_case,
 )
@@ -153,12 +157,12 @@ def set_stat(f: pathlib.Path) -> bool:
 
 def doit(vidfile: pathlib.Path) -> bool:
   todo = args.force
-
+  vidname = path2quotedstring(vidfile)
   if cols>0:
-    print((str(vidfile) + " "*cols)[:cols-1], end='\r')
+    print('\r', ansi.cursor.erase_line, textwrap.shorten(vidname, width=cols-1, placeholder='\u2026'), end='')
 
   if not vidfile.exists():
-    log.debug(f'"{vidfile}" does not exists, skipping')
+    log.debug(f'{vidname} does not exists, skipping')
     return False
 
   vidstat = vidfile.stat()
@@ -168,11 +172,11 @@ def doit(vidfile: pathlib.Path) -> bool:
     set_stat(vidfile)
     if not args.recurse:
       return False
-    log.debug(f'Recursing on "{vidfile}" ...')
+    log.debug(f'Recursing on {vidname} ...')
     return max(map(doit, sorted(list(vidfile.iterdir()), key=sortkey)), default=False)
 
   if not vidfile.is_file() or vidfile.suffix.lower() not in videxts:
-    log.debug(f'"{vidfile}" is not recognized video file, skipping')
+    log.debug(f'{vidname} is not recognized video file, skipping')
     return False
 
   mkvfile = vidfile.with_suffix('.mkv')
@@ -181,7 +185,8 @@ def doit(vidfile: pathlib.Path) -> bool:
   tempfile = mkvfile.with_stem(mkvfile.stem + '-temp')
 
   if mkvfile.exists() and not vidfile.samefile(mkvfile):
-    log.warning(f'"{mkvfile}" already exists')
+    mkvname = path2quotedstring(mkvfile)
+    log.warning(f'{mkvname} already exists')
     failures.append(mkvfile)
     return False
 
@@ -259,7 +264,7 @@ def doit(vidfile: pathlib.Path) -> bool:
     )
     return False
 
-  log.info(files2quotedstring(cl))
+  log.info(paths2quotedstring(cl))
   mkvmerge_warning = False
   if not args.dryrun:
     try:
@@ -286,7 +291,7 @@ def doit(vidfile: pathlib.Path) -> bool:
         tempfile.unlink(missing_ok=True)
       raise e
 
-  log.info(f'mv {files2quotedstring([tempfile, mkvfile])}')
+  log.info(f'mv {path2quotedstring(tempfile)} {path2quotedstring(mkvfile)}')
   if not args.dryrun:
     if mkvmerge_warning:
       backupfile = mkvfile.with_stem(mkvfile.stem + '-backup')
@@ -314,7 +319,7 @@ def doit(vidfile: pathlib.Path) -> bool:
   if args.nodelete or mkvmerge_warning or not delfiles:
     return True
 
-  log.info(f'rm {files2quotedstring(delfiles)}')
+  log.info(f'rm {paths2quotedstring(delfiles)}')
   if not args.dryrun:
     for i in delfiles:
       i.unlink(missing_ok=True)
@@ -478,7 +483,7 @@ if __name__ == '__main__':
     log.warning(f'No valid video files found for paths (need to glob and/or recurse?) arguments: {' '.join(args.paths)}')
 
   if not args.nodelete and findelfiles:
-    log.info(f'rm {files2quotedstring(findelfiles)}')
+    log.info(f'rm {paths2quotedstring(findelfiles)}')
     if not args.dryrun:
       for i in findelfiles:
         if i.exists():
