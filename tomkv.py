@@ -10,8 +10,7 @@ import os
 import shutil
 import sys
 import textwrap
-import ansi
-import ansi.sequence
+import coloredlogs
 
 from cetools import (
   basestem,
@@ -32,7 +31,15 @@ desc = 'Convert video files to mkv files (incorporating separate subtitles & pos
 (cols, lines) = shutil.get_terminal_size(fallback=(0,0))
 parser = None
 args = None
-log = logging.getLogger()
+log = logging.getLogger(__name__)
+coloredlogs.install(logger=log)
+
+# Some examples.
+#log.debug("this is a debugging message")
+#log.info("this is an informational message")
+#log.warning("this is a warning message")
+#log.error("this is an error message")
+#log.critical("this is a critical message")
 
 videxts = {
   '.264',
@@ -159,7 +166,16 @@ def doit(vidfile: pathlib.Path) -> bool:
   todo = args.force
   vidname = path2quotedstring(vidfile)
   if cols>0:
-    print('\r', ansi.cursor.erase_line, textwrap.shorten(vidname, width=cols-1, placeholder='\u2026'), end='')
+    # print('\r', ansi.cursor.erase_line, textwrap.shorten(vidname, width=cols-1, placeholder='\u2026'), end='')
+    # print('\r', '\033[0K', end='')
+    # print('\r', '\033[0K', end='')
+    print('\033[s', '\033[0K', textwrap.shorten(vidname, width=cols-10, placeholder='\u2026'), '\033[u', end='\r')
+
+#    enter_am_mode
+#    clr_eol
+#    exit_am_mode
+
+#    print('\033[?7l','\033[0K', textwrap.shorten(vidname, width=cols-10, placeholder='\u2026'), '\033[u', end='\r')
 
   if not vidfile.exists():
     log.debug(f'{vidname} does not exists, skipping')
@@ -457,6 +473,9 @@ if __name__ == '__main__':
       continue
     sys.argv.insert(1, f'@{i}')
 
+  logging.addLevelName( logging.WARNING, "\033[1;31m%s\033[1;0m" % logging.getLevelName(logging.WARNING))
+  logging.addLevelName( logging.ERROR, "\033[1;41m%s\033[1;0m" % logging.getLevelName(logging.ERROR))
+
   args = parser.parse_args()
   if args.dryrun and args.loglevel > logging.INFO:
     args.loglevel = logging.INFO
@@ -480,7 +499,7 @@ if __name__ == '__main__':
     ps = ( f for p in ps for f in glob.iglob(p) )
   ps = map(pathlib.Path, ps)
   if not max(map(doit, ps), default=False):
-    log.warning(f'No valid video files found for paths (need to glob and/or recurse?) arguments: {' '.join(args.paths)}')
+    log.warning(f'No valid video files found for paths (need to glob and/or recurse?) arguments: {paths2quotedstring(ps)}')
 
   if not args.nodelete and findelfiles:
     log.info(f'rm {paths2quotedstring(findelfiles)}')
