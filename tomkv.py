@@ -24,7 +24,7 @@ from cetools import (
 )
 
 prog = 'tomkv'
-version = '0.5'
+version = '0.6'
 author = 'Carl Edman (CarlEdman@gmail.com)'
 desc = 'Convert video files to mkv files (incorporating separate subtitles & posters).'
 
@@ -33,13 +33,6 @@ parser = None
 args = None
 log = logging.getLogger(__name__)
 coloredlogs.install(logger=log)
-
-# Some examples.
-#log.debug("this is a debugging message")
-#log.info("this is an informational message")
-#log.warning("this is a warning message")
-#log.error("this is an error message")
-#log.critical("this is a critical message")
 
 videxts = {
   '.264',
