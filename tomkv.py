@@ -10,7 +10,6 @@ import os
 import shutil
 import sys
 import textwrap
-import coloredlogs
 
 from cetools import (
   basestem,
@@ -32,7 +31,12 @@ desc = 'Convert video files to mkv files (incorporating separate subtitles & pos
 parser = None
 args = None
 log = logging.getLogger(__name__)
-coloredlogs.install(logger=log)
+
+try:
+  import coloredlogs
+  coloredlogs.install(logger=log)
+except ImportError:
+  pass
 
 videxts = {
   '.264',
