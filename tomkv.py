@@ -10,7 +10,6 @@ import os
 import shutil
 import sys
 import textwrap
-import coloredlogs
 
 from cetools import (
   basestem,
@@ -24,7 +23,7 @@ from cetools import (
 )
 
 prog = 'tomkv'
-version = '0.5'
+version = '0.6'
 author = 'Carl Edman (CarlEdman@gmail.com)'
 desc = 'Convert video files to mkv files (incorporating separate subtitles & posters).'
 
@@ -32,14 +31,12 @@ desc = 'Convert video files to mkv files (incorporating separate subtitles & pos
 parser = None
 args = None
 log = logging.getLogger(__name__)
-coloredlogs.install(logger=log)
 
-# Some examples.
-#log.debug("this is a debugging message")
-#log.info("this is an informational message")
-#log.warning("this is a warning message")
-#log.error("this is an error message")
-#log.critical("this is a critical message")
+try:
+  import coloredlogs
+  coloredlogs.install(logger=log)
+except ImportError:
+  pass
 
 videxts = {
   '.264',
@@ -215,9 +212,9 @@ def doit(vidfile: pathlib.Path) -> bool:
 
   delfiles = set()
 
-  todo = todo | (mkvfile != vidfile)
+  todo = todo or (mkvfile != vidfile)
   todo = todo or bool(args.languages)
-  
+
   for e in chapexts:
     chapfile = vidfile.with_suffix(e)
     if chapfile.exists():
@@ -317,7 +314,7 @@ def doit(vidfile: pathlib.Path) -> bool:
         log.error(f'Temp mkvfile "{mkvfile}" not found, skipping: {e}')
         failures.append(vidfile)
         return False
-   
+
     tempfile.replace(mkvfile)
     try:
       os.utime(mkvfile, ns=(vidstat.st_atime_ns, vidstat.st_mtime_ns))
@@ -339,7 +336,7 @@ def doit(vidfile: pathlib.Path) -> bool:
   if not args.dryrun:
     for i in delfiles:
       i.unlink(missing_ok=True)
-  
+
   return True
 
 
