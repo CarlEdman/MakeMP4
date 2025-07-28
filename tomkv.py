@@ -492,7 +492,6 @@ if __name__ == '__main__':
   log.addHandler(slogger)
 
   ps = args.paths
-  print(list(ps))
   if args.glob:
     ps = ( f for p in ps for f in glob.iglob(p) )
   ps = map(pathlib.Path, ps)
