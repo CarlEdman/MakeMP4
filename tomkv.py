@@ -25,7 +25,7 @@ from cetools import (
 prog = 'tomkv'
 version = '0.6'
 author = 'Carl Edman (CarlEdman@gmail.com)'
-desc = 'Convert video files to mkv files (incorporating separate subtitles & posters).'
+desc = 'Convert video files to mkv files (incorporating separate subtitles, chapters & posters).'
 
 (cols, lines) = shutil.get_terminal_size(fallback=(0,0))
 parser = None
@@ -477,6 +477,7 @@ if __name__ == '__main__':
   if args.dryrun and args.loglevel > logging.INFO:
     args.loglevel = logging.INFO
 
+  print(args.loglevel)
   log.setLevel(0)
   logformat = logging.Formatter('%(asctime)s [%(levelname)s]: %(message)s')
 
