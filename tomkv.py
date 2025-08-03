@@ -141,22 +141,23 @@ def set_stat(f: pathlib.Path) -> bool:
     return False
   s = f.stat()
 
-#  print(oct(s.st_mode), oct(args.file_mode), oct(s.st_mode & modemask), oct(args.file_mode & modemask))
-  if f.is_file() and args.file_mode is not None and (s.st_mode & modemask) != (args.file_mode & modemask):
-    log.info(f'Changing "{f}" mode from {oct(s.st_mode)} to {oct(args.file_mode)}.')
-    f.chmod(args.file_mode)
+  if f.is_file() and args.file_mode is not None:
+    #  print(oct(s.st_mode), oct(args.file_mode), oct(s.st_mode & modemask), oct(args.file_mode & modemask))
+    if (s.st_mode & modemask) != (args.file_mode & modemask):
+      log.info(f'Changing "{f}" mode from {oct(s.st_mode)} to {oct(args.file_mode)}.')
+      f.chmod(args.file_mode)
+  elif f.is_dir() and args.dir_mode is not None:
+    #  print(oct(s.st_mode), oct(args.dir_mode), oct(s.st_mode & modemask), oct(args.dir_mode & modemask))
+    if (s.st_mode & modemask) != (args.dir_mode & modemask):
+      log.info(f'Changing "{f}" mode from {oct(s.st_mode)} to {oct(args.dir_mode)}.')
+      f.chmod(args.dir_mode)
 
-#  print(oct(s.st_mode), oct(args.dir_mode), oct(s.st_mode & modemask), oct(args.dir_mode & modemask))
-  if f.is_dir() and args.dir_mode is not None and (s.st_mode & modemask) != (args.dir_mode & modemask):
-    log.info(f'Changing "{f}" mode from {oct(s.st_mode)} to {oct(args.dir_mode)}.')
-    f.chmod(args.dir_mode)
+  uid = args.uid or s.st_uid
+  gid = args.gid or s.st_gid
+  if s.st_uid != uid or s.st_gid != gid:
+    log.info(f'Changing "{f}" owner:group from {s.st_uid}:{s.st_gid} to {uid}:{gid}.')
+    os.chown(f, uid, gid)
 
-  if args.uid is not None and s.st_uid != args.uid:
-    log.info(f'Changing "{f}" owner from {s.st_uid} to {args.uid}.')
-    os.chown(f, args.uid, -1)
-  if args.gid is not None and s.st_gid != args.gid:
-    log.info(f'Changing "{f}" group from {s.st_gid} to {args.gid}.')
-    os.chown(f, -1, args.gid)
   return True
 
 def doit(vidfile: pathlib.Path) -> bool:
