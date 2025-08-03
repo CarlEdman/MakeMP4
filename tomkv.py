@@ -57,7 +57,7 @@ videxts = {
   '.wmv'
 }
 
-subexts = {
+exts_sub = {
   '.ass',
   '.idx',
   '.srt',
@@ -87,12 +87,12 @@ posterexts2mime = {
   '.wmf': 'image/wmf',
 }
 
-posterstems = {
+stems_poster = {
   'cover',
   'poster',
 }
 
-chapexts = {
+exts_chapter = {
   '.chapters',
   '.chapters.xml'
 }
@@ -139,18 +139,17 @@ def set_stat(f: pathlib.Path) -> bool:
   if not f.exists():
     log.debug(f'"{f}" does not exists, skipping')
     return False
+
   s = f.stat()
 
+  mode = s.st_mode
   if f.is_file() and args.file_mode is not None:
-    #  print(oct(s.st_mode), oct(args.file_mode), oct(s.st_mode & modemask), oct(args.file_mode & modemask))
-    if (s.st_mode & modemask) != (args.file_mode & modemask):
-      log.info(f'Changing "{f}" mode from {oct(s.st_mode)} to {oct(args.file_mode)}.')
-      f.chmod(args.file_mode)
+    mode = args.file_mode
   elif f.is_dir() and args.dir_mode is not None:
-    #  print(oct(s.st_mode), oct(args.dir_mode), oct(s.st_mode & modemask), oct(args.dir_mode & modemask))
-    if (s.st_mode & modemask) != (args.dir_mode & modemask):
-      log.info(f'Changing "{f}" mode from {oct(s.st_mode)} to {oct(args.dir_mode)}.')
-      f.chmod(args.dir_mode)
+    mode = args.dir_mode
+  if (s.st_mode & modemask) != (mode & modemask):
+    log.info(f'Changing "{f}" mode from {oct(s.st_mode)} to {oct(mode)}.')
+    f.chmod(mode)
 
   uid = args.uid or s.st_uid
   gid = args.gid or s.st_gid
@@ -216,7 +215,7 @@ def doit(vidfile: pathlib.Path) -> bool:
   todo = todo or (mkvfile != vidfile)
   todo = todo or bool(args.languages)
 
-  for e in chapexts:
+  for e in exts_chapter:
     chapfile = vidfile.with_suffix(e)
     if chapfile.exists():
       todo = True
@@ -232,7 +231,7 @@ def doit(vidfile: pathlib.Path) -> bool:
     #   pass
     if not f.is_file():
       continue
-    if f.suffix in subexts and f.stem.startswith(vidfile.stem):
+    if f.suffix in exts_sub and f.stem.startswith(vidfile.stem):
       todo = True
       delfiles.add(f)
       if f.suffix in exts_skip:
@@ -262,7 +261,7 @@ def doit(vidfile: pathlib.Path) -> bool:
       cl += [ '--language', f'0:{iso6392}', '--track-name', f'0:{name}', f ]
       todo = True
 
-    elif f.suffix.lower() in posterexts2mime and f.stem.lower() in posterstems:
+    elif f.suffix.lower() in posterexts2mime and f.stem.lower() in stems_poster:
       todo = True
       findelfiles.add(f)
       cl += [
