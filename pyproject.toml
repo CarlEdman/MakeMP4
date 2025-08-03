@@ -1,0 +1,28 @@
+[project]
+name = "makemp4"
+version = "9.0.0"
+description = "A Python frontend to various audio/video tools to automatically convert them to MP4/H264/AAC-LC and tag them."
+authors = [
+    {name = "Carl Edman",email = "CarlEdman@gmail.com"}
+]
+license = {text = "MIT"}
+readme = "README.md"
+requires-python = ">=3.12,<4.0"
+dependencies = [
+    "plexapi (>=4.17.0,<5.0.0)",
+    "ruff (>=0.11.13,<0.12.0)",
+    "sanitize-filename (>=1.2.0,<2.0.0)",
+    "blessed (>=1.21.0,<2.0.0)",
+    "enzyme (>=0.5.2,<0.6.0)",
+    "mutagen (>=1.47.0,<2.0.0)",
+    "pyyaml (>=6.0.2,<7.0.0)",
+    "sanitize-filename (>=1.2.0,<2.0.0)",
+    "ansi (>=0.3.7,<0.4.0)",
+    "coloredlogs (>=15.0.1,<16.0.0)",
+    "colorama (>=0.4.6,<0.5.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

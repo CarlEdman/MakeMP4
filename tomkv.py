@@ -1,4 +1,4 @@
-#!python3
+#! python3
 import argparse
 import glob
 import logging
@@ -9,26 +9,34 @@ import subprocess
 import os
 import shutil
 import sys
+import textwrap
 
 from cetools import (
   basestem,
   lang2iso6392,
   iso6392tolang,
   iso6391to6392,
-  files2quotedstring,
+  path2quotedstring,
+  paths2quotedstring,
   sortkey,
   to_title_case,
 )
 
 prog = 'tomkv'
-version = '0.5'
+version = '0.6'
 author = 'Carl Edman (CarlEdman@gmail.com)'
 desc = 'Convert video files to mkv files (incorporating separate subtitles & posters).'
 
 (cols, lines) = shutil.get_terminal_size(fallback=(0,0))
 parser = None
 args = None
-log = logging.getLogger()
+log = logging.getLogger(__name__)
+
+try:
+  import coloredlogs
+  coloredlogs.install(logger=log)
+except ImportError:
+  pass
 
 videxts = {
   '.264',
@@ -62,7 +70,7 @@ exts_skip = {
 }
 
 posterexts2mime = {
-  '.apng': 'image/apnge',
+  '.apng': 'image/apng',
   '.avif': 'image/avif',
   '.bmp': 'image/bmp',
   '.emf': 'image/emf',
@@ -153,12 +161,21 @@ def set_stat(f: pathlib.Path) -> bool:
 
 def doit(vidfile: pathlib.Path) -> bool:
   todo = args.force
-
+  vidname = path2quotedstring(vidfile)
   if cols>0:
-    print((str(vidfile) + " "*cols)[:cols-1], end='\r')
+    # print('\r', ansi.cursor.erase_line, textwrap.shorten(vidname, width=cols-1, placeholder='\u2026'), end='')
+    # print('\r', '\033[0K', end='')
+    # print('\r', '\033[0K', end='')
+    print('\033[s', '\033[0K', textwrap.shorten(vidname, width=cols-10, placeholder='\u2026'), '\033[u', end='\r')
+
+#    enter_am_mode
+#    clr_eol
+#    exit_am_mode
+
+#    print('\033[?7l','\033[0K', textwrap.shorten(vidname, width=cols-10, placeholder='\u2026'), '\033[u', end='\r')
 
   if not vidfile.exists():
-    log.debug(f'"{vidfile}" does not exists, skipping')
+    log.debug(f'{vidname} does not exists, skipping')
     return False
 
   vidstat = vidfile.stat()
@@ -168,11 +185,11 @@ def doit(vidfile: pathlib.Path) -> bool:
     set_stat(vidfile)
     if not args.recurse:
       return False
-    log.debug(f'Recursing on "{vidfile}" ...')
+    log.debug(f'Recursing on {vidname} ...')
     return max(map(doit, sorted(list(vidfile.iterdir()), key=sortkey)), default=False)
 
   if not vidfile.is_file() or vidfile.suffix.lower() not in videxts:
-    log.debug(f'"{vidfile}" is not recognized video file, skipping')
+    log.debug(f'{vidname} is not recognized video file, skipping')
     return False
 
   mkvfile = vidfile.with_suffix('.mkv')
@@ -181,7 +198,8 @@ def doit(vidfile: pathlib.Path) -> bool:
   tempfile = mkvfile.with_stem(mkvfile.stem + '-temp')
 
   if mkvfile.exists() and not vidfile.samefile(mkvfile):
-    log.warning(f'"{mkvfile}" already exists')
+    mkvname = path2quotedstring(mkvfile)
+    log.warning(f'{mkvname} already exists')
     failures.append(mkvfile)
     return False
 
@@ -194,9 +212,9 @@ def doit(vidfile: pathlib.Path) -> bool:
 
   delfiles = set()
 
-  todo = todo | (mkvfile != vidfile)
+  todo = todo or (mkvfile != vidfile)
   todo = todo or bool(args.languages)
-  
+
   for e in chapexts:
     chapfile = vidfile.with_suffix(e)
     if chapfile.exists():
@@ -259,7 +277,7 @@ def doit(vidfile: pathlib.Path) -> bool:
     )
     return False
 
-  log.info(files2quotedstring(cl))
+  log.info(paths2quotedstring(cl))
   mkvmerge_warning = False
   if not args.dryrun:
     try:
@@ -286,7 +304,7 @@ def doit(vidfile: pathlib.Path) -> bool:
         tempfile.unlink(missing_ok=True)
       raise e
 
-  log.info(f'mv {files2quotedstring([tempfile, mkvfile])}')
+  log.info(f'mv {path2quotedstring(tempfile)} {path2quotedstring(mkvfile)}')
   if not args.dryrun:
     if mkvmerge_warning:
       backupfile = mkvfile.with_stem(mkvfile.stem + '-backup')
@@ -296,7 +314,7 @@ def doit(vidfile: pathlib.Path) -> bool:
         log.error(f'Temp mkvfile "{mkvfile}" not found, skipping: {e}')
         failures.append(vidfile)
         return False
-   
+
     tempfile.replace(mkvfile)
     try:
       os.utime(mkvfile, ns=(vidstat.st_atime_ns, vidstat.st_mtime_ns))
@@ -314,11 +332,11 @@ def doit(vidfile: pathlib.Path) -> bool:
   if args.nodelete or mkvmerge_warning or not delfiles:
     return True
 
-  log.info(f'rm {files2quotedstring(delfiles)}')
+  log.info(f'rm {paths2quotedstring(delfiles)}')
   if not args.dryrun:
     for i in delfiles:
       i.unlink(missing_ok=True)
-  
+
   return True
 
 
@@ -452,6 +470,9 @@ if __name__ == '__main__':
       continue
     sys.argv.insert(1, f'@{i}')
 
+  logging.addLevelName(logging.WARNING, "\033[1;31m%s\033[1;0m" % logging.getLevelName(logging.WARNING))
+  logging.addLevelName(logging.ERROR, "\033[1;41m%s\033[1;0m" % logging.getLevelName(logging.ERROR))
+
   args = parser.parse_args()
   if args.dryrun and args.loglevel > logging.INFO:
     args.loglevel = logging.INFO
@@ -475,10 +496,10 @@ if __name__ == '__main__':
     ps = ( f for p in ps for f in glob.iglob(p) )
   ps = map(pathlib.Path, ps)
   if not max(map(doit, ps), default=False):
-    log.warning(f'No valid video files found for paths (need to glob and/or recurse?) arguments: {' '.join(args.paths)}')
+    log.warning(f'No valid video files found for paths (need to glob and/or recurse?) arguments: {paths2quotedstring(ps)}')
 
   if not args.nodelete and findelfiles:
-    log.info(f'rm {files2quotedstring(findelfiles)}')
+    log.info(f'rm {paths2quotedstring(findelfiles)}')
     if not args.dryrun:
       for i in findelfiles:
         if i.exists():

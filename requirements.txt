@@ -1,9 +1,12 @@
-# pip install -r C:\Users\Carl\DVD\MakeMP4\requirements.txt
+# pip install -r requirements.txt
 #pywin32
-blessed
+#blessed
 enzyme
 mutagen
 plexapi
 pyyaml
-sanitize_filename
 ruff
+sanitize_filename
+ansi
+coloredlogs
+colorama
