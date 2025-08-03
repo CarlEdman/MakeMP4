@@ -343,10 +343,19 @@ def basestem(p: pathlib.Path) -> pathlib.Path:
     p = p.with_suffix('')
   return p
 
+def path2quotedstring(s: pathlib.Path) -> str:
+  s = str(s)
+  unicodedata.
+  return f'"{s}"' if ' ' in s else s
+  
+  return ' '.join(f'"{t}"' if ' ' in t else t for t in [str(a) for a in s])
 
-def files2quotedstring(s: list) -> str:
-  return " ".join(f'"{t}"' if " " in t else t for t in [str(a) for a in s])
+def path2quotedstring(s: str) -> str:
+  t = unicodedata.normalize('NFD', str(s))
+  return  f'"{t}"' if ' ' in t else t 
 
+def paths2quotedstring(ss: list) -> str:
+  return ' '.join(path2quotedstring(s) for s in ss)
 
 lang2iso6392 = {
   'Abkhazian': 'abk',
