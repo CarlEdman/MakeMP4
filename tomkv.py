@@ -25,7 +25,7 @@ from cetools import (
 prog = 'tomkv'
 version = '0.6'
 author = 'Carl Edman (CarlEdman@gmail.com)'
-desc = 'Convert video files to mkv files (incorporating separate subtitles & posters).'
+desc = 'Convert video files to mkv files (incorporating separate subtitles, chapters & posters).'
 
 (cols, lines) = shutil.get_terminal_size(fallback=(0,0))
 args = None
@@ -56,7 +56,7 @@ videxts = {
   '.wmv'
 }
 
-subexts = {
+exts_sub = {
   '.ass',
   '.idx',
   '.srt',
@@ -86,12 +86,12 @@ posterexts2mime = {
   '.wmf': 'image/wmf',
 }
 
-posterstems = {
+stems_poster = {
   'cover',
   'poster',
 }
 
-chapexts = {
+exts_chapter = {
   '.chapters',
   '.chapters.xml'
 }
@@ -138,24 +138,24 @@ def set_stat(f: pathlib.Path) -> bool:
   if not f.exists():
     log.debug(f'"{f}" does not exists, skipping')
     return False
+
   s = f.stat()
 
-#  print(oct(s.st_mode), oct(args.file_mode), oct(s.st_mode & modemask), oct(args.file_mode & modemask))
-  if f.is_file() and args.file_mode is not None and (s.st_mode & modemask) != (args.file_mode & modemask):
-    log.info(f'Changing "{f}" mode from {oct(s.st_mode)} to {oct(args.file_mode)}.')
-    f.chmod(args.file_mode)
+  mode = s.st_mode
+  if f.is_file() and args.file_mode is not None:
+    mode = args.file_mode
+  elif f.is_dir() and args.dir_mode is not None:
+    mode = args.dir_mode
+  if (s.st_mode & modemask) != (mode & modemask):
+    log.info(f'Changing "{f}" mode from {oct(s.st_mode)} to {oct(mode)}.')
+    f.chmod(mode)
 
-#  print(oct(s.st_mode), oct(args.dir_mode), oct(s.st_mode & modemask), oct(args.dir_mode & modemask))
-  if f.is_dir() and args.dir_mode is not None and (s.st_mode & modemask) != (args.dir_mode & modemask):
-    log.info(f'Changing "{f}" mode from {oct(s.st_mode)} to {oct(args.dir_mode)}.')
-    f.chmod(args.dir_mode)
+  uid = args.uid or s.st_uid
+  gid = args.gid or s.st_gid
+  if s.st_uid != uid or s.st_gid != gid:
+    log.info(f'Changing "{f}" owner:group from {s.st_uid}:{s.st_gid} to {uid}:{gid}.')
+    os.chown(f, uid, gid)
 
-  if args.uid is not None and s.st_uid != args.uid:
-    log.info(f'Changing "{f}" owner from {s.st_uid} to {args.uid}.')
-    os.chown(f, args.uid, -1)
-  if args.gid is not None and s.st_gid != args.gid:
-    log.info(f'Changing "{f}" group from {s.st_gid} to {args.gid}.')
-    os.chown(f, -1, args.gid)
   return True
 
 def doit(vidfile: pathlib.Path) -> bool:
@@ -211,64 +211,88 @@ def doit(vidfile: pathlib.Path) -> bool:
 
   delfiles = set()
 
-  todo = todo or (mkvfile != vidfile)
-  todo = todo or bool(args.languages)
+  todo |= mkvfile != vidfile
+  todo |= bool(args.languages)
 
-  for e in chapexts:
-    chapfile = vidfile.with_suffix(e)
-    if chapfile.exists():
-      todo = True
-      delfiles.add(chapfile)
-      cl += ['--chapters', chapfile]
+  sibs = sorted(list(vidfile.parent.iterdir()), key=sortkey)
 
-  for f in sorted(list(vidfile.parent.iterdir()), key=sortkey):
-    # if f.is_dir() and f.name.lower() in { "sub", "subs" }:
-    #   g = f / vidfile.name
-    #   h = g.with_suffix(".srt")
-    #   if h.exists() and h.is_file():
-    #     f = h
-    #   pass
-    if not f.is_file():
+  chaps = []
+  chaps += [
+    f for f in sibs
+    if f.suffix in exts_chapter and f.startswith(vidfile.stem)
+  ]
+
+  todo |= len(chaps) > 0
+  for c in chaps:
+    delfiles.add(c)
+    cl += ['--chapters', c]
+
+  subs = []
+  subs += [
+    f
+    for f in sibs
+    if f.is_file() and f.suffix in exts_sub and f.startswith(vidfile.stem)
+  ]
+  subs += [
+    f
+    for s in sibs
+    if s.is_dir() and s.name.lower() in {'sub', 'subs'}
+    for t in s.iterdir()
+    if t.is_dir() and t.name.startswith(vidfile.stem)
+    for f in t.iterdir()
+    if f.suffix in exts_sub
+  ]
+  subs += [
+    f
+    for s in sibs
+    if s.is_dir() and s.name.lower() in {'sub', 'subs'}
+    for f in s.iterdir()
+    if f.is_file()
+  ]
+
+  todo |= len(subs) > 0
+  for t in subs:
+    delfiles.add(t)
+    if t.suffix in exts_skip:
       continue
-    if f.suffix in subexts and f.stem.startswith(vidfile.stem):
-      todo = True
-      delfiles.add(f)
-      if f.suffix in exts_skip:
-        continue
 
-      sufs = [s.lstrip('.') for s in f.suffixes]
-      sufs = [t for s in sufs for t in s.split()]
-      sufs = [t for s in sufs for t in s.split('_')]
-      sufs = [t for s in sufs for t in s.split(',')]
+    sufs = (s.lstrip('.') for s in t.suffixes)
+    sufs = (t for s in sufs for t in s.split())
+    sufs = (t for s in sufs for t in s.split('_'))
+    sufs = (t for s in sufs for t in s.split(','))
 
-      iso6392 = None
-      logging.debug(sufs)
-      for s in sufs:
-        if s in iso6392tolang:
-          iso6392 = s
-        elif s in iso6391to6392:
-          iso6392 = iso6391to6392[s]
-        elif s in lang2iso6392:
-          iso6392 = lang2iso6392[s]
-        logging.debug(f'{s} -> {iso6392}')
+    iso6392 = None
+    logging.debug(sufs)
+    for s in sufs:
+      if s in iso6392tolang:
+        iso6392 = s
+      elif s in iso6391to6392:
+        iso6392 = iso6391to6392[s]
+      elif s in lang2iso6392:
+        iso6392 = lang2iso6392[s]
+      logging.debug(f'{s} -> {iso6392}')
 
-      if not iso6392:
-        iso6392 = args.default_language
-        log.warning(f'Cannot identify language for {f}, defaulting to {iso6392}')
+    if not iso6392:
+      iso6392 = args.default_language
+      log.warning(f'Cannot identify language for {t}, defaulting to {iso6392}')
 
-      name = f.stem.removeprefix(vidfile.stem).strip(' ._')
-      cl += [ '--language', f'0:{iso6392}', '--track-name', f'0:{name}', f ]
-      todo = True
+    name = t.stem.removeprefix(vidfile.stem).strip(' ._')
+    cl += ['--language', f'0:{iso6392}', '--track-name', f'0:{name}', t]
 
-    elif f.suffix.lower() in posterexts2mime and f.stem.lower() in posterstems:
-      todo = True
-      findelfiles.add(f)
-      cl += [
-        '--attachment-mime-type', posterexts2mime[f.suffix],
-        '--attachment-description', basestem(f).stem,
-        '--attachment-name', to_title_case(f.stem) if args.titlecase else f.stem,
-        '--attach-file', f,
-      ]
+  posters = []
+  posters += [ f
+    for f in sibs if f.suffix.lower() in posterexts2mime and f.stem.lower() in stems_poster
+  ]
+
+  todo |= len(posters) > 0
+  for f in posters:
+    findelfiles.add(f)
+    cl += [
+      '--attachment-mime-type', posterexts2mime[f.suffix],
+      '--attachment-description', basestem(f).stem,
+      '--attachment-name', to_title_case(f.stem) if args.titlecase else f.stem,
+      '--attach-file', f,
+    ]
 
   if not todo:
     log.debug(
@@ -476,6 +500,7 @@ if __name__ == '__main__':
   if args.dryrun and args.loglevel > logging.INFO:
     args.loglevel = logging.INFO
 
+  print(args.loglevel)
   log.setLevel(0)
   logformat = logging.Formatter('%(asctime)s [%(levelname)s]: %(message)s')
 
