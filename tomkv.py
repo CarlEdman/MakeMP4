@@ -30,6 +30,7 @@ desc = 'Convert video files to mkv files (incorporating separate subtitles, chap
 (cols, lines) = shutil.get_terminal_size(fallback=(0,0))
 args = None
 log = logging.getLogger(__name__)
+print(log.hasHandlers())
 
 try:
   import coloredlogs
@@ -162,19 +163,10 @@ def doit(vidfile: pathlib.Path) -> bool:
   todo = args.force
   vidname = path2quotedstring(vidfile)
   if cols>0:
-    # print('\r', ansi.cursor.erase_line, textwrap.shorten(vidname, width=cols-1, placeholder='\u2026'), end='')
-    # print('\r', '\033[0K', end='')
-    # print('\r', '\033[0K', end='')
     print('\033[s', '\033[0K', textwrap.shorten(vidname, width=cols-10, placeholder='\u2026'), '\033[u', end='\r')
 
-#    enter_am_mode
-#    clr_eol
-#    exit_am_mode
-
-#    print('\033[?7l','\033[0K', textwrap.shorten(vidname, width=cols-10, placeholder='\u2026'), '\033[u', end='\r')
-
   if not vidfile.exists():
-    log.debug(f'{vidname} does not exists, skipping')
+    log.warning(f'{vidname} does not exists, skipping...')
     return False
 
   vidstat = vidfile.stat()
@@ -219,7 +211,7 @@ def doit(vidfile: pathlib.Path) -> bool:
   chaps = []
   chaps += [
     f for f in sibs
-    if f.suffix in exts_chapter and f.startswith(vidfile.stem)
+    if f.suffix in exts_chapter and f.name.startswith(vidfile.stem)
   ]
 
   todo |= len(chaps) > 0
@@ -231,7 +223,7 @@ def doit(vidfile: pathlib.Path) -> bool:
   subs += [
     f
     for f in sibs
-    if f.is_file() and f.suffix in exts_sub and f.startswith(vidfile.stem)
+    if f.is_file() and f.suffix in exts_sub and f.name.startswith(vidfile.stem)
   ]
   subs += [
     f
@@ -256,13 +248,16 @@ def doit(vidfile: pathlib.Path) -> bool:
     if t.suffix in exts_skip:
       continue
 
-    sufs = (s.lstrip('.') for s in t.suffixes)
-    sufs = (t for s in sufs for t in s.split())
-    sufs = (t for s in sufs for t in s.split('_'))
-    sufs = (t for s in sufs for t in s.split(','))
+    sufs = [s5
+      for s1 in t.suffixes
+      for s2 in s1.lstrip('.')
+      for s3 in s2.split()
+      for s4 in s3.split('_')
+      for s5 in s4.split(',')
+    ]
 
     iso6392 = None
-    logging.debug(sufs)
+    logging.debug(t, sufs)
     for s in sufs:
       if s in iso6392tolang:
         iso6392 = s
@@ -276,8 +271,7 @@ def doit(vidfile: pathlib.Path) -> bool:
       iso6392 = args.default_language
       log.warning(f'Cannot identify language for {t}, defaulting to {iso6392}')
 
-    name = t.stem.removeprefix(vidfile.stem).strip(' ._')
-    cl += ['--language', f'0:{iso6392}', '--track-name', f'0:{name}', t]
+    cl += ['--language', f'0:{iso6392}', '--track-name', f'0:{t.stem.removeprefix(vidfile.stem).strip(" ._")}', t]
 
   posters = []
   posters += [ f
@@ -295,7 +289,7 @@ def doit(vidfile: pathlib.Path) -> bool:
     ]
 
   if not todo:
-    log.debug(
+    log.info(
       f'"{mkvfile}" is already in MKV format, there are no subtitles, chapters, or posters to integrate, languages are already set, and "--force" was not set: skipping...'
     )
     return False
@@ -474,10 +468,6 @@ if __name__ == '__main__':
     action='store_const',
     const=logging.ERROR,
     help='only print error level (or higher) log messages.')
-  parser.add_argument('--log',
-    dest='logfile',
-    action='store', 
-    help='location of alternate log file.')
   parser.add_argument(
     'paths', nargs='+', help='paths to be operated on; may include wildcards (if glob is set); directories convert content (if recurse is set).'
   )
@@ -500,27 +490,17 @@ if __name__ == '__main__':
   if args.dryrun and args.loglevel > logging.INFO:
     args.loglevel = logging.INFO
 
-  print(args.loglevel)
-  log.setLevel(0)
+  log.setLevel(args.loglevel)
   logformat = logging.Formatter('%(asctime)s [%(levelname)s]: %(message)s')
-
-  if args.logfile:
-    flogger = logging.handlers.WatchedFileHandler(args.logfile, 'a', 'utf-8')
-    flogger.setLevel(logging.DEBUG)
-    flogger.setFormatter(logformat)
-    log.addHandler(flogger)
-
-  slogger = logging.StreamHandler()
-  slogger.setLevel(args.loglevel)
-  slogger.setFormatter(logformat)
-  log.addHandler(slogger)
+  for h in log.handlers:
+    h.setFormatter(logformat)
 
   ps = args.paths
   if args.glob:
     ps = ( f for p in ps for f in glob.iglob(p) )
   ps = map(pathlib.Path, ps)
   if not max(map(doit, ps), default=False):
-    log.warning(f'No valid video files found for paths (need to glob and/or recurse?) arguments: {paths2quotedstring(ps)}')
+    log.warning(f'No valid video files found for paths (need to glob and/or recurse?) arguments: {args.paths}')
 
   if not args.nodelete and findelfiles:
     log.info(f'rm {paths2quotedstring(findelfiles)}')
@@ -528,3 +508,9 @@ if __name__ == '__main__':
       for i in findelfiles:
         if i.exists():
           i.unlink()
+  if failures:
+    w = '\n'.join([ "Encountered issues with:" ] + [ f'    {f}' for f in failures ] )
+    log.warning(w)
+    exit(1)
+
+  exit(0)
