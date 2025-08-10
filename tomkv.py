@@ -23,20 +23,19 @@ from cetools import (
 )
 
 prog = 'tomkv'
-version = '0.6'
+version = '0.7'
 author = 'Carl Edman (CarlEdman@gmail.com)'
 desc = 'Convert video files to mkv files (incorporating separate subtitles, chapters & posters).'
 
 (cols, lines) = shutil.get_terminal_size(fallback=(0,0))
 args = None
 log = logging.getLogger(__name__)
-print(log.hasHandlers())
 
-try:
-  import coloredlogs
-  coloredlogs.install(logger=log)
-except ImportError:
-  pass
+#try:
+#  import coloredlogs
+#  coloredlogs.install(logger=log)
+#except ImportError:
+#  pass
 
 videxts = {
   '.264',
@@ -159,6 +158,16 @@ def set_stat(f: pathlib.Path) -> bool:
 
   return True
 
+def updel(f: pathlib.Path) -> None:
+  if not f.exists():
+    return
+  f.unlink()
+  for p in f.parents:
+    try:
+      p.rmdir()
+    except:
+      return
+
 def doit(vidfile: pathlib.Path) -> bool:
   todo = args.force
   vidname = path2quotedstring(vidfile)
@@ -248,12 +257,10 @@ def doit(vidfile: pathlib.Path) -> bool:
     if t.suffix in exts_skip:
       continue
 
-    sufs = [s5
-      for s1 in t.suffixes
-      for s2 in s1.lstrip('.')
-      for s3 in s2.split()
-      for s4 in s3.split('_')
-      for s5 in s4.split(',')
+    sufs = [s3
+      for s1 in t.name.split('.')
+      for s2 in s1.split('_')
+      for s3 in s2.split(',')
     ]
 
     iso6392 = None
@@ -289,10 +296,10 @@ def doit(vidfile: pathlib.Path) -> bool:
     ]
 
   if not todo:
-    log.info(
+    log.debug(
       f'"{mkvfile}" is already in MKV format, there are no subtitles, chapters, or posters to integrate, languages are already set, and "--force" was not set: skipping...'
     )
-    return False
+    return True
 
   log.info(paths2quotedstring(cl))
   mkvmerge_warning = False
@@ -309,8 +316,7 @@ def doit(vidfile: pathlib.Path) -> bool:
         mkvmerge_warning = True
         failures.append(vidfile)
       else:
-        if tempfile.exists():
-          tempfile.unlink(missing_ok=True)
+        updel(tempfile)
         log.info(e.stdout)
         log.error(f'{e.stderr}\n{e}\nSkipping ...')
         failures.append(vidfile)
@@ -318,7 +324,7 @@ def doit(vidfile: pathlib.Path) -> bool:
     except KeyboardInterrupt as e:
       failures.append(vidfile)
       if tempfile.exists():
-        tempfile.unlink(missing_ok=True)
+        updel(tempfile)
       raise e
 
   log.info(f'mv {path2quotedstring(tempfile)} {path2quotedstring(mkvfile)}')
@@ -352,7 +358,7 @@ def doit(vidfile: pathlib.Path) -> bool:
   log.info(f'rm {paths2quotedstring(delfiles)}')
   if not args.dryrun:
     for i in delfiles:
-      i.unlink(missing_ok=True)
+      updel(i)
 
   return True
 
@@ -446,7 +452,7 @@ if __name__ == '__main__':
     default=False,
     help='Glob argument paths.',
   )
-  parser.add_argument('-d', '--dryrun',
+  parser.add_argument('-d', '--dryrun', '--dry-run',
     dest='dryrun',
     action='store_true',
     help='do not perform operations, but only print them.')
@@ -483,17 +489,17 @@ if __name__ == '__main__':
       continue
     sys.argv.insert(1, f'@{i}')
 
-  logging.addLevelName(logging.WARNING, "\033[1;31m%s\033[1;0m" % logging.getLevelName(logging.WARNING))
-  logging.addLevelName(logging.ERROR, "\033[1;41m%s\033[1;0m" % logging.getLevelName(logging.ERROR))
+#  logging.addLevelName(logging.WARNING, "\033[1;31m%s\033[1;0m" % logging.getLevelName(logging.WARNING))
+#  logging.addLevelName(logging.ERROR, "\033[1;41m%s\033[1;0m" % logging.getLevelName(logging.ERROR))
 
   args = parser.parse_args()
   if args.dryrun and args.loglevel > logging.INFO:
     args.loglevel = logging.INFO
 
   log.setLevel(args.loglevel)
-  logformat = logging.Formatter('%(asctime)s [%(levelname)s]: %(message)s')
-  for h in log.handlers:
-    h.setFormatter(logformat)
+#  logformat = logging.Formatter('%(asctime)s [%(levelname)s]: %(message)s')
+#  for h in log.handlers:
+#    h.setFormatter(logformat)
 
   ps = args.paths
   if args.glob:
@@ -506,8 +512,7 @@ if __name__ == '__main__':
     log.info(f'rm {paths2quotedstring(findelfiles)}')
     if not args.dryrun:
       for i in findelfiles:
-        if i.exists():
-          i.unlink()
+        updel(i)
   if failures:
     w = '\n'.join([ "Encountered issues with:" ] + [ f'    {f}' for f in failures ] )
     log.warning(w)
