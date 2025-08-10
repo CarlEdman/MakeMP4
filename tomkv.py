@@ -296,7 +296,7 @@ def doit(vidfile: pathlib.Path) -> bool:
     ]
 
   if not todo:
-    log.debug(
+    log.warning(
       f'"{mkvfile}" is already in MKV format, there are no subtitles, chapters, or posters to integrate, languages are already set, and "--force" was not set: skipping...'
     )
     return False
@@ -321,7 +321,7 @@ def doit(vidfile: pathlib.Path) -> bool:
         log.info(e.stdout)
         log.error(f'{e.stderr}\n{e}\nSkipping ...')
         failures.append(vidfile)
-      return False
+        return False
     except KeyboardInterrupt as e:
       failures.append(vidfile)
       if tempfile.exists():
