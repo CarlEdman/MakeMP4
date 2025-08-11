@@ -2,13 +2,11 @@
 import argparse
 import glob
 import logging
-import logging.handlers
 import pathlib
 import pwd
 import subprocess
 import os
 import shutil
-import sys
 import textwrap
 
 from cetools import (
@@ -33,9 +31,8 @@ logger = logging.getLogger(__name__)
 
 try:
   import coloredlogs
-  coloredlogs.install(logger=logger)
 except ImportError:
-  pass
+  coloredlogs = None
 
 videxts = {
   '.264',
@@ -165,7 +162,7 @@ def updel(f: pathlib.Path) -> None:
   for p in f.parents:
     try:
       p.rmdir()
-    except:
+    except Exception:
       return
 
 def doit(vidfile: pathlib.Path) -> bool:
@@ -486,10 +483,12 @@ if __name__ == '__main__':
   if args.dryrun and args.loglevel > logging.INFO:
     args.loglevel = logging.INFO
 
+  if coloredlogs:
+    coloredlogs.install(logger=logger)
   logger.setLevel(args.loglevel)
-#  logformat = logging.Formatter('%(asctime)s [%(levelname)s]: %(message)s')
-#  for h in log.handlers:
-#    h.setFormatter(logformat)
+  logformat = logging.Formatter('%(asctime)s [%(levelname)s]: %(message)s')
+  for h in logger.handlers:
+    h.setFormatter(logformat)
 
   ps = args.paths
   if args.glob:
