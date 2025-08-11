@@ -483,12 +483,13 @@ if __name__ == '__main__':
   if args.dryrun and args.loglevel > logging.INFO:
     args.loglevel = logging.INFO
 
-  logformat = '%(asctime)s [%(levelname)s]: %(message)s'
-#  logger = logging.getLogger(__name__)
+  logger = logging.getLogger(__name__)
   if coloredlogs:
-    coloredlogs.install(level=args.loglevel, fmt=logformat)
+    coloredlogs.install(level=args.loglevel, logger=logger,
+      fmt='%(asctime)s [%(levelname)s]: %(message)s')
   else:
-    logging.basicConfig(level=args.loglevel, format=logformat)
+    logging.basicConfig(level=args.loglevel, logger=logger,
+      format='%(asctime)s [%(levelname)s]: %(message)s' )
 
 
   ps = args.paths
