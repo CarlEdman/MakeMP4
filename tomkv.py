@@ -31,11 +31,11 @@ desc = 'Convert video files to mkv files (incorporating separate subtitles, chap
 args = None
 log = logging.getLogger(__name__)
 
-#try:
-#  import coloredlogs
-#  coloredlogs.install(logger=log)
-#except ImportError:
-#  pass
+try:
+  import coloredlogs
+  coloredlogs.install(logger=log)
+except ImportError:
+  pass
 
 videxts = {
   '.264',
