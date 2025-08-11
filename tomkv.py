@@ -484,7 +484,7 @@ if __name__ == '__main__':
     args.loglevel = logging.INFO
 
   logformat = '%(asctime)s [%(levelname)s]: %(message)s'
-  logger = logging.getLogger(__name__)
+#  logger = logging.getLogger(__name__)
   if coloredlogs:
     coloredlogs.install(level=args.loglevel, fmt=logformat)
   else:
