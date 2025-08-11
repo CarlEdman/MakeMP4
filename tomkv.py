@@ -101,8 +101,6 @@ log_colors = {
   logging.CRITICAL: '35',
 }
 
-
-
 findelfiles = set()
 successes = []
 failures = []
@@ -497,12 +495,11 @@ if __name__ == '__main__':
 
   logger = logging.getLogger(__name__)
   if coloredlogs:
-    coloredlogs.install(level=args.loglevel, logger=logger,
+    coloredlogs.install(level=args.loglevel,
       fmt='%(asctime)s [%(levelname)s]: %(message)s')
   else:
-    logging.basicConfig(level=args.loglevel, logger=logger,
+    logging.basicConfig(level=args.loglevel,
       format='%(asctime)s [%(levelname)s]: %(message)s' )
-
 
   ps = args.paths
   if args.glob:
