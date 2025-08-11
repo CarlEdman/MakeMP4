@@ -261,7 +261,7 @@ def doit(vidfile: pathlib.Path) -> bool:
     ]
 
     iso6392 = None
-    logging.debug(t, sufs)
+    logger.debug(t, sufs)
     for s in sufs:
       if s in iso6392tolang:
         iso6392 = s
@@ -269,7 +269,7 @@ def doit(vidfile: pathlib.Path) -> bool:
         iso6392 = iso6391to6392[s]
       elif s in lang2iso6392:
         iso6392 = lang2iso6392[s]
-      logging.debug(f'{s} -> {iso6392}')
+      logger.debug(f'{s} -> {iso6392}')
 
     if not iso6392:
       iso6392 = args.default_language
@@ -476,8 +476,17 @@ if __name__ == '__main__':
   )
   parser.set_defaults(loglevel=logging.WARN)
 
-#  logging.addLevelName(logging.WARNING, "\033[1;31m%s\033[1;0m" % logging.getLevelName(logging.WARNING))
-#  logging.addLevelName(logging.ERROR, "\033[1;41m%s\033[1;0m" % logging.getLevelName(logging.ERROR))
+  log_colors = {
+    logging.DEBUG: '92',
+    logging.INFO: '32',
+    logging.WARNING: '91',
+    logging.ERROR: '41',
+    logging.CRITICAL: '35',
+  }
+  for level, color in log_colors.items:
+    logging.addLevelName(
+      level, f'\033[1;{color}m{logging.getLevelName(level)}\033[1;0m'
+    )
 
   args = parser.parse_args()
   if args.dryrun and args.loglevel > logging.INFO:
