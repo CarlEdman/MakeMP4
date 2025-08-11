@@ -27,7 +27,7 @@ desc = 'Convert video files to mkv files (incorporating separate subtitles, chap
 
 (cols, lines) = shutil.get_terminal_size(fallback=(0,0))
 args = None
-logger = logging.getLogger(__name__)
+logger = None
 
 try:
   import coloredlogs
@@ -483,12 +483,13 @@ if __name__ == '__main__':
   if args.dryrun and args.loglevel > logging.INFO:
     args.loglevel = logging.INFO
 
+  logformat = '%(asctime)s [%(levelname)s]: %(message)s'
+  logger = logging.getLogger(__name__)
   if coloredlogs:
-    coloredlogs.install(logger=logger)
-  logger.setLevel(args.loglevel)
-  logformat = logging.Formatter('%(asctime)s [%(levelname)s]: %(message)s')
-  for h in logger.handlers:
-    h.setFormatter(logformat)
+    coloredlogs.install(level=args.loglevel, fmt=logformat)
+  else:
+    logging.basicConfig(level=args.loglevel, format=logformat)
+
 
   ps = args.paths
   if args.glob:
