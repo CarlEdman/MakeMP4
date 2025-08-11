@@ -23,12 +23,11 @@ from cetools import (
 )
 
 prog = 'tomkv'
-version = '0.6'
+version = '0.7'
 author = 'Carl Edman (CarlEdman@gmail.com)'
 desc = 'Convert video files to mkv files (incorporating separate subtitles, chapters & posters).'
 
 (cols, lines) = shutil.get_terminal_size(fallback=(0,0))
-parser = None
 args = None
 logger = logging.getLogger(__name__)
 
@@ -159,23 +158,28 @@ def set_stat(f: pathlib.Path) -> bool:
 
   return True
 
+def updel(f: pathlib.Path) -> None:
+  if not f.exists():
+    return
+  f.unlink()
+  for p in f.parents:
+    try:
+      p.rmdir()
+    except:
+      return
+
 def doit(vidfile: pathlib.Path) -> bool:
   todo = args.force
   vidname = path2quotedstring(vidfile)
   if cols>0:
-    # print('\r', ansi.cursor.erase_line, textwrap.shorten(vidname, width=cols-1, placeholder='\u2026'), end='')
-    # print('\r', '\033[0K', end='')
-    # print('\r', '\033[0K', end='')
     print('\033[s', '\033[0K', textwrap.shorten(vidname, width=cols-10, placeholder='\u2026'), '\033[u', end='\r')
 
-#    enter_am_mode
-#    clr_eol
-#    exit_am_mode
-
-#    print('\033[?7l','\033[0K', textwrap.shorten(vidname, width=cols-10, placeholder='\u2026'), '\033[u', end='\r')
-
   if not vidfile.exists():
+<<<<<<< HEAD
     logger.debug(f'{vidname} does not exists, skipping')
+=======
+    log.warning(f'{vidname} does not exists, skipping...')
+>>>>>>> dd6b65e604007bfae97ca3b07f26a9b2b450c5e2
     return False
 
   vidstat = vidfile.stat()
@@ -212,70 +216,104 @@ def doit(vidfile: pathlib.Path) -> bool:
 
   delfiles = set()
 
-  todo = todo or (mkvfile != vidfile)
-  todo = todo or bool(args.languages)
+  todo |= mkvfile != vidfile
+  todo |= bool(args.languages)
 
-  for e in exts_chapter:
-    chapfile = vidfile.with_suffix(e)
-    if chapfile.exists():
-      todo = True
-      delfiles.add(chapfile)
-      cl += ['--chapters', chapfile]
+  sibs = sorted(list(vidfile.parent.iterdir()), key=sortkey)
 
-  for f in sorted(list(vidfile.parent.iterdir()), key=sortkey):
-    # if f.is_dir() and f.name.lower() in { "sub", "subs" }:
-    #   g = f / vidfile.name
-    #   h = g.with_suffix(".srt")
-    #   if h.exists() and h.is_file():
-    #     f = h
-    #   pass
-    if not f.is_file():
+  chaps = []
+  chaps += [
+    f for f in sibs
+    if f.suffix in exts_chapter and f.name.startswith(vidfile.stem)
+  ]
+
+  todo |= len(chaps) > 0
+  for c in chaps:
+    delfiles.add(c)
+    cl += ['--chapters', c]
+
+  subs = []
+  subs += [
+    f
+    for f in sibs
+    if f.is_file() and f.suffix in exts_sub and f.name.startswith(vidfile.stem)
+  ]
+  subs += [
+    f
+    for s in sibs
+    if s.is_dir() and s.name.lower() in {'sub', 'subs'}
+    for t in s.iterdir()
+    if t.is_dir() and t.name.startswith(vidfile.stem)
+    for f in t.iterdir()
+    if f.suffix in exts_sub
+  ]
+  subs += [
+    f
+    for s in sibs
+    if s.is_dir() and s.name.lower() in {'sub', 'subs'}
+    for f in s.iterdir()
+    if f.is_file()
+  ]
+
+  todo |= len(subs) > 0
+  for t in subs:
+    delfiles.add(t)
+    if t.suffix in exts_skip:
       continue
-    if f.suffix in exts_sub and f.stem.startswith(vidfile.stem):
-      todo = True
-      delfiles.add(f)
-      if f.suffix in exts_skip:
-        continue
 
-      sufs = [s.lstrip('.') for s in f.suffixes]
-      sufs = [t for s in sufs for t in s.split()]
-      sufs = [t for s in sufs for t in s.split('_')]
-      sufs = [t for s in sufs for t in s.split(',')]
+    sufs = [s3
+      for s1 in t.name.split('.')
+      for s2 in s1.split('_')
+      for s3 in s2.split(',')
+    ]
 
-      iso6392 = None
-      logging.debug(sufs)
-      for s in sufs:
-        if s in iso6392tolang:
-          iso6392 = s
-        elif s in iso6391to6392:
-          iso6392 = iso6391to6392[s]
-        elif s in lang2iso6392:
-          iso6392 = lang2iso6392[s]
-        logging.debug(f'{s} -> {iso6392}')
+    iso6392 = None
+    logging.debug(t, sufs)
+    for s in sufs:
+      if s in iso6392tolang:
+        iso6392 = s
+      elif s in iso6391to6392:
+        iso6392 = iso6391to6392[s]
+      elif s in lang2iso6392:
+        iso6392 = lang2iso6392[s]
+      logging.debug(f'{s} -> {iso6392}')
 
+<<<<<<< HEAD
       if not iso6392:
         iso6392 = args.default_language
         logger.warning(f'Cannot identify language for {f}, defaulting to {iso6392}')
+=======
+    if not iso6392:
+      iso6392 = args.default_language
+      log.warning(f'Cannot identify language for {t}, defaulting to {iso6392}')
+>>>>>>> dd6b65e604007bfae97ca3b07f26a9b2b450c5e2
 
-      name = f.stem.removeprefix(vidfile.stem).strip(' ._')
-      cl += [ '--language', f'0:{iso6392}', '--track-name', f'0:{name}', f ]
-      todo = True
+    cl += ['--language', f'0:{iso6392}', '--track-name', f'0:{t.stem.removeprefix(vidfile.stem).strip(" ._")}', t]
 
-    elif f.suffix.lower() in posterexts2mime and f.stem.lower() in stems_poster:
-      todo = True
-      findelfiles.add(f)
-      cl += [
-        '--attachment-mime-type', posterexts2mime[f.suffix],
-        '--attachment-description', basestem(f).stem,
-        '--attachment-name', to_title_case(f.stem) if args.titlecase else f.stem,
-        '--attach-file', f,
-      ]
+  posters = []
+  posters += [ f
+    for f in sibs if f.suffix.lower() in posterexts2mime and f.stem.lower() in stems_poster
+  ]
+
+  todo |= len(posters) > 0
+  for f in posters:
+    findelfiles.add(f)
+    cl += [
+      '--attachment-mime-type', posterexts2mime[f.suffix],
+      '--attachment-description', basestem(f).stem,
+      '--attachment-name', to_title_case(f.stem) if args.titlecase else f.stem,
+      '--attach-file', f,
+    ]
 
   if not todo:
+<<<<<<< HEAD
     logger.debug(
+=======
+    log.warning(
+>>>>>>> dd6b65e604007bfae97ca3b07f26a9b2b450c5e2
       f'"{mkvfile}" is already in MKV format, there are no subtitles, chapters, or posters to integrate, languages are already set, and "--force" was not set: skipping...'
     )
-    return False
+    return True
 
   logger.info(paths2quotedstring(cl))
   mkvmerge_warning = False
@@ -292,16 +330,22 @@ def doit(vidfile: pathlib.Path) -> bool:
         mkvmerge_warning = True
         failures.append(vidfile)
       else:
+<<<<<<< HEAD
         if tempfile.exists():
           tempfile.unlink(missing_ok=True)
         logger.info(e.stdout)
         logger.error(f'{e.stderr}\n{e}\nSkipping ...')
+=======
+        updel(tempfile)
+        log.info(e.stdout)
+        log.error(f'{e.stderr}\n{e}\nSkipping ...')
+>>>>>>> dd6b65e604007bfae97ca3b07f26a9b2b450c5e2
         failures.append(vidfile)
-      return False
+        return False
     except KeyboardInterrupt as e:
       failures.append(vidfile)
       if tempfile.exists():
-        tempfile.unlink(missing_ok=True)
+        updel(tempfile)
       raise e
 
   logger.info(f'mv {path2quotedstring(tempfile)} {path2quotedstring(mkvfile)}')
@@ -335,12 +379,13 @@ def doit(vidfile: pathlib.Path) -> bool:
   logger.info(f'rm {paths2quotedstring(delfiles)}')
   if not args.dryrun:
     for i in delfiles:
-      i.unlink(missing_ok=True)
+      updel(i)
 
   return True
 
 
 if __name__ == '__main__':
+<<<<<<< HEAD
     parser = argparse.ArgumentParser(
         fromfile_prefix_chars="@", prog=prog, epilog="Written by: " + author
     )
@@ -466,6 +511,121 @@ if __name__ == '__main__':
         nargs="+",
         help="paths to be operated on; may include wildcards (if glob is set); directories convert content (if recurse is set).",
     )
+=======
+  parser = argparse.ArgumentParser(
+    fromfile_prefix_chars='@', prog=prog, epilog='Written by: ' + author
+  )
+  parser.add_argument(
+    '-n',
+    '--no-delete',
+    dest='nodelete',
+    action='store_true',
+    help='do not delete source files (e.g., video, subtitles, chapters, or posters) after conversion to MKV.',
+  )
+  parser.add_argument(
+    '-t',
+    '--title-case',
+    dest='titlecase',
+    action='store_true',
+    help='rename files to proper title case.',
+  )
+  parser.add_argument(
+    '-f',
+    '--force',
+    dest='force',
+    action='store_true',
+    help='force remuxing without any apparent need.',
+  )
+  parser.add_argument(
+    '-l',
+    '--languages',
+    dest='languages',
+    action='store',
+    help='keep audio and subtitle tracks in the given language ISO639-2 codes; prefix with ! to discard same.',
+  )
+  parser.add_argument(
+    '--uid',
+    dest='uid',
+    type=uid_type,
+    action='store',
+    default=None,
+    help='if set, vidfiles will have their uid changed.',
+  )
+  parser.add_argument(
+    '--gid',
+    dest='gid',
+    type=gid_type,
+    action='store',
+    default=None,
+    help='if set, vidfiles will have their gid changed.',
+  )
+  parser.add_argument(
+    '--file-mode',
+    dest='file_mode',
+    type=octal_type,
+    action='store',
+    default=None,
+    help='if set, vidfiles mode will be changed.',
+  )
+  parser.add_argument(
+    '--dir-mode',
+    '--directory-mode',
+    dest='dir_mode',
+    type=octal_type,
+    action='store',
+    default=None,
+    help='if set, folders mode will be changed.',
+  )
+  parser.add_argument(
+    '--default-language',
+    dest='default_language',
+    action='store',
+    default='eng',
+    choices=iso6392tolang.keys(),
+    help='ISO6392 language code to use by default for subtitles.',
+  )
+  parser.add_argument(
+    '-R',
+    '--recurse',
+    dest='recurse',
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help='Recurse into subdirectories.',
+  )
+  parser.add_argument(
+    '-G',
+    '--glob',
+    dest='glob',
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help='Glob argument paths.',
+  )
+  parser.add_argument('-d', '--dryrun', '--dry-run',
+    dest='dryrun',
+    action='store_true',
+    help='do not perform operations, but only print them.')
+  parser.add_argument('--version',
+    action='version',
+    version='%(prog)s ' + version)
+  parser.add_argument('--verbose',
+    dest='loglevel',
+    action='store_const',
+    const=logging.INFO,
+    help='print informational (or higher) log messages.')
+  parser.add_argument('--debug',
+    dest='loglevel',
+    action='store_const',
+    const=logging.DEBUG,
+    help='print debugging (or higher) log messages.')
+  parser.add_argument('--taciturn',
+    dest='loglevel',
+    action='store_const',
+    const=logging.ERROR,
+    help='only print error level (or higher) log messages.')
+  parser.add_argument(
+    'paths', nargs='+', help='paths to be operated on; may include wildcards (if glob is set); directories convert content (if recurse is set).'
+  )
+>>>>>>> dd6b65e604007bfae97ca3b07f26a9b2b450c5e2
 
     parser.set_defaults(loglevel=logging.WARN)
     for i in [
@@ -478,17 +638,23 @@ if __name__ == '__main__':
             continue
         sys.argv.insert(1, f"@{i}")
 
+<<<<<<< HEAD
     logging.addLevelName(
         logging.WARNING, "\033[1;31m%s\033[1;0m" % logging.getLevelName(logging.WARNING)
     )
     logging.addLevelName(
         logging.ERROR, "\033[1;41m%s\033[1;0m" % logging.getLevelName(logging.ERROR)
     )
+=======
+#  logging.addLevelName(logging.WARNING, "\033[1;31m%s\033[1;0m" % logging.getLevelName(logging.WARNING))
+#  logging.addLevelName(logging.ERROR, "\033[1;41m%s\033[1;0m" % logging.getLevelName(logging.ERROR))
+>>>>>>> dd6b65e604007bfae97ca3b07f26a9b2b450c5e2
 
     args = parser.parse_args()
     if args.dryrun and args.loglevel > logging.INFO:
         args.loglevel = logging.INFO
 
+<<<<<<< HEAD
     print(args.loglevel, args.logfile)
     # logging.basicConfig()
     # log.setLevel(0)
@@ -520,3 +686,28 @@ if __name__ == '__main__':
             for i in findelfiles:
                 if i.exists():
                     i.unlink()
+=======
+  log.setLevel(args.loglevel)
+#  logformat = logging.Formatter('%(asctime)s [%(levelname)s]: %(message)s')
+#  for h in log.handlers:
+#    h.setFormatter(logformat)
+
+  ps = args.paths
+  if args.glob:
+    ps = ( f for p in ps for f in glob.iglob(p) )
+  ps = map(pathlib.Path, ps)
+  if not max(map(doit, ps), default=False):
+    log.warning(f'No valid video files found for paths (need to glob and/or recurse?) arguments: {args.paths}')
+
+  if not args.nodelete and findelfiles:
+    log.info(f'rm {paths2quotedstring(findelfiles)}')
+    if not args.dryrun:
+      for i in findelfiles:
+        updel(i)
+  if failures:
+    w = '\n'.join([ "Encountered issues with:" ] + [ f'    {f}' for f in failures ] )
+    log.warning(w)
+    exit(1)
+
+  exit(0)
+>>>>>>> dd6b65e604007bfae97ca3b07f26a9b2b450c5e2

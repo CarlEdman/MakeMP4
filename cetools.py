@@ -9,7 +9,6 @@ import pathlib
 import re
 import time
 import unicodedata
-import textwrap
 
 from fractions import Fraction
 from xmlrpc.client import Boolean
