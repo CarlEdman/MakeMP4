@@ -483,7 +483,7 @@ if __name__ == '__main__':
     logging.ERROR: '41',
     logging.CRITICAL: '35',
   }
-  for level, color in log_colors.items:
+  for level, color in log_colors.items():
     logging.addLevelName(
       level, f'\033[1;{color}m{logging.getLevelName(level)}\033[1;0m'
     )
@@ -494,12 +494,11 @@ if __name__ == '__main__':
 
   logger = logging.getLogger(__name__)
   if coloredlogs:
-    coloredlogs.install(level=args.loglevel, logger=logger,
+    coloredlogs.install(level=args.loglevel,
       fmt='%(asctime)s [%(levelname)s]: %(message)s')
   else:
-    logging.basicConfig(level=args.loglevel, logger=logger,
+    logging.basicConfig(level=args.loglevel,
       format='%(asctime)s [%(levelname)s]: %(message)s' )
-
 
   ps = args.paths
   if args.glob:
