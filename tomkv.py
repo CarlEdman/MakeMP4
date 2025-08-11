@@ -133,8 +133,8 @@ def gid_type(x):
   return None
 
 def set_stat(f: pathlib.Path) -> bool:
-  if os.name == 'nt':
-    return True
+  # if os.name == 'nt':
+  #   return True
   if not f.exists():
     logger.debug(f'"{f}" does not exists, skipping')
     return False
