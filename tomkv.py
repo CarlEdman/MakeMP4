@@ -29,10 +29,10 @@ desc = 'Convert video files to mkv files (incorporating separate subtitles, chap
 args = None
 logger = None
 
-try:
-  import coloredlogs
-except ImportError:
-  coloredlogs = None
+#try:
+#  import coloredlogs
+#except ImportError:
+coloredlogs = None
 
 videxts = {
   '.264',
@@ -92,6 +92,16 @@ exts_chapter = {
   '.chapters',
   '.chapters.xml'
 }
+
+log_colors = {
+  logging.DEBUG: '92',
+  logging.INFO: '32',
+  logging.WARNING: '91',
+  logging.ERROR: '41',
+  logging.CRITICAL: '35',
+}
+
+
 
 findelfiles = set()
 successes = []
@@ -476,14 +486,7 @@ if __name__ == '__main__':
   )
   parser.set_defaults(loglevel=logging.WARN)
 
-  log_colors = {
-    logging.DEBUG: '92',
-    logging.INFO: '32',
-    logging.WARNING: '91',
-    logging.ERROR: '41',
-    logging.CRITICAL: '35',
-  }
-  for level, color in log_colors.items:
+  for level, color in log_colors.items():
     logging.addLevelName(
       level, f'\033[1;{color}m{logging.getLevelName(level)}\033[1;0m'
     )
