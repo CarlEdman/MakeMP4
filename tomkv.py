@@ -30,11 +30,11 @@ desc = 'Convert video files to mkv files (incorporating separate subtitles, chap
 (cols, lines) = shutil.get_terminal_size(fallback=(0,0))
 parser = None
 args = None
-log = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 try:
   import coloredlogs
-  coloredlogs.install(logger=log)
+  coloredlogs.install(logger=logger)
 except ImportError:
   pass
 
@@ -116,7 +116,7 @@ def uid_type(x):
   except KeyError:
     pass
 
-  log.warning(f'No uid recognized for "{x}", not setting.')
+  logger.warning(f'No uid recognized for "{x}", not setting.')
   return None
 
 def gid_type(x):
@@ -130,14 +130,14 @@ def gid_type(x):
   except KeyError:
     pass
 
-  log.warning(f'No gid recognized for "{x}", not setting.')
+  logger.warning(f'No gid recognized for "{x}", not setting.')
   return None
 
 def set_stat(f: pathlib.Path) -> bool:
   if os.name == 'nt':
     return True
   if not f.exists():
-    log.debug(f'"{f}" does not exists, skipping')
+    logger.debug(f'"{f}" does not exists, skipping')
     return False
 
   s = f.stat()
@@ -148,13 +148,13 @@ def set_stat(f: pathlib.Path) -> bool:
   elif f.is_dir() and args.dir_mode is not None:
     mode = args.dir_mode
   if (s.st_mode & modemask) != (mode & modemask):
-    log.info(f'Changing "{f}" mode from {oct(s.st_mode)} to {oct(mode)}.')
+    logger.info(f'Changing "{f}" mode from {oct(s.st_mode)} to {oct(mode)}.')
     f.chmod(mode)
 
   uid = args.uid or s.st_uid
   gid = args.gid or s.st_gid
   if s.st_uid != uid or s.st_gid != gid:
-    log.info(f'Changing "{f}" owner:group from {s.st_uid}:{s.st_gid} to {uid}:{gid}.')
+    logger.info(f'Changing "{f}" owner:group from {s.st_uid}:{s.st_gid} to {uid}:{gid}.')
     os.chown(f, uid, gid)
 
   return True
@@ -175,7 +175,7 @@ def doit(vidfile: pathlib.Path) -> bool:
 #    print('\033[?7l','\033[0K', textwrap.shorten(vidname, width=cols-10, placeholder='\u2026'), '\033[u', end='\r')
 
   if not vidfile.exists():
-    log.debug(f'{vidname} does not exists, skipping')
+    logger.debug(f'{vidname} does not exists, skipping')
     return False
 
   vidstat = vidfile.stat()
@@ -185,11 +185,11 @@ def doit(vidfile: pathlib.Path) -> bool:
     set_stat(vidfile)
     if not args.recurse:
       return False
-    log.debug(f'Recursing on {vidname} ...')
+    logger.debug(f'Recursing on {vidname} ...')
     return max(map(doit, sorted(list(vidfile.iterdir()), key=sortkey)), default=False)
 
   if not vidfile.is_file() or vidfile.suffix.lower() not in videxts:
-    log.debug(f'{vidname} is not recognized video file, skipping')
+    logger.debug(f'{vidname} is not recognized video file, skipping')
     return False
 
   mkvfile = vidfile.with_suffix('.mkv')
@@ -199,7 +199,7 @@ def doit(vidfile: pathlib.Path) -> bool:
 
   if mkvfile.exists() and not vidfile.samefile(mkvfile):
     mkvname = path2quotedstring(mkvfile)
-    log.warning(f'{mkvname} already exists')
+    logger.warning(f'{mkvname} already exists')
     failures.append(mkvfile)
     return False
 
@@ -255,7 +255,7 @@ def doit(vidfile: pathlib.Path) -> bool:
 
       if not iso6392:
         iso6392 = args.default_language
-        log.warning(f'Cannot identify language for {f}, defaulting to {iso6392}')
+        logger.warning(f'Cannot identify language for {f}, defaulting to {iso6392}')
 
       name = f.stem.removeprefix(vidfile.stem).strip(' ._')
       cl += [ '--language', f'0:{iso6392}', '--track-name', f'0:{name}', f ]
@@ -272,12 +272,12 @@ def doit(vidfile: pathlib.Path) -> bool:
       ]
 
   if not todo:
-    log.debug(
+    logger.debug(
       f'"{mkvfile}" is already in MKV format, there are no subtitles, chapters, or posters to integrate, languages are already set, and "--force" was not set: skipping...'
     )
     return False
 
-  log.info(paths2quotedstring(cl))
+  logger.info(paths2quotedstring(cl))
   mkvmerge_warning = False
   if not args.dryrun:
     try:
@@ -287,15 +287,15 @@ def doit(vidfile: pathlib.Path) -> bool:
                      text=True)
     except subprocess.CalledProcessError as e:
       if e.returncode == 1:
-        log.info(e.stdout)
-        log.warning(f'{e.stderr}\n{e}\nProceeding and preserving files ...')
+        logger.info(e.stdout)
+        logger.warning(f'{e.stderr}\n{e}\nProceeding and preserving files ...')
         mkvmerge_warning = True
         failures.append(vidfile)
       else:
         if tempfile.exists():
           tempfile.unlink(missing_ok=True)
-        log.info(e.stdout)
-        log.error(f'{e.stderr}\n{e}\nSkipping ...')
+        logger.info(e.stdout)
+        logger.error(f'{e.stderr}\n{e}\nSkipping ...')
         failures.append(vidfile)
       return False
     except KeyboardInterrupt as e:
@@ -304,14 +304,14 @@ def doit(vidfile: pathlib.Path) -> bool:
         tempfile.unlink(missing_ok=True)
       raise e
 
-  log.info(f'mv {path2quotedstring(tempfile)} {path2quotedstring(mkvfile)}')
+  logger.info(f'mv {path2quotedstring(tempfile)} {path2quotedstring(mkvfile)}')
   if not args.dryrun:
     if mkvmerge_warning:
       backupfile = mkvfile.with_stem(mkvfile.stem + '-backup')
       try:
         mkvfile.rename(backupfile)
       except FileNotFoundError as e:
-        log.error(f'Temp mkvfile "{mkvfile}" not found, skipping: {e}')
+        logger.error(f'Temp mkvfile "{mkvfile}" not found, skipping: {e}')
         failures.append(vidfile)
         return False
 
@@ -320,7 +320,7 @@ def doit(vidfile: pathlib.Path) -> bool:
       os.utime(mkvfile, ns=(vidstat.st_atime_ns, vidstat.st_mtime_ns))
       mkvfile.chmod(vidstat.st_mode)
     except Exception as e:
-      log.error(f'Failed to set ownership and permissions for "{mkvfile}", skipping: {e}')
+      logger.error(f'Failed to set ownership and permissions for "{mkvfile}", skipping: {e}')
       failures.append(vidfile)
       return False
 
@@ -332,7 +332,7 @@ def doit(vidfile: pathlib.Path) -> bool:
   if args.nodelete or mkvmerge_warning or not delfiles:
     return True
 
-  log.info(f'rm {paths2quotedstring(delfiles)}')
+  logger.info(f'rm {paths2quotedstring(delfiles)}')
   if not args.dryrun:
     for i in delfiles:
       i.unlink(missing_ok=True)
@@ -341,167 +341,182 @@ def doit(vidfile: pathlib.Path) -> bool:
 
 
 if __name__ == '__main__':
-  parser = argparse.ArgumentParser(
-    fromfile_prefix_chars='@', prog=prog, epilog='Written by: ' + author
-  )
-  parser.add_argument(
-    '-n',
-    '--no-delete',
-    dest='nodelete',
-    action='store_true',
-    help='do not delete source files (e.g., video, subtitles, chapters, or posters) after conversion to MKV.',
-  )
-  parser.add_argument(
-    '-t',
-    '--title-case',
-    dest='titlecase',
-    action='store_true',
-    help='rename files to proper title case.',
-  )
-  parser.add_argument(
-    '-f',
-    '--force',
-    dest='force',
-    action='store_true',
-    help='force remuxing without any apparent need.',
-  )
-  parser.add_argument(
-    '-l',
-    '--languages',
-    dest='languages',
-    action='store',
-    help='keep audio and subtitle tracks in the given language ISO639-2 codes; prefix with ! to discard same.',
-  )
-  parser.add_argument(
-    '--uid',
-    dest='uid',
-    type=uid_type,
-    action='store',
-    default=None,
-    help='if set, vidfiles will have their uid changed.',
-  )
-  parser.add_argument(
-    '--gid',
-    dest='gid',
-    type=gid_type,
-    action='store',
-    default=None,
-    help='if set, vidfiles will have their gid changed.',
-  )
-  parser.add_argument(
-    '--file-mode',
-    dest='file_mode',
-    type=octal_type,
-    action='store',
-    default=None,
-    help='if set, vidfiles mode will be changed.',
-  )
-  parser.add_argument(
-    '--dir-mode',
-    '--directory-mode',
-    dest='dir_mode',
-    type=octal_type,
-    action='store',
-    default=None,
-    help='if set, folders mode will be changed.',
-  )
-  parser.add_argument(
-    '--default-language',
-    dest='default_language',
-    action='store',
-    default='eng',
-    choices=iso6392tolang.keys(),
-    help='ISO6392 language code to use by default for subtitles.',
-  )
-  parser.add_argument(
-    '-R',
-    '--recurse',
-    dest='recurse',
-    action=argparse.BooleanOptionalAction,
-    default=False,
-    help='Recurse into subdirectories.',
-  )
-  parser.add_argument(
-    '-G',
-    '--glob',
-    dest='glob',
-    action=argparse.BooleanOptionalAction,
-    default=False,
-    help='Glob argument paths.',
-  )
-  parser.add_argument('-d', '--dryrun',
-    dest='dryrun',
-    action='store_true',
-    help='do not perform operations, but only print them.')
-  parser.add_argument('--version',
-    action='version',
-    version='%(prog)s ' + version)
-  parser.add_argument('--verbose',
-    dest='loglevel',
-    action='store_const',
-    const=logging.INFO,
-    help='print informational (or higher) log messages.')
-  parser.add_argument('--debug',
-    dest='loglevel',
-    action='store_const',
-    const=logging.DEBUG,
-    help='print debugging (or higher) log messages.')
-  parser.add_argument('--taciturn',
-    dest='loglevel',
-    action='store_const',
-    const=logging.ERROR,
-    help='only print error level (or higher) log messages.')
-  parser.add_argument('--log',
-    dest='logfile',
-    action='store', 
-    help='location of alternate log file.')
-  parser.add_argument(
-    'paths', nargs='+', help='paths to be operated on; may include wildcards (if glob is set); directories convert content (if recurse is set).'
-  )
+    parser = argparse.ArgumentParser(
+        fromfile_prefix_chars="@", prog=prog, epilog="Written by: " + author
+    )
+    parser.add_argument(
+        "-n",
+        "--no-delete",
+        dest="nodelete",
+        action="store_true",
+        help="do not delete source files (e.g., video, subtitles, chapters, or posters) after conversion to MKV.",
+    )
+    parser.add_argument(
+        "-t",
+        "--title-case",
+        dest="titlecase",
+        action="store_true",
+        help="rename files to proper title case.",
+    )
+    parser.add_argument(
+        "-f",
+        "--force",
+        dest="force",
+        action="store_true",
+        help="force remuxing without any apparent need.",
+    )
+    parser.add_argument(
+        "-l",
+        "--languages",
+        dest="languages",
+        action="store",
+        help="keep audio and subtitle tracks in the given language ISO639-2 codes; prefix with ! to discard same.",
+    )
+    parser.add_argument(
+        "--uid",
+        dest="uid",
+        type=uid_type,
+        action="store",
+        default=None,
+        help="if set, vidfiles will have their uid changed.",
+    )
+    parser.add_argument(
+        "--gid",
+        dest="gid",
+        type=gid_type,
+        action="store",
+        default=None,
+        help="if set, vidfiles will have their gid changed.",
+    )
+    parser.add_argument(
+        "--file-mode",
+        dest="file_mode",
+        type=octal_type,
+        action="store",
+        default=None,
+        help="if set, vidfiles mode will be changed.",
+    )
+    parser.add_argument(
+        "--dir-mode",
+        "--directory-mode",
+        dest="dir_mode",
+        type=octal_type,
+        action="store",
+        default=None,
+        help="if set, folders mode will be changed.",
+    )
+    parser.add_argument(
+        "--default-language",
+        dest="default_language",
+        action="store",
+        default="eng",
+        choices=iso6392tolang.keys(),
+        help="ISO6392 language code to use by default for subtitles.",
+    )
+    parser.add_argument(
+        "-R",
+        "--recurse",
+        dest="recurse",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Recurse into subdirectories.",
+    )
+    parser.add_argument(
+        "-G",
+        "--glob",
+        dest="glob",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Glob argument paths.",
+    )
+    parser.add_argument(
+        "-d",
+        "--dryrun",
+        dest="dryrun",
+        action="store_true",
+        help="do not perform operations, but only print them.",
+    )
+    parser.add_argument("--version", action="version", version="%(prog)s " + version)
+    parser.add_argument(
+        "--verbose",
+        dest="loglevel",
+        action="store_const",
+        const=logging.INFO,
+        help="print informational (or higher) log messages.",
+    )
+    parser.add_argument(
+        "--debug",
+        dest="loglevel",
+        action="store_const",
+        const=logging.DEBUG,
+        help="print debugging (or higher) log messages.",
+    )
+    parser.add_argument(
+        "--taciturn",
+        dest="loglevel",
+        action="store_const",
+        const=logging.ERROR,
+        help="only print error level (or higher) log messages.",
+    )
+    parser.add_argument(
+        "--log", dest="logfile", action="store", help="location of alternate log file."
+    )
+    parser.add_argument(
+        "paths",
+        nargs="+",
+        help="paths to be operated on; may include wildcards (if glob is set); directories convert content (if recurse is set).",
+    )
 
-  parser.set_defaults(loglevel=logging.WARN)
-  for i in [
-    (pathlib.Path.home() / '.config' / prog).with_suffix('.ini'),
-    pathlib.Path(sys.argv[0]).with_suffix('.ini'),
-    pathlib.Path(prog).with_suffix('.ini'),
-    (pathlib.Path('..') / prog).with_suffix('.ini'),
-  ]:
-    if not i.exists():
-      continue
-    sys.argv.insert(1, f'@{i}')
+    parser.set_defaults(loglevel=logging.WARN)
+    for i in [
+        (pathlib.Path.home() / ".config" / prog).with_suffix(".ini"),
+        pathlib.Path(sys.argv[0]).with_suffix(".ini"),
+        pathlib.Path(prog).with_suffix(".ini"),
+        (pathlib.Path("..") / prog).with_suffix(".ini"),
+    ]:
+        if not i.exists():
+            continue
+        sys.argv.insert(1, f"@{i}")
 
-  logging.addLevelName(logging.WARNING, "\033[1;31m%s\033[1;0m" % logging.getLevelName(logging.WARNING))
-  logging.addLevelName(logging.ERROR, "\033[1;41m%s\033[1;0m" % logging.getLevelName(logging.ERROR))
+    logging.addLevelName(
+        logging.WARNING, "\033[1;31m%s\033[1;0m" % logging.getLevelName(logging.WARNING)
+    )
+    logging.addLevelName(
+        logging.ERROR, "\033[1;41m%s\033[1;0m" % logging.getLevelName(logging.ERROR)
+    )
 
-  args = parser.parse_args()
-  if args.dryrun and args.loglevel > logging.INFO:
-    args.loglevel = logging.INFO
+    args = parser.parse_args()
+    if args.dryrun and args.loglevel > logging.INFO:
+        args.loglevel = logging.INFO
 
-  print(args.loglevel)
-  log.setLevel(0)
-  logformat = logging.Formatter('%(asctime)s [%(levelname)s]: %(message)s')
+    print(args.loglevel, args.logfile)
+    # logging.basicConfig()
+    # log.setLevel(0)
+    logformat = logging.Formatter("%(asctime)s [%(levelname)s]: %(message)s")
 
-  if args.logfile:
-    flogger = logging.handlers.WatchedFileHandler(args.logfile, 'a', 'utf-8')
-    flogger.setLevel(logging.DEBUG)
-    flogger.setFormatter(logformat)
-    log.addHandler(flogger)
+    if args.logfile:
+        flogger = logging.handlers.WatchedFileHandler(args.logfile, "a", "utf-8")
+        flogger.setLevel(logging.DEBUG)
+        flogger.setFormatter(logformat)
+        logger.addHandler(flogger)
 
-  slogger = logging.StreamHandler()
-  slogger.setLevel(args.loglevel)
-  slogger.setFormatter(logformat)
-  log.addHandler(slogger)
+    slogger = logging.StreamHandler()
+    slogger.setLevel(args.loglevel)
+    slogger.setFormatter(logformat)
+    logger.addHandler(slogger)
 
-  ps = args.paths
-  if args.glob:
-    ps = ( f for p in ps for f in glob.iglob(p) )
-  ps = map(pathlib.Path, ps)
-  if not max(map(doit, ps), default=False):
-    log.warning(f'No valid video files found for paths (need to glob and/or recurse?) arguments: {paths2quotedstring(ps)}')
+    ps = args.paths
+    if args.glob:
+        ps = (f for p in ps for f in glob.iglob(p))
+    ps = map(pathlib.Path, ps)
+    if not max(map(doit, ps), default=False):
+        logger.warning(
+            f"No valid video files found for paths (need to glob and/or recurse?) arguments: {paths2quotedstring(ps)}"
+        )
 
-  if not args.nodelete and findelfiles:
-    log.info(f'rm {paths2quotedstring(findelfiles)}')
-    if not args.dryrun:
-      for i in findelfiles:
-        if i.exists():
-          i.unlink()
+    if not args.nodelete and findelfiles:
+        logger.info(f"rm {paths2quotedstring(findelfiles)}")
+        if not args.dryrun:
+            for i in findelfiles:
+                if i.exists():
+                    i.unlink()
