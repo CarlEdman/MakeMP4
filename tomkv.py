@@ -449,14 +449,6 @@ if __name__ == '__main__':
     default=False,
     help='Recurse into subdirectories.',
   )
-  parser.add_argument(
-    '-G',
-    '--glob',
-    dest='glob',
-    action=argparse.BooleanOptionalAction,
-    default=False,
-    help='Glob argument paths.',
-  )
   parser.add_argument('-d', '--dryrun', '--dry-run',
     dest='dryrun',
     action='store_true',
@@ -480,7 +472,10 @@ if __name__ == '__main__':
     const=logging.ERROR,
     help='only print error level (or higher) log messages.')
   parser.add_argument(
-    'paths', nargs='+', help='paths to be operated on; may include wildcards (if glob is set); directories convert content (if recurse is set).'
+    'paths',
+    nargs='+',
+    type=pathlib.Path,
+    help='paths to be operated on; directories convert content (if recurse is set).'
   )
   parser.set_defaults(loglevel=logging.WARN)
 
@@ -501,12 +496,8 @@ if __name__ == '__main__':
     logging.basicConfig(level=args.loglevel,
       format='%(asctime)s %(levelname)s: %(message)s\x1b[1;0m' )
 
-  ps = args.paths
-  if args.glob:
-    ps = ( f for p in ps for f in glob.iglob(p) )
-  ps = map(pathlib.Path, ps)
-  if not max(map(doit, ps), default=False):
-    logger.warning(f'No valid video files found for paths (need to glob and/or recurse?) arguments: {args.paths}')
+  if not max(map(doit, args.paths), default=False):
+    logger.warning(f'No valid video files found for paths (need to recurse?) arguments: {args.paths}')
 
   if not args.nodelete and findelfiles:
     logger.info(f'rm {paths2quotedstring(findelfiles)}')
