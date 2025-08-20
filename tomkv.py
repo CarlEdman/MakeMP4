@@ -177,7 +177,7 @@ def doit(vidfile: pathlib.Path) -> bool:
   todo = args.force
   vidname = path2quotedstring(vidfile)
   if args.monitor and cols>0:
-    print('\033[s', '\033[0K', textwrap.shorten(vidname, width=cols-10, placeholder='\u2026'), '\033[u', end='\r')
+    print('\033[s', '\033[0K', textwrap.shorten(str(vidfile), width=cols-10, placeholder='\u2026'), '\033[u', end='\r')
 
   if not vidfile.exists():
     logger.debug(f'{vidname} does not exists, skipping...')
