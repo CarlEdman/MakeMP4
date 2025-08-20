@@ -29,10 +29,10 @@ desc = 'Convert video files to mkv files (incorporating separate subtitles, chap
 args = None
 logger = None
 
-#try:
-#  import coloredlogs
-#except ImportError:
-coloredlogs = None
+try:
+  import coloredlogs
+except ImportError:
+  coloredlogs = None
 
 videxts = {
   '.264',
@@ -94,11 +94,11 @@ exts_chapter = {
 }
 
 log_colors = {
-  logging.DEBUG: '92',
-  logging.INFO: '32',
-  logging.WARNING: '91',
-  logging.ERROR: '41',
-  logging.CRITICAL: '35',
+  logging.DEBUG: '37;44',
+  logging.INFO: '47;34',
+  logging.WARNING: '30;91',
+  logging.ERROR: '47;31',
+  logging.CRITICAL: '37;41',
 }
 
 findelfiles = set()
@@ -486,7 +486,7 @@ if __name__ == '__main__':
 
   for level, color in log_colors.items():
     logging.addLevelName(
-      level, f'\033[1;{color}m{logging.getLevelName(level)}\033[1;0m'
+      level, f'\x1b[{color}m{logging.getLevelName(level)}'
     )
 
   args = parser.parse_args()
@@ -496,10 +496,10 @@ if __name__ == '__main__':
   logger = logging.getLogger(__name__)
   if coloredlogs:
     coloredlogs.install(level=args.loglevel,
-      fmt='%(asctime)s [%(levelname)s]: %(message)s')
+      fmt='%(asctime)s %(levelname)s: %(message)s')
   else:
     logging.basicConfig(level=args.loglevel,
-      format='%(asctime)s [%(levelname)s]: %(message)s' )
+      format='%(asctime)s %(levelname)s: %(message)s\x1b[1;0m' )
 
   ps = args.paths
   if args.glob:
