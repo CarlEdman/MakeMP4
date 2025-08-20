@@ -176,7 +176,7 @@ def updel(f: pathlib.Path) -> None:
 def doit(vidfile: pathlib.Path) -> bool:
   todo = args.force
   vidname = path2quotedstring(vidfile)
-  if cols>0:
+  if args.monitor and cols>0:
     print('\033[s', '\033[0K', textwrap.shorten(vidname, width=cols-10, placeholder='\u2026'), '\033[u', end='\r')
 
   if not vidfile.exists():
@@ -448,6 +448,13 @@ if __name__ == '__main__':
     action=argparse.BooleanOptionalAction,
     default=False,
     help='Recurse into subdirectories.',
+  )
+  parser.add_argument(
+    '-M', '--monitor',
+    dest='monitor',
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help='Output paths as they are examined.',
   )
   parser.add_argument('-d', '--dryrun', '--dry-run',
     dest='dryrun',
