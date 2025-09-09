@@ -34,7 +34,7 @@ try:
 except ImportError:
   coloredlogs = None
 
-videxts = {
+exts_vid = {
   '.264',
   '.265',
   '.avi',
@@ -89,6 +89,7 @@ stems_poster = {
 }
 
 exts_chapter = {
+  '.xml',
   '.chapters',
   '.chapters.xml'
 }
@@ -193,7 +194,7 @@ def doit(vidfile: pathlib.Path) -> bool:
     logger.debug(f'Recursing on {vidname} ...')
     return max(map(doit, sorted(list(vidfile.iterdir()), key=sortkey)), default=False)
 
-  if not vidfile.is_file() or vidfile.suffix.lower() not in videxts:
+  if not vidfile.is_file() or vidfile.suffix.lower() not in exts_vid:
     logger.debug(f'{vidname} is not recognized video file, skipping')
     return False
 
