@@ -505,7 +505,7 @@ if __name__ == '__main__':
       format='%(asctime)s %(levelname)s: %(message)s\x1b[1;0m' )
 
   if not max(map(doit, args.paths), default=False):
-    logger.warning(f'No valid video files found for paths (need to recurse?) arguments: {args.paths}')
+    logger.warning(f'No valid video files found for paths{" (need to recurse?)" if not args.recurse else ""} arguments: {", ".join(map(str, args.paths))}')
 
   if not args.nodelete and findelfiles:
     logger.info(f'rm {paths2quotedstring(findelfiles)}')
