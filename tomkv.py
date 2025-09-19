@@ -507,11 +507,15 @@ if __name__ == '__main__':
   if not max(map(doit, args.paths), default=False):
     logger.warning(f'No valid video files found for paths{" (need to recurse?)" if not args.recurse else ""} arguments: {", ".join(map(str, args.paths))}')
 
+  if args.monitor and cols>0:
+    print('\033[s', '\033[0K', '\033[u', end='\r')
+
   if not args.nodelete and findelfiles:
     logger.info(f'rm {paths2quotedstring(findelfiles)}')
     if not args.dryrun:
       for i in findelfiles:
         updel(i)
+
   if failures:
     w = '\n'.join([ "Encountered issues with:" ] + [ f'    {f}' for f in failures ] )
     logger.warning(w)
