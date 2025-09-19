@@ -448,14 +448,14 @@ if __name__ == '__main__':
     dest='recurse',
     action=argparse.BooleanOptionalAction,
     default=False,
-    help='Recurse into subdirectories.',
+    help='recurse into subdirectories.',
   )
   parser.add_argument(
     '-M', '--monitor',
     dest='monitor',
     action=argparse.BooleanOptionalAction,
     default=False,
-    help='Output paths as they are examined.',
+    help='print paths as they are examined.',
   )
   parser.add_argument('-d', '--dryrun', '--dry-run',
     dest='dryrun',
