@@ -177,6 +177,7 @@ def updel(f: pathlib.Path) -> None:
 def doit(vidfile: pathlib.Path) -> bool:
   todo = args.force
   vidname = path2quotedstring(vidfile)
+  backup_vidfile = False
   if args.monitor and cols>0:
     print('\033[s', '\033[0K', textwrap.shorten(str(vidfile), width=cols-10, placeholder='\u2026'), '\033[u', end='\r')
 
@@ -202,10 +203,8 @@ def doit(vidfile: pathlib.Path) -> bool:
   if args.titlecase:
     mkvfile = mkvfile.with_stem(to_title_case(mkvfile.stem))
   tempfile = mkvfile.with_stem(mkvfile.stem + '-temp')
-
-  if mkvfile.exists() and not vidfile.samefile(mkvfile):
-    mkvname = path2quotedstring(mkvfile)
-    logger.warning(f'{mkvname} already exists')
+  if tempfile.exists():
+    logger.warning(f'{tempfile} already exists')
     failures.append(mkvfile)
     return False
 
@@ -286,13 +285,10 @@ def doit(vidfile: pathlib.Path) -> bool:
 
     cl += ['--language', f'0:{iso6392}', '--track-name', f'0:{t.stem.removeprefix(vidfile.stem).strip(" ._")}', t]
 
-  posters = []
-  posters += [ f
-    for f in sibs if f.suffix.lower() in posterexts2mime and f.stem.lower() in stems_poster
-  ]
+  posters = [f for f in sibs if f.suffix.lower() in posterexts2mime and f.stem.lower() in stems_poster]
 
-  todo |= len(posters) > 0
   for f in posters:
+    todo = True
     findelfiles.add(f)
     cl += [
       '--attachment-mime-type', posterexts2mime[f.suffix],
@@ -308,7 +304,6 @@ def doit(vidfile: pathlib.Path) -> bool:
     return True
 
   logger.info(paths2quotedstring(cl))
-  mkvmerge_warning = False
   if not args.dryrun:
     try:
       subprocess.run(list(map(str, cl)),
@@ -316,49 +311,55 @@ def doit(vidfile: pathlib.Path) -> bool:
                      capture_output=True,
                      text=True)
     except subprocess.CalledProcessError as e:
-      if e.returncode == 1:
-        logger.info(e.stdout)
-        logger.warning(f'{e.stderr}\n{e}\nProceeding and preserving files ...')
-        mkvmerge_warning = True
-        failures.append(vidfile)
+      logger.info(f'{e.stdout}\n{e.stderr}\n{e}\n')
+      backup_vidfile = True
+      failures.append(vidfile)
+      if e.returncode == 0:
+        logger.warning('Error raised, but returncode == 0 ...')
+      elif e.returncode == 1:
+        if args.overwrite:
+          logger.warning('Proceeding, backing up, and overwriting source file ...')
+        else:
+          logger.warning('Proceeding and preserving files ...')
       else:
         updel(tempfile)
-        logger.info(e.stdout)
-        logger.error(f'{e.stderr}\n{e}\nSkipping ...')
-        failures.append(vidfile)
+        logger.error('Skipping ...')
         return False
     except KeyboardInterrupt as e:
       failures.append(vidfile)
-      if tempfile.exists():
-        updel(tempfile)
+      updel(tempfile)
       raise e
+
+  if backup_vidfile:
+    backupfile = vidfile.with_stem('.bak' + vidfile.stem)
+    logger.info(f'mv {path2quotedstring(vidfile)} {path2quotedstring(backupfile)}')
+    if not args.dryrun:
+      try:
+        vidfile = vidfile.rename(backupfile)
+      except FileNotFoundError as e:
+        logger.error(f'Original file "{vidfile}" not found, skipping: {e}')
+        failures.append(mkvfile)
+        return False
 
   logger.info(f'mv {path2quotedstring(tempfile)} {path2quotedstring(mkvfile)}')
   if not args.dryrun:
-    if mkvmerge_warning:
-      backupfile = mkvfile.with_stem(mkvfile.stem + '-backup')
-      try:
-        mkvfile.rename(backupfile)
-      except FileNotFoundError as e:
-        logger.error(f'Temp mkvfile "{mkvfile}" not found, skipping: {e}')
-        failures.append(vidfile)
-        return False
-
     tempfile.replace(mkvfile)
-    try:
+
+  try:
+    if not args.dryrun:
       os.utime(mkvfile, ns=(vidstat.st_atime_ns, vidstat.st_mtime_ns))
       mkvfile.chmod(vidstat.st_mode)
-    except Exception as e:
-      logger.error(f'Failed to set ownership and permissions for "{mkvfile}", skipping: {e}')
-      failures.append(vidfile)
-      return False
+  except Exception as e:
+    logger.error(f'Failed to set ownership and permissions for "{mkvfile}", skipping: {e}')
+    failures.append(vidfile)
+    return False
 
   successes.append(vidfile)
 
-  if vidfile.exists() and mkvfile.exists() and not vidfile.samefile(mkvfile):
+  if vidfile.exists() and mkvfile.exists() and not vidfile.samefile(mkvfile) and not backup_vidfile:
     delfiles.add(vidfile)
 
-  if args.nodelete or mkvmerge_warning or not delfiles:
+  if args.nodelete or backup_vidfile or not delfiles:
     return True
 
   logger.info(f'rm {paths2quotedstring(delfiles)}')
@@ -457,6 +458,12 @@ if __name__ == '__main__':
     default=False,
     help='print paths as they are examined.',
   )
+  parser.add_argument(
+    '-O', '--overwrite',
+    dest='overwrite',
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help='If there is an error in remuxing, nevertheless replace the original and rename it to *.bak.')
   parser.add_argument('-d', '--dryrun', '--dry-run',
     dest='dryrun',
     action='store_true',
@@ -495,8 +502,10 @@ if __name__ == '__main__':
   args = parser.parse_args()
   if args.dryrun and args.loglevel > logging.INFO:
     args.loglevel = logging.INFO
-
   logger = logging.getLogger(__name__)
+  if args.overwrite and args.nodelete:
+    logger.warning('--overwrite and --no-delete flags are incompatible, yet both are set.')
+
   if coloredlogs:
     coloredlogs.install(level=args.loglevel,
       fmt='%(asctime)s %(levelname)s: %(message)s')
