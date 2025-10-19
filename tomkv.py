@@ -165,9 +165,11 @@ def set_stat(f: pathlib.Path) -> bool:
   return True
 
 def updel(f: pathlib.Path) -> None:
-  if not f.exists():
+  try:
+    f.unlink()
+  except Exception:
     return
-  f.unlink()
+
   for p in f.parents:
     try:
       p.rmdir()
@@ -331,7 +333,7 @@ def doit(vidfile: pathlib.Path) -> bool:
       raise e
 
   if backup_vidfile:
-    backupfile = vidfile.with_stem('.bak' + vidfile.stem)
+    backupfile = vidfile.with_suffix('.bak' + vidfile.suffix)
     logger.info(f'mv {path2quotedstring(vidfile)} {path2quotedstring(backupfile)}')
     if not args.dryrun:
       try:
@@ -372,60 +374,52 @@ def doit(vidfile: pathlib.Path) -> bool:
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser(
-    fromfile_prefix_chars='@', prog=prog, epilog='Written by: ' + author
-  )
+    fromfile_prefix_chars='@', prog=prog, epilog='Written by: ' + author)
   parser.add_argument(
     '-n',
     '--no-delete',
     dest='nodelete',
     action='store_true',
-    help='do not delete source files (e.g., video, subtitles, chapters, or posters) after conversion to MKV.',
-  )
+    help='do not delete source files (e.g., video, subtitles, chapters, or posters) after conversion to MKV.')
   parser.add_argument(
     '-t',
     '--title-case',
     dest='titlecase',
     action='store_true',
-    help='rename files to proper title case.',
-  )
+    help='rename files to proper title case.')
   parser.add_argument(
     '-f',
     '--force',
     dest='force',
     action='store_true',
-    help='force remuxing without any apparent need.',
-  )
+    help='force remuxing without any apparent need.')
   parser.add_argument(
     '-l',
     '--languages',
     dest='languages',
     action='store',
-    help='keep audio and subtitle tracks in the given language ISO639-2 codes; prefix with ! to discard same.',
-  )
+    help='keep only audio and subtitle tracks in the given language ISO639-2 codes; prefix with ! to discard only these.')
   parser.add_argument(
     '--uid',
     dest='uid',
     type=uid_type,
     action='store',
     default=None,
-    help='if set, vidfiles will have their uid changed.',
-  )
+    help='if set, vidfiles will have their uid changed.')
   parser.add_argument(
     '--gid',
     dest='gid',
     type=gid_type,
     action='store',
     default=None,
-    help='if set, vidfiles will have their gid changed.',
-  )
+    help='if set, vidfiles will have their gid changed.')
   parser.add_argument(
     '--file-mode',
     dest='file_mode',
     type=octal_type,
     action='store',
     default=None,
-    help='if set, vidfiles mode will be changed.',
-  )
+    help='if set, vidfiles mode will be changed.')
   parser.add_argument(
     '--dir-mode',
     '--directory-mode',
@@ -433,31 +427,27 @@ if __name__ == '__main__':
     type=octal_type,
     action='store',
     default=None,
-    help='if set, folders mode will be changed.',
-  )
+    help='if set, folders mode will be changed.')
   parser.add_argument(
     '--default-language',
     dest='default_language',
     action='store',
     default='eng',
     choices=iso6392tolang.keys(),
-    help='ISO6392 language code to use by default for subtitles.',
-  )
+    help='ISO6392 language code to use by default for subtitles.')
   parser.add_argument(
     '-R',
     '--recurse',
     dest='recurse',
     action=argparse.BooleanOptionalAction,
     default=False,
-    help='recurse into subdirectories.',
-  )
+    help='recurse into subdirectories of arguments.')
   parser.add_argument(
     '-M', '--monitor',
     dest='monitor',
     action=argparse.BooleanOptionalAction,
     default=False,
-    help='print paths as they are examined.',
-  )
+    help='print paths as they are examined.')
   parser.add_argument(
     '-O', '--overwrite',
     dest='overwrite',
@@ -490,8 +480,7 @@ if __name__ == '__main__':
     'paths',
     nargs='+',
     type=pathlib.Path,
-    help='paths to be operated on; directories convert content (if recurse is set).'
-  )
+    help='paths to be operated on.')
   parser.set_defaults(loglevel=logging.WARN)
 
   for level, color in log_colors.items():
