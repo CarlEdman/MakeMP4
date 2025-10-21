@@ -394,20 +394,17 @@ if __name__ == '__main__':
   parser = argparse.ArgumentParser(
     fromfile_prefix_chars='@', prog=prog, epilog='Written by: ' + author)
   parser.add_argument(
-    '-n',
-    '--no-delete',
+    '-n', '--no-delete',
     dest='nodelete',
     action='store_true',
     help='do not delete source files (e.g., video, subtitles, chapters, or posters) after conversion to MKV.')
   parser.add_argument(
-    '-t',
-    '--title-case',
+    '-t', '--title-case',
     dest='titlecase',
     action='store_true',
     help='rename files to proper title case.')
   parser.add_argument(
-    '-f',
-    '--force',
+    '-f', '--force',
     dest='force',
     action='store_true',
     help='force remuxing without any apparent need.')
@@ -524,8 +521,6 @@ if __name__ == '__main__':
   log.addHandler(slogger)
 
   ps = args.paths
-  if args.glob:
-    ps = ( f for p in ps for f in glob.iglob(p) )
   ps = map(pathlib.Path, ps)
   if not max(map(doit, ps), default=False):
     log.warning(f'No valid video files found for paths (need to glob and/or recurse?) arguments: {paths2quotedstring(ps)}')
