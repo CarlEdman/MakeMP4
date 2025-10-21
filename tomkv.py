@@ -10,7 +10,6 @@ import os
 import shutil
 import sys
 import textwrap
-import coloredlogs
 
 from cetools import (
   basestem,
@@ -29,10 +28,25 @@ author = 'Carl Edman (CarlEdman@gmail.com)'
 desc = 'Convert video files to mkv files (incorporating separate subtitles & posters).'
 
 (cols, lines) = shutil.get_terminal_size(fallback=(0,0))
-parser = None
 args = None
 log = logging.getLogger(__name__)
-coloredlogs.install(logger=log)
+log.setLevel(logging.DEBUG)
+
+logging.addLevelName( logging.WARNING, "\033[1;31m%s\033[1;0m" % logging.getLevelName(logging.WARNING))
+logging.addLevelName( logging.ERROR, "\033[1;41m%s\033[1;0m" % logging.getLevelName(logging.ERROR))
+
+ansi_save_cursor = "\x1b7"
+ansi_restore_cursor = "\x1b8"
+ansi_clear_to_eol = "\x1b[0K"
+utf_ellipsis = "\u2026"
+
+def monitor(s):
+  if args.monitor:
+    print(ansi_save_cursor, ansi_clear_to_eol, textwrap.shorten(s, width=cols-10, placeholder=utf_ellipsis), ansi_restore_cursor, end='\r')
+
+def monitor_end():
+  if args.monitor:
+    print(ansi_save_cursor, ansi_clear_to_eol, ansi_restore_cursor, end='\r')
 
 videxts = {
   '.264',
@@ -137,12 +151,10 @@ def set_stat(f: pathlib.Path) -> bool:
     return False
   s = f.stat()
 
-#  print(oct(s.st_mode), oct(args.file_mode), oct(s.st_mode & modemask), oct(args.file_mode & modemask))
   if f.is_file() and args.file_mode is not None and (s.st_mode & modemask) != (args.file_mode & modemask):
     log.info(f'Changing "{f}" mode from {oct(s.st_mode)} to {oct(args.file_mode)}.')
     f.chmod(args.file_mode)
 
-#  print(oct(s.st_mode), oct(args.dir_mode), oct(s.st_mode & modemask), oct(args.dir_mode & modemask))
   if f.is_dir() and args.dir_mode is not None and (s.st_mode & modemask) != (args.dir_mode & modemask):
     log.info(f'Changing "{f}" mode from {oct(s.st_mode)} to {oct(args.dir_mode)}.')
     f.chmod(args.dir_mode)
@@ -158,17 +170,7 @@ def set_stat(f: pathlib.Path) -> bool:
 def doit(vidfile: pathlib.Path) -> bool:
   todo = args.force
   vidname = path2quotedstring(vidfile)
-  if cols>0:
-    # print('\r', ansi.cursor.erase_line, textwrap.shorten(vidname, width=cols-1, placeholder='\u2026'), end='')
-    # print('\r', '\033[0K', end='')
-    # print('\r', '\033[0K', end='')
-    print('\033[s', '\033[0K', textwrap.shorten(vidname, width=cols-10, placeholder='\u2026'), '\033[u', end='\r')
-
-#    enter_am_mode
-#    clr_eol
-#    exit_am_mode
-
-#    print('\033[?7l','\033[0K', textwrap.shorten(vidname, width=cols-10, placeholder='\u2026'), '\033[u', end='\r')
+  monitor(vidname)
 
   if not vidfile.exists():
     log.debug(f'{vidname} does not exists, skipping')
@@ -415,16 +417,20 @@ if __name__ == '__main__':
     dest='recurse',
     action=argparse.BooleanOptionalAction,
     default=False,
-    help='Recurse into subdirectories.',
-  )
+    help='Recurse into subdirectories.')
   parser.add_argument(
     '-G',
     '--glob',
     dest='glob',
     action=argparse.BooleanOptionalAction,
     default=False,
-    help='Glob argument paths.',
-  )
+    help='Glob argument paths.')
+  parser.add_argument(
+    '-M', '--monitor',
+    dest='monitor',
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help='Print names as videos are examined.')
   parser.add_argument('-d', '--dryrun',
     dest='dryrun',
     action='store_true',
@@ -466,14 +472,10 @@ if __name__ == '__main__':
       continue
     sys.argv.insert(1, f'@{i}')
 
-  logging.addLevelName( logging.WARNING, "\033[1;31m%s\033[1;0m" % logging.getLevelName(logging.WARNING))
-  logging.addLevelName( logging.ERROR, "\033[1;41m%s\033[1;0m" % logging.getLevelName(logging.ERROR))
-
   args = parser.parse_args()
   if args.dryrun and args.loglevel > logging.INFO:
     args.loglevel = logging.INFO
 
-  log.setLevel(0)
   logformat = logging.Formatter('%(asctime)s [%(levelname)s]: %(message)s')
 
   if args.logfile:
@@ -488,12 +490,12 @@ if __name__ == '__main__':
   log.addHandler(slogger)
 
   ps = args.paths
-  print(list(ps))
   if args.glob:
     ps = ( f for p in ps for f in glob.iglob(p) )
   ps = map(pathlib.Path, ps)
   if not max(map(doit, ps), default=False):
     log.warning(f'No valid video files found for paths (need to glob and/or recurse?) arguments: {paths2quotedstring(ps)}')
+  end_monitor()
 
   if not args.nodelete and findelfiles:
     log.info(f'rm {paths2quotedstring(findelfiles)}')
