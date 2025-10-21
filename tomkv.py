@@ -27,7 +27,7 @@ desc = 'Convert video files to mkv files (incorporating separate subtitles, chap
 
 (cols, lines) = shutil.get_terminal_size(fallback=(0,0))
 args = None
-<<<<<<< HEAD
+
 log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)
 
@@ -46,9 +46,6 @@ def monitor(s):
 def monitor_end():
   if args.monitor:
     print(ansi_save_cursor, ansi_clear_to_eol, ansi_restore_cursor, end='\r')
-=======
-logger = None
->>>>>>> 62708f159033fa5827bac94bee00cffb7a5ead94
 
 try:
   import coloredlogs
@@ -168,15 +165,6 @@ def set_stat(f: pathlib.Path) -> bool:
 
   s = f.stat()
 
-<<<<<<< HEAD
-  if f.is_file() and args.file_mode is not None and (s.st_mode & modemask) != (args.file_mode & modemask):
-    log.info(f'Changing "{f}" mode from {oct(s.st_mode)} to {oct(args.file_mode)}.')
-    f.chmod(args.file_mode)
-
-  if f.is_dir() and args.dir_mode is not None and (s.st_mode & modemask) != (args.dir_mode & modemask):
-    log.info(f'Changing "{f}" mode from {oct(s.st_mode)} to {oct(args.dir_mode)}.')
-    f.chmod(args.dir_mode)
-=======
   mode = s.st_mode
   if f.is_file() and args.file_mode is not None:
     mode = args.file_mode
@@ -191,7 +179,6 @@ def set_stat(f: pathlib.Path) -> bool:
   if s.st_uid != uid or s.st_gid != gid:
     logger.info(f'Changing "{f}" owner:group from {s.st_uid}:{s.st_gid} to {uid}:{gid}.')
     os.chown(f, uid, gid)
->>>>>>> 62708f159033fa5827bac94bee00cffb7a5ead94
 
   return True
 
@@ -210,13 +197,9 @@ def updel(f: pathlib.Path) -> None:
 def doit(vidfile: pathlib.Path) -> bool:
   todo = args.force
   vidname = path2quotedstring(vidfile)
-<<<<<<< HEAD
+
   monitor(vidname)
-=======
   backup_vidfile = False
-  if args.monitor and cols>0:
-    print('\033[s', '\033[0K', textwrap.shorten(str(vidfile), width=cols-10, placeholder='\u2026'), '\033[u', end='\r')
->>>>>>> 62708f159033fa5827bac94bee00cffb7a5ead94
 
   if not vidfile.exists():
     logger.debug(f'{vidname} does not exists, skipping...')
@@ -476,26 +459,12 @@ if __name__ == '__main__':
     dest='recurse',
     action=argparse.BooleanOptionalAction,
     default=False,
-<<<<<<< HEAD
-    help='Recurse into subdirectories.')
-=======
     help='recurse into subdirectories of arguments.')
->>>>>>> 62708f159033fa5827bac94bee00cffb7a5ead94
   parser.add_argument(
     '-M', '--monitor',
     dest='monitor',
     action=argparse.BooleanOptionalAction,
     default=False,
-<<<<<<< HEAD
-    help='Glob argument paths.')
-  parser.add_argument(
-    '-M', '--monitor',
-    dest='monitor',
-    action=argparse.BooleanOptionalAction,
-    default=False,
-    help='Print names as videos are examined.')
-  parser.add_argument('-d', '--dryrun',
-=======
     help='print paths as they are examined.')
   parser.add_argument(
     '-O', '--overwrite',
@@ -504,7 +473,6 @@ if __name__ == '__main__':
     default=False,
     help='If there is an error in remuxing, nevertheless replace the original and rename it to *.bak.')
   parser.add_argument('-d', '--dryrun', '--dry-run',
->>>>>>> 62708f159033fa5827bac94bee00cffb7a5ead94
     dest='dryrun',
     action='store_true',
     help='do not perform operations, but only print them.')
@@ -533,14 +501,11 @@ if __name__ == '__main__':
     help='paths to be operated on.')
   parser.set_defaults(loglevel=logging.WARN)
 
-<<<<<<< HEAD
-=======
   for level, color in log_colors.items():
     logging.addLevelName(
       level, f'\x1b[{color}m{logging.getLevelName(level)}'
     )
 
->>>>>>> 62708f159033fa5827bac94bee00cffb7a5ead94
   args = parser.parse_args()
   if args.dryrun and args.loglevel > logging.INFO:
     args.loglevel = logging.INFO
@@ -548,21 +513,11 @@ if __name__ == '__main__':
   if args.overwrite and args.nodelete:
     logger.warning('--overwrite and --no-delete flags are incompatible, yet both are set.')
 
-<<<<<<< HEAD
   logformat = logging.Formatter('%(asctime)s [%(levelname)s]: %(message)s')
-=======
-  if coloredlogs:
-    coloredlogs.install(level=args.loglevel,
-      fmt='%(asctime)s %(levelname)s: %(message)s')
-  else:
-    logging.basicConfig(level=args.loglevel,
-      format='%(asctime)s %(levelname)s: %(message)s\x1b[1;0m' )
->>>>>>> 62708f159033fa5827bac94bee00cffb7a5ead94
 
   if not max(map(doit, args.paths), default=False):
     logger.warning(f'No valid video files found for paths{" (need to recurse?)" if not args.recurse else ""} arguments: {", ".join(map(str, args.paths))}')
 
-<<<<<<< HEAD
   slogger = logging.StreamHandler()
   slogger.setLevel(args.loglevel)
   slogger.setFormatter(logformat)
@@ -575,10 +530,6 @@ if __name__ == '__main__':
   if not max(map(doit, ps), default=False):
     log.warning(f'No valid video files found for paths (need to glob and/or recurse?) arguments: {paths2quotedstring(ps)}')
   end_monitor()
-=======
-  if args.monitor and cols>0:
-    print('\033[s', '\033[0K', '\033[u', end='\r')
->>>>>>> 62708f159033fa5827bac94bee00cffb7a5ead94
 
   if not args.nodelete and findelfiles:
     logger.info(f'rm {paths2quotedstring(findelfiles)}')
