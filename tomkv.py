@@ -1,6 +1,5 @@
 #! python3
 import argparse
-import glob
 import logging
 import pathlib
 import pwd
@@ -524,7 +523,7 @@ if __name__ == '__main__':
   ps = map(pathlib.Path, ps)
   if not max(map(doit, ps), default=False):
     log.warning(f'No valid video files found for paths (need to glob and/or recurse?) arguments: {paths2quotedstring(ps)}')
-  end_monitor()
+  monitor_end()
 
   if not args.nodelete and findelfiles:
     logger.info(f'rm {paths2quotedstring(findelfiles)}')
